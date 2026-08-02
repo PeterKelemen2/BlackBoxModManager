@@ -82,3 +82,51 @@ A variant can hold both mechanisms at once. Several manifests can each point at 
 ## Done when
 
 Both example mods parse into the model, their options extract correctly, a stored selection resolves without a prompt, and the flattened command list produces the expected conflict keys. All of it under test, with no UI.
+
+## Results
+
+Step 4 is done. The layer lives in `src/BlackboxModManager.Core/Mods`. It reads text only. It never touches a game directory, so every test runs on native Linux with no Wine and no game present.
+
+| Type                                    | Holds                                                             |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| `ModPackage`, `ModVariant`              | One folder, N variants. 4.1.                                      |
+| `ModOptionSet`, `ModOption`             | One question and its options. 4.2.                                |
+| `ModPackageReader`                      | Finds manifests, reads them, extracts the questions. 4.1 and 4.2. |
+| `ModSelections`, `VariantSelection`     | The stored answers, by name. 4.3.                                 |
+| `SelectionResolver`                     | Answers a pause with no user. 4.4.                                |
+| `ScriptFlattener`, `ResolvedScript`     | The linear edit list of the chosen branches. 4.5.                 |
+| `EditKey`, `ResolvedEdit`               | The conflict key and the original value text. 4.5.                |
+| `ConflictDetector`                      | Same key and a different value. The seam for step 6.              |
+| `ScriptAppendGraph`                     | Finds an append loop before the library parser recurses.          |
+| `ScriptReader`, `ScriptText`, `ModPath` | Parse failures that name a place, the tokenizer, path resolution. |
+
+`tests/BlackboxModManager.Tests` holds 109 tests. They run against the real `example_mods` and against hand-built mods in a temporary directory.
+
+### The numbers
+
+| Fact                       | Value                                                 |
+| -------------------------- | ----------------------------------------------------- |
+| 1 Lap package              | 1 package, 5 variants, 0 questions                    |
+| Camera package             | 1 package, 1 variant, 1 combobox with 2 options       |
+| `1 Lap URL Races` resolved | 51 edits, all `update_incareer`, all keyed            |
+| Camera, option 0           | 450 edits, all from `[1]_Camera_MOD_NFSMW_TO_U2.end`  |
+| Camera, option 1           | 744 edits, all from `[0]_Restore_Camera_Settings.end` |
+| `ALL` against `URL`        | 0 conflicts, and `ALL` covers every `URL` key         |
+
+The 450 and 744 in step 3 were per-file parse counts. They are also the resolved branch sizes. The two readings agree.
+
+### Four corrections
+
+**There are five `1 Lap` manifests, not four.** `ALL`, `CIRCUIT`, `STREET`, `SUV`, and `URL`. The brief and step 1 both said four. Both now say five. The statement "`ALL` is the union of the other four" was always right and stays.
+
+**The model needs a list of option sets, not one nullable option set.** A script can hold more than one selectable, and `ProcessScript` then pauses more than once. `ModVariant.OptionSets` is a list. The resolver answers the pauses in order.
+
+**This layer resolves paths itself.** A manifest writes `MOD\URL.end` and the file sits at `MOD/URL.end`. Wine resolves the separator and the case, and a native run resolves neither. `ModPath.Resolve` handles both, so the layer works on Linux with no Wine. Without it every test failed with `BadScript`.
+
+**An `if` command stops a static flatten.** `ProcessScript` evaluates one against the loaded containers, and this layer has none. `ScriptFlattener` reports that and never guesses a branch. Neither example mod uses `if`. Step 8 owns the fix.
+
+### Two notes for the next steps
+
+**An unknown verb and an option block header both parse to `OptionalCommand`.** The library gives them the same type, and `Type` reads `invalid` for both. Only the enclosing question tells them apart. `ScriptFlattener` compares the token against the options of the enclosing selectable. A header is a jump. Anything else stops the run and names the file and the line.
+
+**`EditKeyExtractor.KeyedVerbs` holds four verbs today.** They are `update_collection`, `update_incareer`, `update_string`, and `update_texture`. The source confirms that all four follow the shape `verb file name... value`, with no fixed argument count. Every other verb produces `EditKind.Other` and no key. Step 8 extends the set. Add a verb only after the source confirms its shape.

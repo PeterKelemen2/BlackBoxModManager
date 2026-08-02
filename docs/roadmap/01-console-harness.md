@@ -76,7 +76,7 @@ The harness runs a self-contained `win-x64` publish under system Wine 11.13. A f
 
 **Point `Directory` at the scratch copy, never at a real install.** This is the single most destructive mistake available in this step. The libraries edit containers in place.
 
-**Expect `Files` to name containers the script never edits.** All four `1 Lap` manifests declare `GLOBALA.BUN`, but every command targets `GLOBALB.LZC`. Both files must exist under `Directory` or `CheckFiles` throws.
+**Expect `Files` to name containers the script never edits.** All five `1 Lap` manifests declare `GLOBALA.BUN`, but every command targets `GLOBALB.LZC`. Both files must exist under `Directory` or `CheckFiles` throws.
 
 **Validate `Choice` before you set it.** An out-of-range value produces the message "Unable to find end to a selectable statement", which names neither the file nor the real problem. See defect 5.
 

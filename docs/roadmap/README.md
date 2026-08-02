@@ -6,21 +6,21 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 
 ## Sequence
 
-| Step | File                                                         | Gates                                  |
-| ---- | ------------------------------------------------------------ | -------------------------------------- |
-| 0    | Done. See "Completed" below.                                 | —                                      |
-| —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.         |
-| 1    | Done. See "Completed" below.                                 | —                                      |
-| 2    | Done. See "Completed" below.                                 | —                                      |
-| 3    | Done. See "Completed" below.                                 | —                                      |
-| 4    | [04-endscript-layer.md](04-endscript-layer.md)               | All Binary mod features.               |
-| 5    | [05-mvp-shell.md](05-mvp-shell.md)                           | The UI.                                |
-| 6    | [06-binary-deployment.md](06-binary-deployment.md)           | The success criterion.                 |
-| 7    | [07-game-profiles.md](07-game-profiles.md)                   | Games other than Underground 2.        |
-| 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.         |
-| 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.              |
+| Step | File                                                         | Gates                           |
+| ---- | ------------------------------------------------------------ | ------------------------------- |
+| 0    | Done. See "Completed" below.                                 | —                               |
+| —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.  |
+| 1    | Done. See "Completed" below.                                 | —                               |
+| 2    | Done. See "Completed" below.                                 | —                               |
+| 3    | Done. See "Completed" below.                                 | —                               |
+| 4    | Done. See "Completed" below.                                 | —                               |
+| 5    | [05-mvp-shell.md](05-mvp-shell.md)                           | The UI.                         |
+| 6    | [06-binary-deployment.md](06-binary-deployment.md)           | The success criterion.          |
+| 7    | [07-game-profiles.md](07-game-profiles.md)                   | Games other than Underground 2. |
+| 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.  |
+| 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.       |
 
-Steps 1 to 3 prove that the foundation works. **All three pass.** Step 4 is open. Nothing blocks it.
+Steps 1 to 3 prove that the foundation works. **All three pass.** Step 4 is done. Step 5 is open.
 
 ## Completed
 
@@ -80,6 +80,17 @@ Four facts carry forward.
 2. **Hard links, symbolic links, and copies all work on both builds.** No privilege blocked a symbolic link. **Step 5 can default to hard links.** Do not hardcode that. Call `LinkSupport.Probe` against the real target, because a hard link still fails across filesystems.
 3. **A Proton build ships no `winepath` program.** A wrapper that calls it falls through to system Wine and starts a wineserver of the wrong version. Convert paths with `wine winepath.exe -w`, using the same build.
 4. **`IncludeNativeLibrariesForSelfExtract` does not put the DLL beside the executable.** It extracts to a temporary directory and the P/Invoke resolves from there. Test the resolution with `NativeLibrary.TryLoad`, never the file location.
+
+### Step 4 — our layer over Endscript
+
+**Done.** `src/BlackboxModManager.Core/Mods` holds the model. It reads text only, so every test runs on native Linux with no Wine and no game. Read [04-endscript-layer.md](04-endscript-layer.md) for the type list and the numbers.
+
+Four facts carry forward.
+
+1. **There are five `1 Lap` manifests, not four.** The brief and step 1 both said four. Both are corrected.
+2. **A variant holds a list of option sets, not one.** A script can pause more than once, so the roadmap model needed a list.
+3. **An unknown verb and an option block header parse to the same type.** Only the enclosing question separates them. `ScriptFlattener` does that and stops on a real unknown verb.
+4. **An `if` command cannot resolve without loaded containers.** The flattener says so and never guesses. Step 8 owns the fix.
 
 ## Reference files
 
