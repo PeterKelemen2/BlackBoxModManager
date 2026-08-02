@@ -9,6 +9,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | Step | File                                                         | Gates                                  |
 | ---- | ------------------------------------------------------------ | -------------------------------------- |
 | 0    | Done. See "Completed" below.                                 | —                                      |
+| —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.         |
 | 1    | [01-console-harness.md](01-console-harness.md)               | Everything. Do this first.             |
 | 2    | [02-binary-install.md](02-binary-install.md)                 | Any container work on a clean machine. |
 | 3    | [03-wine-verification.md](03-wine-verification.md)           | The Linux target.                      |
@@ -40,5 +41,6 @@ Four facts from that work carry into everything below. Read them before you touc
 
 ## Reference files
 
+- [00-test-environment.md](00-test-environment.md) — the developer machine paths, plus the confirmed Binary install layout and the game install facts. Read it before step 1. It answers several questions that steps 2 and 3 raise.
 - [98-known-upstream-defects.md](98-known-upstream-defects.md) — defects in the MIT libraries that we work around rather than fix.
 - [99-api-notes.md](99-api-notes.md) — verified signatures and call order for Nikki and Endscript. Read this before you write library code. The project brief describes some of these APIs incorrectly.

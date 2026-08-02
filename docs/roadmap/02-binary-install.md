@@ -4,17 +4,17 @@ The application requires an existing Binary 2.8.3 install. It does not bundle Bi
 
 **Why this exists:** the libraries need per-game hash lists at run time. Those files ship with Binary, not with the MIT libraries. Reading them from the install of the user removes any need to redistribute them.
 
-## Investigate first
+## Layout — confirmed
 
-The design below assumes a layout that nobody has verified. Answer these against a real 2.8.3 install before you write code.
+A real 2.8.3 install answered the layout questions. See [00-test-environment.md](00-test-environment.md) for the evidence.
 
-1. Where do `mainkeys` and `userkeys` sit relative to `Binary.exe`?
-2. What is the exact file name per game? The profile classes expect one file per game.
-3. How do you read the version? Check the file version resource of `Binary.exe` first. Check for a version file second.
-4. Does the install ship `LZCompressLib.dll`? A yes removes the last redistribution question. See step 4 of the open questions in the brief.
-5. What does a `.bacc` file hold? These sit beside the game containers, not in the Binary install. Grep the upstream source for `bacc` to answer this cheaply.
+- `mainkeys` sits directly beside `Binary.exe`. The path is `<root>/mainkeys/<game>.txt`.
+- The file names are lowercase `GameINT` names: `underground1.txt`, `underground2.txt`, `mostwanted.txt`, `carbon.txt`, `prostreet.txt`, `undercover.txt`.
+- Read the version from the `Binary.dll` assembly version, which reads `2.8.3.0`.
+- A fresh install has **no** `userkeys` directory. Binary creates it on demand. Never require it and never read it.
+- The install ships `LZCompressLib.dll`, but it is the **32-bit** build. We build x64, so we cannot use it. See the pitfalls below.
 
-Record the answers in this file. Do not leave them as assumptions.
+One question stays open. Nobody has inspected a `.bacc` file yet. Grep the upstream source for `bacc`, or run Binary once against a scratch copy.
 
 ## Work
 
@@ -41,9 +41,15 @@ Underground2Profile.MainHashList   = Path.Combine(binaryRoot, "mainkeys", "under
 Underground2Profile.CustomHashList = Path.Combine(ourAppData, "customkeys", "underground2.txt");
 ```
 
-The exact file names come from the investigation above. One pair of statics exists per game class. The properties are `static`, so they are process-global.
+One pair of statics exists per game class. The properties are `static`, so they are process-global.
 
 ## Pitfalls
+
+**Do not take `LZCompressLib.dll` from the Binary install.** The shipped copy is 32-bit. Our build is x64. The two files share a name and differ in every other way, including their MD5 sums. Ship the x64 copy from the Nikki repository instead. This keeps the license question for that DLL open. See [00-test-environment.md](00-test-environment.md).
+
+**Do not require a `userkeys` directory.** A fresh install has none. Treating its absence as a validation failure rejects a perfectly good install.
+
+**`userkeys` is output, not input.** `SaveHashList` generates those files. It writes every label that the `mainkeys` file does not already list. Never read them as a data source.
 
 **`CustomHashList` must point at a path we own.** `BaseProfile.Save()` calls `SaveHashList()`, which creates the parent directory and overwrites the file. Pointing it into the Binary install makes us write into a directory that belongs to another application. Point it under `%APPDATA%\BlackBoxModManager\`. See defect 7.
 

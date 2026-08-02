@@ -10,7 +10,9 @@ Three things, in descending order of risk.
 
 1. **The `LZCompressLib.dll` P/Invoke.** This is a native x64 PE DLL with no source. Nikki calls `BlockCompress` and `BlockDecompress` from `Nikki/Utils/Interop.cs`. Container compression needs it. Wine runs PE binaries natively, so this should work. Nothing proves it until it runs.
 2. **Symlink and hardlink creation.** Windows normally needs `SeCreateSymbolicLinkPrivilege`, which means administrator rights or Developer Mode. Wine enforces this differently across builds. This gates the deploy engine in step 5, not the container work.
-3. **File path case sensitivity.** The game files use mixed case, such as `GLOBALB.LZC` against `GlobalB.lzc`. Windows does not care. A Wine prefix on a case-sensitive Linux filesystem does care.
+3. **File path case sensitivity.** This is no longer a risk. It is a confirmed problem. The manifests declare `GLOBAL\GLOBALB.LZC`. The file on disk is `GLOBAL/GlobalB.lzc`. Wine resolves the case for us. A native Linux .NET run does not, and `CheckFiles` throws for a file you can see in the listing. See [00-test-environment.md](00-test-environment.md).
+
+The test prefix is GE-Proton-10-34. Record results against that build.
 
 ## Work
 

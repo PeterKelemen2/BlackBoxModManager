@@ -9,8 +9,12 @@ Prove the whole library pipeline end to end, with no UI. This is the highest-val
 ## Prerequisites
 
 - A vanilla Underground 2 install that you can copy. Never point the harness at the install you play.
-- A Binary 2.8.3 install, for the `mainkeys` hash list. See [02-binary-install.md](02-binary-install.md) for the discovery work. For this step, hardcode the path.
+- A Binary 2.8.3 install, for the `mainkeys` hash list. Hardcode the path for this step. Step 2 replaces it with discovery.
 - The three submodules building. See the README.
+
+Both paths for this machine sit in [00-test-environment.md](00-test-environment.md). Read that file first. It also records two facts that will otherwise cost you an afternoon: the container file case does not match the manifest, and the shipped `LZCompressLib.dll` is the wrong architecture.
+
+**Run the harness under Wine, not on native Linux .NET.** The manifests declare `GLOBAL\GLOBALB.LZC` and the file on disk is `GLOBAL/GlobalB.lzc`. Wine resolves that case difference. Native .NET on a case-sensitive filesystem does not, and `CheckFiles` throws `FileNotFoundException` for a file you can see.
 
 ## Work
 
