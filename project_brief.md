@@ -2,7 +2,7 @@
 
 ## Context
 
-This project builds a mod manager for the BlackBox-era Need for Speed games. The target titles are Underground 2, Most Wanted, Carbon, and ProStreet. The modding scene for these games uses three separate mod formats. No unified tool manages them.
+This project builds a mod manager for the BlackBox-era Need for Speed games. The target titles are Underground 1, Underground 2, Most Wanted, Carbon, ProStreet, and Undercover. The modding scene for these games uses three separate mod formats. No unified tool manages them.
 
 1. **ASI scripts** — plugin DLLs that an ASI loader reads. These are drop-in files.
 2. **Binary mods** — a third-party tool called [Binary](https://github.com/SpeedReflect/Binary) (version 2.8.3) installs these. The tool edits game data files. This category is the most difficult to manage. It is the main architectural problem of this project.
@@ -235,7 +235,7 @@ Step 1 is what makes step 3 possible. We cannot retarget a repository that we do
 
 The sections below described reverse-engineering work. That work is now a code-reading exercise.
 
-- **The `.LZC` and `.BUN` container format** needs no reverse-engineering. Nikki implements it. Nikki supports **Underground 1, Underground 2, Most Wanted, Carbon, ProStreet, and Undercover**. This is a superset of our four targets. Each game has its own `Support.<Game>/` tree with `Attributes`, `Class`, `Parts`, and `Framework` types.
+- **The `.LZC` and `.BUN` container format** needs no reverse-engineering. Nikki implements it. Nikki supports **Underground 1, Underground 2, Most Wanted, Carbon, ProStreet, and Undercover**. That list is exactly our six targets. Each game has its own `Support.<Game>/` tree with `Attributes`, `Class`, `Parts`, and `Framework` types.
 - **`.end` parsing** needs no new code. `Endscript` provides `EndScriptParser`, `EndScriptManager`, a `BaseCommand` model, and `Launch`. `Launch` is the exact `VERSN1` DTO. Its `Serialize` method reproduces the backslash dialect through `settings.Replace(@"\\", @"\")`. This confirms the dialect quirk and gives us the writer at no cost.
 - **Guesses about enums and vocabulary** are no longer needed. The source answers them. See the corrections below.
 
@@ -314,7 +314,7 @@ interface IEndscriptApplyEngine {
 - **Hashing**: `System.IO.Hashing` (XxHash) for fast internal diffs. Use `Blake3.NET` if community-standard checksums matter. Do not identify files by size and mtime. Extraction resets mtimes, so they are unreliable. Hash the content.
 - **Archive handling** for the zip and rar files that hold mods: `System.IO.Compression` for zip, and `SharpCompress` for rar and 7z.
 - **Manifest parsing**: use `Endscript.Core.Launch` with `Deserialize` and `Serialize`. Do not hand-roll this. The class already handles the `[VERSN1]` header and the non-standard backslash dialect on both read and write. Keep a round-trip test over `example_mods` that reads, writes, and compares bytes. This stops a future framework retarget from a silent change to the output dialect.
-- **Game container format parsing**: **Nikki solves this.** No byte-level reverse-engineering is needed. The per-game support trees cover all four target titles plus Underground 1 and Undercover. This needs `LZCompressLib.dll` (native x64) beside the executable.
+- **Game container format parsing**: **Nikki solves this.** No byte-level reverse-engineering is needed. The per-game support trees cover all six target titles. This needs `LZCompressLib.dll` (native x64) beside the executable.
 - **`.end` script handling**: use `EndScriptParser`, `EndScriptManager`, and the `BaseCommand` model from `Endscript`. Use the `SmartSplitString` tokenizer from `CoreExtensions`. Do not write our own. Our code adds the layer _above_: variant discovery, option persistence, answers to the `ProcessScript()` option pauses from stored selections, conflict detection over resolved command targets, and multi-mod ordering. A merged-script emitter is still worth building as an inspectable deploy artifact, but it is not on the critical path.
 - **Hash lists**: the `mainkeys/<game>.txt` string and hash dictionaries are needed at run time. They ship with **the distribution of Binary**, not with the MIT libraries. **Point the profile statics at the Binary 2.8.3 install of the user.** We never redistribute these files. See the prerequisite section above.
 - **Packaging**: `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true`. Self-contained means that Linux users do not need `winetricks dotnet` in their existing game prefix. `IncludeNativeLibrariesForSelfExtract` is required because the code P/Invokes `LZCompressLib.dll` by name, and the call fails at run time if the file is not extracted next to the host. `win-x64` is mandatory once we use the x64 `LZCompressLib.dll` from the Nikki repository, which is our decision. Binary itself is a 32-bit application, so an x86 build is possible in principle. Do not take that path without a strong reason. Ship `THIRD-PARTY-NOTICES` with the three MIT license texts.
@@ -365,7 +365,7 @@ Steps 1, 2, and 4 are worth building anyway. **The main path also needs staging 
 5. **Symlink permissions under Wine.** Windows normally needs `SeCreateSymbolicLinkPrivilege`, which means admin rights or Developer Mode. Enforcement in the ntdll of Wine varies by build. Confirm hardlink and symlink behavior on the Wine and Proton builds that we target. This affects the ASI and loose-file MVP.
 6. **Which of the 48 commands need first-class UI and conflict handling.** Our two example mods use 5. Commands such as `if`, `static`, `generate`, `create_file`, `erase_file`, `unlock_memory`, and `speedreflect` have side effects outside the collection model. Conflict detection keyed on `(targetFile, keyPath)` does not cover them. Read `Endscript/Commands/` and classify each command by what it touches. Treat unclassified commands as opaque and warn. Do not assume that they are conflict-free.
 7. **The `.bacc` backup-file convention.** `GLOBAL/GLOBALA.BUN.bacc` and `GLOBAL/GLOBALB.LZC.bacc` sit next to their originals in the install listing. They are probably the pre-edit backups of Binary. A grep for `bacc` in the upstream source now answers this cheaply. No byte inspection is needed. Decide whether to reuse the mechanism or to keep our backups fully independent. Either way, our snapshot step must not treat `.bacc` files as game content.
-8. **A wider manifest and script sample** for Most Wanted, Carbon, and ProStreet. This would validate the per-game `Links` boilerplate assumption and exercise commands that the U2 mods do not use. This is lower priority now, because the enums come from the source and not from inference.
+8. **A wider manifest and script sample** for Underground 1, Most Wanted, Carbon, ProStreet, and Undercover. This would validate the per-game `Links` boilerplate assumption and exercise commands that the U2 mods do not use. This is lower priority now, because the enums come from the source and not from inference.
 
 ## Suggested roadmap
 
@@ -376,7 +376,7 @@ Format research is **done**. The upstream libraries **solve the container proble
 3. **Build our layer over Endscript**: variant discovery from sibling `VERSN1` files, an option model for `combobox` and `checkbox` with persisted selections, non-interactive answers to the `ProcessScript()` pauses, and resolved-command extraction for conflict detection. All of this is testable against `example_mods` with no UI.
 4. **Build the MVP shell** for ASI/DLL and loose-file mods. This covers MVVM scaffolding, game detection, profiles, the load order UI, the link-deploy engine (hardlink, then symlink, then copy), and staging with backup and revert. Smoke-test under Wine continuously.
 5. **Add Binary mod deployment.** Wire step 3 into the UI: variant multi-select, option controls, the conflict list, a single load, apply-all, and save pass against staging, an atomic swap, and revert.
-6. **Add game profile support** for the path, registry, and executable differences across Underground 2, Most Wanted, Carbon, and ProStreet. Nikki already covers all four plus UG1 and Undercover, so this is our own plumbing only.
+6. **Add game profile support** for the path, registry, and executable differences across all six target games. Nikki already covers every one of them, so this is our own plumbing only.
 7. **Harden command classification** (open question 6). Handle commands outside the collection model properly.
 8. **Add Texmod and `.tpf` support.** This step is explicitly last and explicitly optional. No earlier step may depend on it.
 

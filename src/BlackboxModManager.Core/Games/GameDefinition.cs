@@ -56,9 +56,17 @@ namespace BlackboxModManager.Core.Games
 	/// The games that this application manages.
 	///
 	/// Underground 2 is the only entry. We listed that install file by file, so every
-	/// marker below is a fact. Nikki supports six games, and we confirmed one.
-	/// <b>Step 7 adds the other five.</b> Add an entry only after a listing of a real
-	/// install of that game confirms the executable name and the markers.
+	/// marker below is a fact.
+	///
+	/// This application targets all six games that Nikki supports: Underground 1,
+	/// Underground 2, Most Wanted, Carbon, ProStreet, and Undercover. <b>Step 7 adds the five
+	/// that are absent.</b> Add an entry only after a listing of a real install of that game
+	/// confirms the executable name and the markers.
+	///
+	/// <b>A target is not the same thing as a supported game.</b> This list holds the games
+	/// that the application manages today, and it is the only answer to that question. Never
+	/// read the membership of GameINT instead, because every game there is a target and five
+	/// of them have no confirmed descriptor yet.
 	/// </summary>
 	public static class GameCatalog
 	{

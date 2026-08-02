@@ -1,8 +1,8 @@
 # Step 7 — Game profile support
 
-Extend the application from Underground 2 to Most Wanted, Carbon, and ProStreet.
+Extend the application from Underground 2 to Underground 1, Most Wanted, Carbon, ProStreet, and Undercover.
 
-**The container work is already done.** Nikki ships per-game support trees for Underground 1, Underground 2, Most Wanted, Carbon, ProStreet, and Undercover. That is a superset of our four targets. Endscript ships a profile class per game. This step is our own plumbing only.
+**The container work is already done.** Nikki ships per-game support trees for Underground 1, Underground 2, Most Wanted, Carbon, ProStreet, and Undercover. That list is exactly our six targets. Endscript ships a profile class per game. This step is our own plumbing only.
 
 ## Work
 
@@ -11,7 +11,7 @@ Extend the application from Underground 2 to Most Wanted, Carbon, and ProStreet.
 3. Generalize the detection code from step 5 to iterate descriptors.
 4. Generalize the hash list wiring. Map a `GameINT` to the right profile class and to the right `mainkeys` file name.
 5. Make profiles game-scoped. A mod for one game must never appear in another game's profile.
-6. Gather a wider manifest and script sample for the three new games.
+6. Gather a wider manifest and script sample for the five new games.
 
 ## Pitfalls
 
@@ -23,12 +23,12 @@ Extend the application from Underground 2 to Most Wanted, Carbon, and ProStreet.
 
 **The `Links` boilerplate assumption is unverified for the new games.** All four inspected manifests are Underground 2 and share identical `Links`. Whether each of the other games has its own fixed set is an assumption. Gather samples before you rely on it. Compare against the expected per-game set and surface only deviations.
 
-**Expect commands the Underground 2 mods never used.** The two example mods exercise 5 of 48 commands. Most Wanted, Carbon, and ProStreet mods will reach further. Step 8 handles that properly. Until then, an unknown verb must fail loudly.
+**Expect commands the Underground 2 mods never used.** The two example mods exercise 5 of 48 commands. Mods for the other five games will reach further. Step 8 handles that properly. Until then, an unknown verb must fail loudly.
 
-**`GameINT` includes games we do not target.** The enum holds Underground 1 and Undercover. Do not treat enum membership as support. Gate on our own descriptor list.
+**Enum membership is not support.** Every game in `GameINT` except `None` is a target, and that still does not make it supported. A game is supported when a descriptor for it exists, and a descriptor is valid only when a listing of a real install confirms it. Gate every code path on the descriptor list, never on `GameINT`.
 
 **Registry layouts differ per title and per store.** A retail install, a Steam install, and an Origin install put paths in different places. Always allow a manual browse.
 
 ## Done when
 
-All four target games detect, import mods, deploy, and revert. The per-game `Links` boilerplate assumption is either confirmed against real samples or replaced with what the samples show.
+All five new games detect, import mods, deploy, and revert. That makes six games with Underground 2. The per-game `Links` boilerplate assumption is either confirmed against real samples or replaced with what the samples show.
