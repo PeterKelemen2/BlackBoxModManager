@@ -6,6 +6,8 @@
 
   <Thickness x:Key="RowSpacing">0,0,0,6</Thickness>
 
+  <BooleanToVisibilityConverter x:Key="BoolToVisible" />
+
   <Style TargetType="TextBlock" x:Key="Heading">
     <Setter Property="FontWeight" Value="Bold" />
     <Setter Property="Margin" Value="0,0,0,4" />

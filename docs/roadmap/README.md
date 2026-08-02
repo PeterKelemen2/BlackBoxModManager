@@ -15,12 +15,12 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 3    | Done. See "Completed" below.                                 | —                               |
 | 4    | Done. See "Completed" below.                                 | —                               |
 | 5    | Done. See "Completed" below.                                 | —                               |
-| 6    | [06-binary-deployment.md](06-binary-deployment.md)           | The success criterion.          |
+| 6    | Done. See "Completed" below.                                 | —                               |
 | 7    | [07-game-profiles.md](07-game-profiles.md)                   | Games other than Underground 2. |
 | 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.  |
 | 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.       |
 
-Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4 and 5 are done. Step 6 is open.
+Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, and 6 are done. **The success criterion of the project brief passes.** Step 7 is open.
 
 ## Completed
 
@@ -55,7 +55,7 @@ Read [tools/Harness/README.md](../../tools/Harness/README.md) to run it.
 Three facts carry forward.
 
 1. **A self-contained `win-x64` build of .NET 10 runs under system Wine 11.13.** A fresh prefix needs no configuration. The `LZCompressLib.dll` P/Invoke works. Step 3 still has to confirm the same inside the GE-Proton prefix.
-2. **`Save` rewrites every loaded container, not only the edited ones.** No command targets `GLOBALA.BUN`, and the file still changed. Step 6 must decide what to do about that.
+2. **`Save` rewrites every loaded container, not only the edited ones.** No command targets `GLOBALA.BUN`, and the file still changed. **Step 6 decided to accept it.** The verify treats a rewritten container as expected, and the revert restores the vanilla state whatever `Save` wrote.
 3. **The game accepts a `GlobalB.lzc` that carries no whole-file compression.** Nikki writes it that way, and the file grows by 60 percent. This matches what Binary does.
 
 **Throw the harness away after step 3.** Do not grow it into the application.
@@ -108,6 +108,23 @@ Six facts carry forward.
 6. **The window asks every question in a dialog.** `Console.ReadLine` never returns on a Wine console, and a window application has no console. `IUserInteraction` holds the whole set.
 7. **Never scroll a list from inside its own `CollectionChanged` handler, and always set `e.Handled`.** A synchronous `ScrollIntoView` there makes the item container generator run mid-notification, and WPF throws `An ItemsControl is inconsistent with its items source`. A handler that leaves `e.Handled` false then turns one exception into a storm of dialogs and a crash.
 8. **A font family that Wine does not hold kills the process.** WPF reaches `Invariant.FailFast`, which no handler can catch. `FontFamily="Consolas"` on the log list ended the application on its first log line. **Name no font family in the XAML**, and let `tools/run-app.sh` link the fonts of the host into the prefix.
+
+### Step 6 — Binary mod deployment
+
+**Done.** Both example mods install together into one game directory, in one load, apply, and save pass. The game starts from that directory and both mods take effect. The revert restores the vanilla state exactly. Binary never ran. Read [06-binary-deployment.md](06-binary-deployment.md) for the run numbers and the findings.
+
+Run it with `tools/run-deploy-test.sh`. Add `DEPLOY_NO_REVERT=1` to keep the result, then start `SPEED2.EXE` in the scratch copy.
+
+**Start the game after every change to the container path.** No automated check can confirm that a race runs one lap or that the camera moved.
+
+Six facts carry forward.
+
+1. **The single pass works.** Two mods applied 1249 commands to one loaded profile before one `Save`. `GlobalB.lzc` grew from 5,145,778 to 8,263,472 bytes, which matches the step 1 measurement to the byte.
+2. **Defect 6 was wrong and is corrected.** `AddNew` does check for a duplicate and throws. The real hazard is that `Contains` compares raw text, so two spellings of one container both pass and `Save` then writes one file twice.
+3. **The library matches a container by the exact text of its name.** The merged union keeps the spelling of the manifest. Two mods that spell one container differently cannot share a load, and `MergedLaunch` says so.
+4. **Pass the full path of the script to `EndScriptManager`.** The third argument becomes `Path.GetDirectoryName(launcher)`, and seventeen commands read a file relative to it. The step 1 harness passed a bare name.
+5. **A link to a file that does not exist is normal.** A vanilla install holds one of the four links that every manifest names, and every loader in Nikki returns for a missing file.
+6. **A combobox option is named by the quoted string in the script**, not by the file that the block appends. A stored answer holds that name.
 
 ## Reference files
 

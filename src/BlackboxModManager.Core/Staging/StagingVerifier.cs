@@ -56,6 +56,16 @@ namespace BlackboxModManager.Core.Staging
 
 			foreach (DeployedFile file in report.Files) deployed[PathKey.Normalize(file.RelativePath)] = file;
 
+			// A container that the container engine rewrote differs from the vanilla state on
+			// purpose, and it matches no file in a mod store. There is nothing to compare it
+			// against, so the check on it is existence and a length above zero.
+			var containers = new Dictionary<string, ContainerWrite>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (ContainerWrite write in report.Containers)
+			{
+				containers[PathKey.Normalize(write.RelativePath)] = write;
+			}
+
 			log?.Invoke(full
 				? "Verify the staging copy. The full check hashes every file."
 				: "Verify the staging copy.");
@@ -63,7 +73,12 @@ namespace BlackboxModManager.Core.Staging
 			// 1. The vanilla files. A deployed file replaced its vanilla twin on purpose,
 			// so leave those out of this pass.
 			IReadOnlyList<SnapshotDifference> differences = SnapshotReader.Compare(
-				snapshot, stagingDirectory, full, relative => deployed.ContainsKey(PathKey.Normalize(relative)));
+				snapshot, stagingDirectory, full, relative =>
+				{
+					string key = PathKey.Normalize(relative);
+
+					return deployed.ContainsKey(key) || containers.ContainsKey(key);
+				});
 
 			foreach (SnapshotDifference difference in differences)
 			{
@@ -112,6 +127,28 @@ namespace BlackboxModManager.Core.Staging
 				if (!FileHash.SameContent(source, target))
 				{
 					problems.Add($"The staging copy of {file.RelativePath} differs from the copy in the mod \"{file.ModId}\".");
+				}
+			}
+
+			// 3. The containers. A container that Save wrote has to exist and to hold bytes.
+			// A container that saves without error can still fail to load in the game, and
+			// no check here can answer that. Only a run of the game answers it.
+			foreach (ContainerWrite write in containers.Values)
+			{
+				string target = ModPath.Resolve(stagingDirectory, write.RelativePath);
+				++checkedFiles;
+
+				if (!File.Exists(target))
+				{
+					problems.Add($"The staging copy does not hold the container {write.RelativePath}, " +
+						$"which {String.Join(", ", write.Contributors)} edited.");
+					continue;
+				}
+
+				if (new FileInfo(target).Length == 0)
+				{
+					problems.Add($"The container {write.RelativePath} in the staging copy is empty. " +
+						$"{String.Join(", ", write.Contributors)} edited it.");
 				}
 			}
 

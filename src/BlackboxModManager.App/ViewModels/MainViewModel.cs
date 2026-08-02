@@ -7,6 +7,7 @@ using BlackboxModManager.App.Services;
 using BlackboxModManager.Core;
 using BlackboxModManager.Core.Deploy;
 using BlackboxModManager.Core.Games;
+using BlackboxModManager.Core.Mods;
 using BlackboxModManager.Core.Profiles;
 using BlackboxModManager.Core.Staging;
 using BlackboxModManager.Core.Store;
@@ -36,6 +37,7 @@ namespace BlackboxModManager.App.ViewModels
 		private Settings _settings;
 		private Profile _profile;
 		private GameInstall _install;
+		private BinaryInstall _binaryInstall;
 
 		/// <summary>
 		/// The game that the window manages. GameCatalog holds one entry today, and step 7
@@ -48,6 +50,18 @@ namespace BlackboxModManager.App.ViewModels
 		public ObservableCollection<string> ProfileNames { get; } = new ObservableCollection<string>();
 
 		public ObservableCollection<string> Log { get; } = new ObservableCollection<string>();
+
+		/// <summary>
+		/// The variants of the mod that the user selected. This is empty unless that mod is a
+		/// Binary mod.
+		/// </summary>
+		public ObservableCollection<VariantRowViewModel> Variants { get; } =
+			new ObservableCollection<VariantRowViewModel>();
+
+		/// <summary>
+		/// One line per conflict, plus one per variant that the check could not read.
+		/// </summary>
+		public ObservableCollection<string> Conflicts { get; } = new ObservableCollection<string>();
 
 		public MainViewModel(IUserInteraction ask)
 		{
@@ -86,7 +100,20 @@ namespace BlackboxModManager.App.ViewModels
 		private bool _fullVerify;
 
 		[ObservableProperty]
+		private string _detailsHeader = "Select a mod to see what it offers.";
+
 		private ModRowViewModel _selectedMod;
+
+		public ModRowViewModel SelectedMod
+		{
+			get => this._selectedMod;
+			set
+			{
+				if (!this.SetProperty(ref this._selectedMod, value)) return;
+
+				this.LoadVariants(value);
+			}
+		}
 
 		private bool _busy;
 
@@ -220,9 +247,11 @@ namespace BlackboxModManager.App.ViewModels
 		{
 			BinaryInstallResolution resolution = this._binary.Resolve();
 
+			this._binaryInstall = resolution.Install;
+
 			this.BinaryStatus = resolution.IsUsable
 				? $"Binary {resolution.Install.Version} at {resolution.Install.Root}."
-				: resolution.Status.Message + " Step 6 needs it. This step does not.";
+				: resolution.Status.Message + " A Binary mod needs it. A drop-in mod does not.";
 		}
 
 		private void RefreshDeployedState()
@@ -468,12 +497,115 @@ namespace BlackboxModManager.App.ViewModels
 			}
 
 			this.Status = $"{this.Mods.Count} mods, {this._profile.EnabledCount} enabled.";
+			this.RefreshConflicts();
 		}
 
 		private void OnModToggled()
 		{
 			this.SaveProfile();
 			this.Status = $"{this.Mods.Count} mods, {this._profile.EnabledCount} enabled.";
+			this.RefreshConflicts();
+		}
+
+		// ---------------------------------------------------------------- variants
+
+		/// <summary>
+		/// Reads the variants of one mod and their questions.
+		///
+		/// Only a Binary mod has variants. An ASI mod and a loose-file mod ask nothing, so
+		/// the panel says so instead of showing an empty list.
+		/// </summary>
+		private void LoadVariants(ModRowViewModel row)
+		{
+			this.Variants.Clear();
+
+			if (row is null)
+			{
+				this.DetailsHeader = "Select a mod to see what it offers.";
+				return;
+			}
+
+			if (row.Mod.Kind != ModKind.Binary)
+			{
+				this.DetailsHeader = $"\"{row.Name}\" is a {row.Kind} mod. It holds {row.FileCount} files " +
+					"and it asks no question. The link engine puts its files in place.";
+				return;
+			}
+
+			ProfileEntry entry = this._profile?.Find(row.Id);
+
+			if (entry is null)
+			{
+				this.DetailsHeader = $"The profile holds no entry for \"{row.Name}\".";
+				return;
+			}
+
+			try
+			{
+				ModPackage package = ModPackageReader.Read(row.Mod.ContentRoot);
+
+				foreach (ModVariant variant in package.Variants)
+				{
+					this.Variants.Add(new VariantRowViewModel(
+						variant, entry.Selections.Ensure(variant.Name), this.OnVariantChanged));
+				}
+
+				foreach (string problem in package.Problems) this.Write($"{row.Name}: {problem}");
+
+				this.DetailsHeader = this.Variants.Count == 1
+					? $"\"{row.Name}\" holds one variant. Switch it on to apply it."
+					: $"\"{row.Name}\" holds {this.Variants.Count} variants. Switch on any number of them.";
+			}
+			catch (Exception ex)
+			{
+				this.DetailsHeader = $"The mod \"{row.Name}\" did not read. {ex.Message}";
+				this.Write($"{row.Name}: {ex.Message}");
+			}
+		}
+
+		private void OnVariantChanged()
+		{
+			this.SaveProfile();
+			this.RefreshConflicts();
+		}
+
+		// ---------------------------------------------------------------- conflicts
+
+		/// <summary>
+		/// Reads the conflicts of the current selection. It writes nothing, so it can run
+		/// after every change.
+		///
+		/// A conflict never blocks a deploy. Load order already decides the winner, and this
+		/// list exists so that the user can see the decision and reorder the mods.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(IsIdle))]
+		private void RefreshConflicts()
+		{
+			this.Conflicts.Clear();
+
+			if (this._install is null || this._profile is null) return;
+
+			try
+			{
+				ConflictReport report = this.Service().CheckConflicts(this._install, this._profile);
+
+				this.Conflicts.Add(report.Summary());
+
+				foreach (ConflictEntry entry in report.Conflicts) this.Conflicts.Add(entry.ToString());
+
+				foreach (string line in report.Unchecked) this.Conflicts.Add($"Not checked. {line}");
+
+				if (report.Conflicts.Count > 0)
+				{
+					this.Conflicts.Add("The last mod in the load order wins. Move a mod to change the winner.");
+				}
+			}
+			catch (Exception ex)
+			{
+				// A selection that is half finished is normal while the user works. Report
+				// it in the panel and never as a dialog.
+				this.Conflicts.Add(ex.Message);
+			}
 		}
 
 		// ---------------------------------------------------------------- deploy
@@ -492,6 +624,11 @@ namespace BlackboxModManager.App.ViewModels
 				foreach (DeployOverride collision in result.Report.Overrides)
 				{
 					report($"Load order: {collision}");
+				}
+
+				foreach (ContainerWrite container in result.Report.Containers)
+				{
+					report($"Container: {container}");
 				}
 			});
 
@@ -512,7 +649,14 @@ namespace BlackboxModManager.App.ViewModels
 
 		private bool CanDeploy() => this.IsIdle && this.IsGameReady && this._profile != null;
 
-		private DeployService Service() => new DeployService(this._store, this._settings.WorkRootOverride);
+		/// <summary>
+		/// Builds the service for one operation. It carries the Binary install, because the
+		/// container engine needs the hash lists of that install.
+		/// </summary>
+		private DeployService Service()
+		{
+			return new DeployService(this._store, this._binaryInstall, this._settings.WorkRootOverride);
+		}
 
 		// ---------------------------------------------------------------- plumbing
 
@@ -575,6 +719,7 @@ namespace BlackboxModManager.App.ViewModels
 			this.MoveUpCommand.NotifyCanExecuteChanged();
 			this.MoveDownCommand.NotifyCanExecuteChanged();
 			this.RefreshModsCommand.NotifyCanExecuteChanged();
+			this.RefreshConflictsCommand.NotifyCanExecuteChanged();
 			this.DeployCommand.NotifyCanExecuteChanged();
 			this.RevertCommand.NotifyCanExecuteChanged();
 		}

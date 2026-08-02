@@ -291,8 +291,12 @@ namespace BlackboxModManager.Tests
 			Assert.EndsWith(GameWorkspace.WorkspaceSuffix, workspace.Root);
 		}
 
+		/// <summary>
+		/// A Binary mod edits containers, and that needs the hash lists of a Binary install.
+		/// This DeployService holds none, so the deploy must stop before it writes.
+		/// </summary>
 		[Fact]
-		public void AProfileThatEnablesAKindWithNoEngineStopsTheDeploy()
+		public void ABinaryModWithNoBinaryInstallStopsTheDeploy()
 		{
 			var mod = new TempDirectory();
 
@@ -304,10 +308,12 @@ namespace BlackboxModManager.Tests
 				InstalledMod binary = this._importer.Import(mod.Path).Mod;
 				Assert.Equal(ModKind.Binary, binary.Kind);
 
-				DeployServiceException error = Assert.Throws<DeployServiceException>(
-					() => this.Deploy(this.ProfileWith(binary)));
+				Profile profile = this.ProfileWith(binary);
+				profile.Find(binary.Id).Selections.Ensure("Install").Enabled = true;
 
-				Assert.Contains("Step 6 adds the container engine", error.Message);
+				DeployServiceException error = Assert.Throws<DeployServiceException>(() => this.Deploy(profile));
+
+				Assert.Contains("Binary install", error.Message);
 
 				// The game directory must be untouched.
 				Assert.Equal("container a", this._game.Read("GLOBAL/GLOBALA.BUN"));

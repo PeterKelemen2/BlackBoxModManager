@@ -73,3 +73,64 @@ One pass per mod reintroduces it, and worse. See the first pitfall below.
 ## Done when
 
 The success criterion in the project brief passes. Both example mods install together from the UI, with Binary never launched, in one load-apply-save pass, with a clean revert afterward and both mods visibly in effect in the running game.
+
+## Results
+
+**Step 6 is done and the success criterion of the project brief passes in full.** Both example mods install together into one game directory, in one load, apply, and save pass. The game starts from that directory and both mods take effect. The revert restores the vanilla state exactly. Binary never ran.
+
+Read the run with `tools/run-deploy-test.sh`. It copies the game, applies both mods, verifies, and reverts.
+
+### The numbers from the run
+
+| Fact             | Value                                                       |
+| ---------------- | ----------------------------------------------------------- |
+| Vanilla snapshot | 1561 files, 1729 MB                                         |
+| Staging build    | 1472 files linked, 89 copied                                |
+| Merged load      | 2 containers, `GLOBAL\GLOBALB.LZC` and `GLOBAL\GLOBALA.BUN` |
+| Camera mod       | 1198 commands, 1 question answered                          |
+| 1 Lap URL mod    | 51 commands, 0 questions                                    |
+| Conflict check   | 2 variants, 501 field edits, 0 conflicts                    |
+| `Load` errors    | none                                                        |
+| `Save` errors    | none                                                        |
+| `manager.Errors` | empty for both mods                                         |
+| Full verify      | 1563 files, 0 problems                                      |
+| `GlobalB.lzc`    | 5,145,778 bytes vanilla, 8,263,472 bytes after the deploy   |
+| Revert           | 0 differences against the snapshot                          |
+
+The container growth matches the step 1 measurement to the byte. Nikki writes `GlobalB.lzc` with no whole-file compression, and the game accepts it.
+
+### The types
+
+| Type                    | Holds                                                                   |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `ContainerDeployEngine` | The single pass. Load once, apply every variant, save once. 6.1 to 6.3. |
+| `MergedLaunch`          | The one synthetic manifest, with the union of files and links. 6.1.     |
+| `VariantReader`         | The enabled variants of every Binary mod, in load order.                |
+| `ConflictPreflight`     | Same key and a different value, with the load order winner. 6.4.        |
+| `VariantRowViewModel`   | A variant checkbox, and a control per question. 6.4.                    |
+
+`tests/BlackboxModManager.Tests` holds 178 tests. The new ones read the real example mods and build no container, so they run on native Linux.
+
+### The game confirms the result
+
+**A person ran the game and both mods took effect.** The game started from the scratch copy at `/mnt/Data/Games/DeployTest`, and the camera change and the one-lap races were both visible.
+
+Keep doing this after a change to the container path. No automated check can replace it. A container that saves with no error can still fail to load, and only the game answers that. Run the test with `DEPLOY_NO_REVERT=1`, then start `SPEED2.EXE` in the scratch copy.
+
+### Facts that carry forward
+
+1. **The single pass works, and the load order decides every collision.** Two mods applied 1249 commands to one loaded profile before one `Save`. No mod overwrote the container of the other. Container merging never became a problem that somebody had to solve.
+
+2. **`AddNew` does check for duplicates.** Defect 6 said it does not. It calls `Contains` and throws `DatabaseExistenceException`. The real hazard is narrower: `Contains` compares raw text, so two spellings of one container both pass and the profile then holds two objects for one file. Defect 6 is corrected.
+
+3. **The library matches a container by the exact text of its name.** `CollectionMap` keys every collection on `sdb.Filename` and `GetCollection` does one dictionary lookup. The merged union therefore keeps the spelling of the manifest, and two mods that spell one container differently cannot share a load. `MergedLaunch` reports that instead of loading both.
+
+4. **Pass the full path of the script to `EndScriptManager`.** The third argument becomes `Path.GetDirectoryName(launcher)` inside `CollectionMap`, and seventeen commands read a file relative to it. The step 1 harness passed a bare file name, which gives an empty directory. Neither example mod reads a file, so nothing broke and nothing proved the point.
+
+5. **A link to a file that does not exist is normal.** A vanilla install holds one of the four links that every manifest names. Every loader in Nikki returns for a missing file. Report it once as a note, never as an error. A first attempt treated it as an error and stopped the deploy.
+
+6. **The verify needs a third category.** A rewritten container differs from the vanilla snapshot on purpose and matches no file in the mod store. It cannot be compared against either, so the check on it is existence and a length above zero.
+
+7. **A combobox option is named by the quoted string, not by the file it appends.** The camera mod offers `Install Camera Mod [NFSMW TO U2]` and `Restore original camera settings`. The blocks that those options append are `[1]_Camera_MOD_NFSMW_TO_U2.end` and `[0]_Restore_Camera_Settings.end`. A stored answer holds the option name, so it holds the first form.
+
+8. **A profile records the variants of a Binary mod separately from the mod.** `ProfileEntry.Enabled` switches the mod on, and `VariantSelection.Enabled` switches one variant on. A variant that the user switched off keeps its answers, so a later switch back changes nothing else.

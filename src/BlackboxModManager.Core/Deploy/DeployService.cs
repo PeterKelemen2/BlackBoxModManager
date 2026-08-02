@@ -28,11 +28,16 @@ namespace BlackboxModManager.Core.Deploy
 
 		public ReplicationReport Staging { get; }
 
-		public DeployResult(DeployReport report, VerificationResult verification, ReplicationReport staging)
+		/// <summary>What the conflict check found before the deploy wrote anything.</summary>
+		public ConflictReport Conflicts { get; }
+
+		public DeployResult(DeployReport report, VerificationResult verification, ReplicationReport staging,
+			ConflictReport conflicts)
 		{
 			this.Report = report;
 			this.Verification = verification;
 			this.Staging = staging;
+			this.Conflicts = conflicts;
 		}
 	}
 
@@ -58,14 +63,25 @@ namespace BlackboxModManager.Core.Deploy
 		private readonly ModStore _store;
 		private readonly IReadOnlyList<IDeployEngine> _engines;
 		private readonly string _workRootOverride;
+		private readonly BinaryInstall _binary;
 
-		public DeployService(ModStore store, string workRootOverride = null)
-			: this(store, new IDeployEngine[] { new LinkDeployEngine() }, workRootOverride) { }
+		/// <summary>
+		/// The engines in the order that a deploy runs them.
+		///
+		/// The link engine runs first. It puts drop-in files into the staging copy, and one
+		/// of those files can be a container that the container engine then loads. The
+		/// reverse order would load the container of the game and then overwrite the result.
+		/// </summary>
+		public DeployService(ModStore store, BinaryInstall binary = null, string workRootOverride = null)
+			: this(store, new IDeployEngine[] { new LinkDeployEngine(), new ContainerDeployEngine() },
+				binary, workRootOverride) { }
 
-		public DeployService(ModStore store, IReadOnlyList<IDeployEngine> engines, string workRootOverride = null)
+		public DeployService(ModStore store, IReadOnlyList<IDeployEngine> engines,
+			BinaryInstall binary = null, string workRootOverride = null)
 		{
 			this._store = store ?? throw new ArgumentNullException(nameof(store));
 			this._engines = engines ?? throw new ArgumentNullException(nameof(engines));
+			this._binary = binary;
 			this._workRootOverride = workRootOverride;
 		}
 
@@ -89,13 +105,19 @@ namespace BlackboxModManager.Core.Deploy
 					"Every build and every swap copies every byte.");
 			}
 
+			// Read the conflicts first. The check writes nothing, and a user who sees the
+			// list before the deploy can still change the load order.
+			ConflictReport conflicts = this.CheckConflicts(install, profile, write);
+
 			VanillaSnapshot snapshot = this.EnsureVanilla(workspace, write);
 
 			write("Build the staging copy.");
 			ReplicationReport staging = TreeReplicator.Build(
 				workspace.VanillaDirectory, workspace.StagingDirectory, write);
 
-			var context = new DeployContext(install, workspace.StagingDirectory, profile, this._store, write);
+			var context = new DeployContext(
+				install, workspace.StagingDirectory, profile, this._store, this._binary, write);
+
 			DeployReport report = this.RunEngines(context, profile, write);
 
 			VerificationResult verification = StagingVerifier.Verify(
@@ -120,7 +142,22 @@ namespace BlackboxModManager.Core.Deploy
 			write(report.Summary());
 			write("The deploy finished.");
 
-			return new DeployResult(report, verification, staging);
+			return new DeployResult(report, verification, staging, conflicts);
+		}
+
+		/// <summary>
+		/// Reports the fields that the enabled variants disagree about. It writes nothing, so
+		/// the UI can call it whenever the selection changes.
+		/// </summary>
+		public ConflictReport CheckConflicts(GameInstall install, Profile profile, Action<string> log = null)
+		{
+			if (install is null) throw new ArgumentNullException(nameof(install));
+			if (profile is null) throw new ArgumentNullException(nameof(profile));
+
+			IReadOnlyList<EnabledVariant> variants = VariantReader.Read(
+				profile, this._store, install.Game, null);
+
+			return ConflictPreflight.Run(variants, log);
 		}
 
 		/// <summary>
@@ -206,6 +243,7 @@ namespace BlackboxModManager.Core.Deploy
 			var files = new List<DeployedFile>();
 			var overrides = new List<DeployOverride>();
 			var methods = new Dictionary<LinkKind, int>();
+			var containers = new List<ContainerWrite>();
 			string note = String.Empty;
 
 			IReadOnlyList<InstalledMod> enabled = this.ResolveEnabled(profile);
@@ -234,6 +272,7 @@ namespace BlackboxModManager.Core.Deploy
 
 				files.AddRange(report.Files);
 				overrides.AddRange(report.Overrides);
+				containers.AddRange(report.Containers);
 
 				foreach (KeyValuePair<LinkKind, int> entry in report.Methods)
 				{
@@ -245,7 +284,7 @@ namespace BlackboxModManager.Core.Deploy
 				if (note.Length == 0) note = report.MethodNote;
 			}
 
-			return new DeployReport(files, overrides, methods, note);
+			return new DeployReport(files, overrides, methods, note, containers);
 		}
 
 		/// <summary>
@@ -290,8 +329,7 @@ namespace BlackboxModManager.Core.Deploy
 			{
 				throw new DeployServiceException(
 					$"The profile \"{profile.Name}\" enables {String.Join(", ", unclaimed)}. " +
-					"No engine in this build deploys that kind. Step 6 adds the container engine. " +
-					"Disable those mods, then deploy again.");
+					"No engine in this build deploys that kind. Switch those mods off, then deploy again.");
 			}
 
 			return found;

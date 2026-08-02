@@ -28,6 +28,17 @@ namespace BlackboxModManager.App
 			// that only the run platform can answer. See SelfTest.
 			if (args.Length == 2 && args[0] == SelfTest.Switch) return SelfTest.Run(args[1]);
 
+			// The deploy test installs both example mods into a scratch copy of the game.
+			// It delivers the success criterion of the project brief with no window.
+			if (args.Length >= 4 && args[0] == DeployTest.Switch)
+			{
+				// A fifth argument of "keep" leaves the deploy in place, so that somebody can
+				// start the game and look at the result.
+				bool revert = args.Length < 5 || args[4] != "keep";
+
+				return DeployTest.Run(args[1], args[2], args[3], revert);
+			}
+
 			var application = new App();
 			application.InitializeComponent();
 			return application.Run();

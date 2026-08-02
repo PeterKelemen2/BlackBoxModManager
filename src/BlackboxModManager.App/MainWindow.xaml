@@ -75,23 +75,89 @@
 
       <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
 
-      <GroupBox Grid.Column="2" Header="Log" Padding="4">
-        <!-- Name no font family here. A family that the machine does not hold ends in
-             MS.Internal.Invariant.FailFast, which kills the process with no dialog and no
-             catchable exception. Wine holds no Consolas, and a log line then killed the
-             application. The default family is the one that the rest of the window uses,
-             and it is the only one that we know resolves. -->
-        <ListBox x:Name="LogList" ItemsSource="{Binding Log}"
-                 FontSize="11"
-                 HorizontalContentAlignment="Stretch"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto">
-          <ListBox.ItemTemplate>
-            <DataTemplate>
-              <TextBlock Text="{Binding}" TextWrapping="Wrap" />
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </GroupBox>
+      <TabControl Grid.Column="2">
+        <!-- The variants of a Binary mod, and the questions that its script asks. -->
+        <TabItem Header="Mod">
+          <Grid Margin="6">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Text="{Binding DetailsHeader}" Style="{StaticResource Hint}"
+                       Margin="0,0,0,8" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+              <ItemsControl ItemsSource="{Binding Variants}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="#40808080" BorderThickness="0,0,0,1" Padding="0,0,0,6" Margin="0,0,0,6">
+                      <StackPanel>
+                        <!-- A mod folder holds several variants and the user picks any
+                             number of them. This is a multiple selection. -->
+                        <CheckBox Content="{Binding Name}" IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                  IsEnabled="{Binding IsInstallable}" FontWeight="Bold" />
+                        <TextBlock Text="{Binding Problem}" Style="{StaticResource Hint}"
+                                   Margin="20,2,0,0"
+                                   Visibility="{Binding HasProblem, Converter={StaticResource BoolToVisible}}" />
+                        <ItemsControl ItemsSource="{Binding Questions}" Margin="20,4,0,0">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                              <StackPanel Margin="0,0,0,6">
+                                <!-- The description of the script is the caption. -->
+                                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Margin="0,0,0,2" />
+                                <ComboBox ItemsSource="{Binding Options}"
+                                          SelectedItem="{Binding SelectedOption, Mode=TwoWay}"
+                                          Visibility="{Binding IsCombobox, Converter={StaticResource BoolToVisible}}" />
+                                <CheckBox Content="On" IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                          Visibility="{Binding IsCheckbox, Converter={StaticResource BoolToVisible}}" />
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Grid>
+        </TabItem>
+
+        <!-- Name no font family in this window. A family that the machine does not hold
+             ends in MS.Internal.Invariant.FailFast, which kills the process with no dialog
+             and no catchable exception. Wine holds no Consolas, and a log line then killed
+             the application. -->
+        <TabItem Header="Log">
+          <ListBox x:Name="LogList" ItemsSource="{Binding Log}"
+                   FontSize="11" BorderThickness="0"
+                   HorizontalContentAlignment="Stretch"
+                   ScrollViewer.HorizontalScrollBarVisibility="Auto">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </TabItem>
+
+        <TabItem Header="Conflicts">
+          <Grid Margin="6">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <ListBox Grid.Row="0" ItemsSource="{Binding Conflicts}" BorderThickness="0"
+                     FontSize="11" HorizontalContentAlignment="Stretch">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <Button Grid.Row="1" Content="Check again" Command="{Binding RefreshConflictsCommand}"
+                    HorizontalAlignment="Left" Margin="0,6,0,0" />
+          </Grid>
+        </TabItem>
+      </TabControl>
     </Grid>
 
     <!-- The actions. -->

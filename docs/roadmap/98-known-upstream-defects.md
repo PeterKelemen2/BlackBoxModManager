@@ -48,15 +48,24 @@ Review this list when a symptom does not match the code you wrote.
 
 **Work around it:** validate `Choice` against `Options.Length` before you resume. Throw your own error that names the mod, the script, and the option set. Never pass an unvalidated stored selection straight into `Choice`.
 
-## 6. `BaseProfile.Load` adds a container per call, with no duplicate check
+## 6. `BaseProfile.Load` adds a container per call, and its duplicate check compares raw text
 
-**Where:** `Endscript/Endscript/Profiles/BaseProfile.cs`, inside `Load`.
+**Where:** `Endscript/Endscript/Profiles/BaseProfile.cs`, inside `Load`, `AddNew`, and `Contains`.
 
-**What happens:** `Load` calls `this.AddNew(launch.Files[i])` for every entry. It does not test whether the profile already holds that container. Two manifests that both declare `GLOBAL\GLOBALB.LZC` produce two `SynchronizedDatabase` entries for one file. `Save` then writes the same file twice from two different in-memory states. The last write wins, and the edits of the first mod disappear.
+**Corrected in step 6.** An earlier version of this entry said that `AddNew` has no duplicate check. It has one. The real defect is narrower and it needs the same fix.
 
-**This directly threatens the single-pass design.** The brief requires one load, then all mods applied, then one save. A naive loop that calls `profile.Load(launch)` once per mod hits this defect.
+**What happens:** `Load` calls `this.AddNew(launch.Files[i])` for every entry. `AddNew` calls `Contains(filename)` first and throws `DatabaseExistenceException` for a duplicate. `Contains` compares with `String.Equals(..., OrdinalIgnoreCase)` on the raw string, so it normalizes neither the separator nor the path.
 
-**Work around it:** call `Load` once. Build one synthetic `Launch` whose `Files` is the deduplicated union of every enabled mod's `Files`. See [06-binary-deployment.md](06-binary-deployment.md).
+**Two failure modes follow.**
+
+1. Two manifests that write the container the same way stop the load with `DatabaseExistenceException`. That is loud, and the message names the file.
+2. Two manifests that write one container two ways, such as `GLOBAL\GLOBALB.LZC` against `GLOBAL/GlobalB.lzc`, both pass the check. The profile then holds two `SynchronizedDatabase` objects for one file. `Save` writes that file twice from two different in-memory states, the last write wins, and the edits of the first mod disappear with no error.
+
+**This directly threatens the single-pass design.** The brief requires one load, then all mods applied, then one save. A loop that calls `profile.Load(launch)` once per mod hits failure mode 1 for every shared container.
+
+**Work around it:** call `Load` once. Build one synthetic `Launch` whose `Files` is the union of every enabled mod's `Files`, deduplicated on a key that normalizes the separator and the letter case. `MergedLaunch` does this. See [06-binary-deployment.md](06-binary-deployment.md).
+
+**One spelling per container, and only one.** The union keeps the spelling of the manifest, because `CollectionMap` matches a container by that exact text. Two enabled mods that spell one container differently cannot share a load at all, and `MergedLaunch` reports that instead of loading both. See [99-api-notes.md](99-api-notes.md).
 
 ## 7. `SaveHashList` writes to disk during `Save`
 

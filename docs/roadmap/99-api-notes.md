@@ -48,6 +48,12 @@ public void LoadLinks();
 
 `LoadLinks` resolves each link. `ePathType.Relative` resolves against `ThisDir`. `ePathType.Absolute` resolves against `Directory`. This is the reverse of what the names suggest.
 
+**A link to a file that does not exist is normal.** Binary writes the same four links into every manifest of one game. A vanilla Underground 2 install holds only `LANGUAGES\Labels.bin` of them, and it holds no `GLOBAL\attributes.bin`, no `GLOBAL\fe_attrib.bin`, and no `LANGUAGES\Labels_Global.bin`. `Loader.LoadBinKeys`, `LoadVaultAttributes`, and `LoadVaultFEAttribs` all return at once for a missing file. Never treat a missing link file as an error.
+
+**A rooted path in `File` ignores the base directory.** `Path.Combine` returns its second argument unchanged when that argument is rooted. One synthetic manifest holds one `ThisDir` and the variants hold several, so a relative link of one mod cannot resolve through it. Resolve every link to a full path and store that. `MergedLaunch` does this.
+
+**Nothing in the library reads `UsageID`.** The property exists and no other file references it. Setting `Usage` to `Modder` declares what the run is, and it changes no behavior.
+
 ## `BaseProfile`
 
 ```csharp
@@ -102,6 +108,23 @@ public string Directory { get; }
 
 Read `CurrentFile`, `CurrentLine`, and `CurrentIndex` inside a catch block. They identify the exact failure point.
 
+## `CollectionMap`
+
+```csharp
+public CollectionMap(BaseProfile profile, string launcher);
+public string Directory { get; }                                        // = Path.GetDirectoryName(launcher)
+public Collectable GetCollection(string filename, string manager, string cname);
+public bool ContainsCollection(string filename, string manager, string cname);
+```
+
+`EndScriptManager` builds one of these in its constructor. Two facts about it decide how the merged load must work.
+
+**The map keys a collection by the container file name as plain text.** The key is `sdb.Filename + "|" + manager.Name + "|" + collection.CollectionName`. `GetCollection` does one dictionary lookup on that string and throws `LookupFailException` when it misses. Neither side normalizes the separator or the letter case.
+
+**Consequence.** The `Files` entry of the merged manifest must keep the spelling that the scripts use. `GLOBAL\GLOBALB.LZC` and `GLOBAL/GlobalB.lzc` name one file on the disk and two different keys in this map. Both example mods write `GLOBAL\GLOBALB.LZC` in the manifest and in every command, so one spelling serves both. Two mods that disagree about the spelling cannot share one load.
+
+**`Directory` is the directory of the launcher argument.** Every command that reads a file resolves against it. `ImportCommand`, `AddTextureCommand`, `CreateFileCommand`, and thirteen more read it.
+
 ## `EndScriptManager`
 
 ```csharp
@@ -112,6 +135,13 @@ public IEnumerable<EndError> Errors { get; }
 public int CurrentIndex { get; }
 public BaseCommand CurrentCommand { get; }
 ```
+
+**Pass the full path of the script as `launcher`.** The constructor uses it only for
+`new CollectionMap(profile, launcher)`, which stores `Path.GetDirectoryName(launcher)`. A bare
+file name gives an empty directory, and every command that reads a file then resolves against
+the working directory of the process. The step 1 harness passed `launch.Endscript`, which is a
+bare name. No command of either example mod reads a file, so nothing broke and nothing proved
+the point either.
 
 Call `CommandChase()` once before the first `ProcessScript()`. It resolves the jump targets for every selectable and logical command.
 
@@ -163,7 +193,8 @@ string[] loadErrors = profile.Load(launch);
 var parser = new EndScriptParser(Path.Combine(launch.ThisDir, launch.Endscript));
 BaseCommand[] commands = parser.Read();
 
-var manager = new EndScriptManager(profile, commands, launch.Endscript);
+// The third argument becomes Path.GetDirectoryName(launcher). Pass the full path.
+var manager = new EndScriptManager(profile, commands, Path.Combine(launch.ThisDir, launch.Endscript));
 manager.CommandChase();
 while (!manager.ProcessScript())
 {

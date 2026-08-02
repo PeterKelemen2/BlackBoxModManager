@@ -19,6 +19,16 @@ namespace BlackboxModManager.Core.Mods
 		/// <summary>The variant name. This is the manifest file name without its extension.</summary>
 		public string Variant { get; set; }
 
+		/// <summary>
+		/// True when a deploy applies this variant.
+		///
+		/// A mod folder holds several variants, and the user picks any number of them. The
+		/// entry stays in the file when the user switches a variant off, so the answers
+		/// survive. Presence in the file means "the profile knows this variant". This flag
+		/// means "apply it".
+		/// </summary>
+		public bool Enabled { get; set; }
+
 		/// <summary>The chosen option name for each question, keyed by the ordinal.</summary>
 		public Dictionary<int, string> Answers { get; set; } = new Dictionary<int, string>();
 
@@ -59,6 +69,31 @@ namespace BlackboxModManager.Core.Mods
 
 		[JsonIgnore]
 		public int Count => this.Variants.Count;
+
+		/// <summary>
+		/// The variants that a deploy applies, by name. The order of a dictionary means
+		/// nothing, so a caller that needs an order takes it from the variant list of the
+		/// package.
+		/// </summary>
+		public IReadOnlyList<string> EnabledVariants()
+		{
+			var found = new List<string>();
+
+			foreach (KeyValuePair<string, VariantSelection> entry in this.Variants)
+			{
+				if (entry.Value != null && entry.Value.Enabled) found.Add(entry.Key);
+			}
+
+			return found;
+		}
+
+		/// <summary>True when this variant is present and switched on.</summary>
+		public bool IsEnabled(string variant)
+		{
+			VariantSelection selection = this.For(variant);
+
+			return selection != null && selection.Enabled;
+		}
 
 		public VariantSelection For(string variant)
 		{

@@ -25,14 +25,22 @@ namespace BlackboxModManager.Core.Deploy
 		public ModStore Store { get; }
 
 		/// <summary>
+		/// The Binary install that holds the hash lists. This is null when the user has not
+		/// set one. Only the container engine needs it, and that engine reports the need.
+		/// </summary>
+		public BinaryInstall Binary { get; }
+
+		/// <summary>
 		/// Where the engine writes its progress. The UI shows these lines. This is never
 		/// null, so an engine can call it with no check.
 		/// </summary>
 		public Action<string> Log { get; }
 
 		public DeployContext(GameInstall game, string stagingDirectory, Profile profile,
-			ModStore store, Action<string> log = null)
+			ModStore store, BinaryInstall binary = null, Action<string> log = null)
 		{
+			this.Binary = binary;
+
 			this.Game = game ?? throw new ArgumentNullException(nameof(game));
 			this.Profile = profile ?? throw new ArgumentNullException(nameof(profile));
 			this.Store = store ?? throw new ArgumentNullException(nameof(store));
