@@ -18,7 +18,8 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 6    | Done. See "Completed" below.                                 | —                              |
 | 7    | [07-game-profiles.md](07-game-profiles.md)                   | Part done. Three games wait.   |
 | 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples. |
-| 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.      |
+| 9    | [09-asi-configuration.md](09-asi-configuration.md)           | ASI mod settings and loaders.  |
+| 10   | [10-texmod.md](10-texmod.md)                                 | Nothing. Explicitly last.      |
 
 Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, and 6 are done. **The success criterion of the project brief passes.**
 
