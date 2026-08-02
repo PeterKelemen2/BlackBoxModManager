@@ -17,7 +17,11 @@ namespace BlackboxModManager.Core
 		public const string MainKeysFolder = "mainkeys";
 
 		/// <summary>
-		/// The six games that Nikki supports. GameINT.None is not one of them.
+		/// The six games that Nikki supports, which are also the six games that this
+		/// application targets. GameINT.None is not one of them.
+		///
+		/// This list says which hash lists a Binary install has to hold. It does not say
+		/// which games the application manages today. GameCatalog answers that.
 		/// </summary>
 		public static IReadOnlyList<GameINT> SupportedGames { get; } = new[]
 		{
