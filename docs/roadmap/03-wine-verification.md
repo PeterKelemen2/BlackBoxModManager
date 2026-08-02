@@ -12,7 +12,7 @@ Three things, in descending order of risk.
 2. **Symlink and hardlink creation.** Windows normally needs `SeCreateSymbolicLinkPrivilege`, which means administrator rights or Developer Mode. Wine enforces this differently across builds. This gates the deploy engine in step 5, not the container work.
 3. **File path case sensitivity.** This is no longer a risk. It is a confirmed problem. The manifests declare `GLOBAL\GLOBALB.LZC`. The file on disk is `GLOBAL/GlobalB.lzc`. Wine resolves the case for us. A native Linux .NET run does not, and `CheckFiles` throws for a file you can see in the listing. See [00-test-environment.md](00-test-environment.md).
 
-The test prefix is GE-Proton-10-34. Record results against that build.
+The test prefix is GE-Proton10-34. Record results against that build. Heroic manages it. The runner is `~/.config/heroic/tools/proton/GE-Proton10-34/files/bin/wine`, which reports `wine-10.0 (Staging)`. The `pfx` entry inside the prefix is a symbolic link to the prefix itself, so `WINEPREFIX` is the prefix root.
 
 ## Work
 
@@ -42,3 +42,50 @@ The test prefix is GE-Proton-10-34. Record results against that build.
 ## Done when
 
 The published harness runs inside the Wine prefix, produces a byte-identical container, and the game launches with the mods in effect. The link-behavior results are recorded for step 5.
+
+## Results
+
+Work items 1 to 5 pass. Item 6, the game launch, waits for a human.
+
+### The run matrix
+
+Two Wine builds, two publish shapes. All four apply `1 Lap URL Races.end` with no error.
+
+| Run | Runner | Publish | Result | `LZCompressLib.dll` |
+| --- | ------ | ------- | ------ | ------------------- |
+| 1 | Wine 11.13 | multi-file | Pass | resolved beside the executable |
+| 2 | Wine 11.13 | single-file | Pass | resolved from the bundle |
+| 3 | GE-Proton10-34 | multi-file | Pass | resolved beside the executable |
+| 4 | GE-Proton10-34 | single-file | Pass | resolved from the bundle |
+
+**Every run wrote the same bytes.** `GlobalB.lzc` has MD5 `1d11b99c09c15f57541446b2a4655ad0` in all four. `GLOBALA.BUN` has MD5 `3f1b442c59b9503c0e1b1b52a1c6882f` in all four. The container does not depend on the Wine build or on the publish shape. **This closes risk 1.** The `LZCompressLib.dll` P/Invoke works, and it produces identical output across two independent Wine builds.
+
+No Windows machine was available, and a native Linux run cannot get far enough to write a container. Two Wine builds is the strongest comparison this environment offers.
+
+### Links and paths — risk 2 and risk 3
+
+Probed against the game directory on ext4 with `--probe`.
+
+| Method | Wine 11.13 | GE-Proton10-34 |
+| ------ | ---------- | -------------- |
+| Hard link | works | works |
+| Symbolic link | works | works |
+| Copy | works | works |
+| Letter case | insensitive | insensitive |
+| Backslash separator | works | works |
+
+**No privilege problem appeared on either build.** `SeCreateSymbolicLinkPrivilege` did not block anything. **Step 5 can plan for hard links as the default**, with the symbolic link and the copy as fallbacks. Do not hardcode that choice. Call `LinkSupport.Probe` against the real target directory, because a hard link still fails across filesystems.
+
+A native Linux run of the same probe reports the opposite for paths: case sensitive, and the backslash is not a separator. A test asserts this, so the difference stays visible.
+
+### Two traps that cost time
+
+**A Proton build ships no `winepath` program.** Its `files/bin` holds `wine`, `wine64`, `wineserver`, and `msidb`, and nothing else. A wrapper that calls `winepath` therefore falls through to system Wine, which starts a wineserver of the wrong version in the Proton prefix. Every later call then fails with `wine client error:0: version mismatch 956/864`, which names neither the cause nor the prefix. **Convert paths with `"$runner" winepath.exe -w`**, so the conversion uses the same build.
+
+**Never mix Wine builds in one prefix.** Once a wineserver of the wrong version runs, every call to that prefix fails until the server stops. Put the directory of the runner first on `PATH`, so that `wine` and `wineserver` come from one build.
+
+### One correction to the pitfalls above
+
+The pitfall on `IncludeNativeLibrariesForSelfExtract` says the DLL "must exist as a real file next to the host at run time". That is not what happens. A single-file publish extracts the native libraries to a temporary directory, and the P/Invoke resolves them from there. The file is not beside the executable and the call still works.
+
+The flag is still mandatory. The wording was wrong, and a harness check built on that wording rejected a good build. **Test the resolution, not the file.** `NativeLibrary.TryLoad` against the Nikki assembly answers the real question.

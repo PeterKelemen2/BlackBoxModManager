@@ -16,6 +16,8 @@ namespace Harness
 		/// </summary>
 		public static int Run(Options options)
 		{
+			if (options.ProbeDir != null) return Probe(options.ProbeDir);
+
 			var service = new BinaryInstallService();
 
 			if (options.ForgetBinary)
@@ -83,6 +85,47 @@ namespace Harness
 
 			Console.Error.WriteLine("  Or          Pass --binary <dir> for one run only.");
 			return false;
+		}
+
+		/// <summary>
+		/// Reports which link methods the target directory supports. Step 5 needs this
+		/// answer per Wine build and per filesystem. Copy always works, so this never
+		/// blocks a deploy. It only decides the cost.
+		/// </summary>
+		private static int Probe(string directory)
+		{
+			Console.WriteLine($"Directory     {directory}");
+			Console.WriteLine($"OS            {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
+			Console.WriteLine();
+			Console.WriteLine("Link methods");
+
+			LinkProbeResult links = LinkSupport.Probe(directory);
+
+			foreach (LinkProbe probe in links.Probes)
+			{
+				Console.WriteLine($"  {probe.Kind,-14} {(probe.Works ? "works" : "FAILED")}");
+
+				if (!probe.Works) Console.WriteLine($"                 {probe.Error}");
+			}
+
+			Console.WriteLine($"  Best           {links.Best}");
+			Console.WriteLine();
+			Console.WriteLine("Path handling");
+
+			PathCaseResult paths = PathCase.Probe(directory);
+
+			if (paths.Error.Length > 0)
+			{
+				Console.WriteLine($"  FAILED         {paths.Error}");
+			}
+			else
+			{
+				Console.WriteLine($"  Letter case    {(paths.IsCaseInsensitive ? "insensitive" : "SENSITIVE")}");
+				Console.WriteLine($"  Backslash      {(paths.AcceptsBackslash ? "works as a separator" : "DOES NOT WORK")}");
+			}
+
+			// Copy is the floor. A directory where even a copy fails is not usable at all.
+			return links.Works(LinkKind.Copy) ? 0 : 1;
 		}
 
 		private static void ReportResolution(BinaryInstallResolution resolution)

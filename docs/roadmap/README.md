@@ -12,7 +12,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.         |
 | 1    | Done. See "Completed" below.                                 | —                                      |
 | 2    | Done. See "Completed" below.                                 | —                                      |
-| 3    | [03-wine-verification.md](03-wine-verification.md)           | The Linux target.                      |
+| 3    | [03-wine-verification.md](03-wine-verification.md)           | Items 1 to 5 pass. The game launch is open. |
 | 4    | [04-endscript-layer.md](04-endscript-layer.md)               | All Binary mod features.               |
 | 5    | [05-mvp-shell.md](05-mvp-shell.md)                           | The UI.                                |
 | 6    | [06-binary-deployment.md](06-binary-deployment.md)           | The success criterion.                 |
@@ -20,7 +20,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.         |
 | 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.              |
 
-Steps 1 to 3 prove that the foundation works. Steps 1 and 2 pass. Do not start step 4 until step 3 passes as well.
+Steps 1 to 3 prove that the foundation works. Steps 1 and 2 pass. Step 3 passes every check that does not need a human. Only the game launch inside the Proton prefix is open.
 
 ## Completed
 
@@ -69,6 +69,17 @@ Three facts carry forward.
 1. **`Console.ReadLine` never returns on a Wine console.** A minimal test program behaves the same way, so this is Wine. The harness therefore has no first-run prompt. **The step 5 UI must ask its questions in a dialog.**
 2. **Automatic discovery works.** The common directory scan finds an unpacked Binary install with no help from the user. The registry scan finds nothing, which is expected.
 3. **`userkeys` is generated output, and our redirect matches it.** One deploy wrote the same 1018 labels that a Binary run wrote. See [00-test-environment.md](00-test-environment.md).
+
+### Step 3 — Wine verification
+
+**Items 1 to 5 pass. Item 6, the game launch, waits for a human.** Read [03-wine-verification.md](03-wine-verification.md) for the run matrix and the probe results.
+
+Four facts carry forward.
+
+1. **The container does not depend on the Wine build or on the publish shape.** Wine 11.13 and GE-Proton10-34, multi-file and single-file, all wrote the same bytes. The `LZCompressLib.dll` P/Invoke works on both. This closes the largest open risk in the project.
+2. **Hard links, symbolic links, and copies all work on both builds.** No privilege blocked a symbolic link. **Step 5 can default to hard links.** Do not hardcode that. Call `LinkSupport.Probe` against the real target, because a hard link still fails across filesystems.
+3. **A Proton build ships no `winepath` program.** A wrapper that calls it falls through to system Wine and starts a wineserver of the wrong version. Convert paths with `wine winepath.exe -w`, using the same build.
+4. **`IncludeNativeLibrariesForSelfExtract` does not put the DLL beside the executable.** It extracts to a temporary directory and the P/Invoke resolves from there. Test the resolution with `NativeLibrary.TryLoad`, never the file location.
 
 ## Reference files
 

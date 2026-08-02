@@ -13,7 +13,7 @@ The machine-specific paths and the facts observed in them. These paths belong to
 
 The machine holds two copies of Binary 2.8.3. Their `Binary.dll` files have the same MD5 sum. The copy under `~/Downloads` is the one that the step 2 locator finds without help. The copy under `/mnt/Data` has never been run, so it holds no `userkeys` directory. The copy under `~/Downloads` has been run and does hold one. Both are useful. Use the untouched copy to test a fresh install and the used copy to test a used one.
 
-The prefix runs GE-Proton-10-34. The game launches from that prefix.
+The prefix runs GE-Proton10-34. The game launches from that prefix. Heroic manages it. The runner is `~/.config/heroic/tools/proton/GE-Proton10-34/files/bin/wine`, which reports `wine-10.0 (Staging)`. The `pfx` entry inside the prefix is a symbolic link to the prefix itself, so `WINEPREFIX` is the prefix root.
 
 **Copy the game before every harness run.** Never point `launch.Directory` at the path above. It is the vanilla reference.
 
@@ -98,13 +98,18 @@ The install is at the path in the table above. `SPEED2.EXE` is the executable.
 
 Console output works. `Console.WriteLine` and `Console.Error.WriteLine` both reach the terminal.
 
-**A self-contained `win-x64` publish of .NET 10 runs under system Wine 11.13.** A fresh prefix needs no configuration. This is not the GE-Proton prefix. Step 3 still has to test that one.
+**A self-contained `win-x64` publish of .NET 10 runs under system Wine 11.13 and under GE-Proton10-34.** A fresh prefix needs no configuration. Both builds produce byte-identical containers. See [03-wine-verification.md](03-wine-verification.md).
+
+**A Proton build ships no `winepath` program.** Its `files/bin` holds `wine`, `wine64`, `wineserver`, and `msidb`, and nothing else. Convert a path with `wine winepath.exe -w`, using the same build. A call to the `winepath` program falls through to system Wine and starts a wineserver of the wrong version in the prefix.
+
+**Never mix Wine builds in one prefix.** The symptom is `wine client error:0: version mismatch 956/864`. It names neither the cause nor the prefix. Stop the wineserver, then use one build.
 
 ## Open items this environment can still answer
 
 1. What does a `.bacc` file contain? Run Binary once against a scratch copy and inspect the result. A grep already proved that no MIT library reads or writes one. The string sits in `Binary.dll`.
-2. Does the x64 `LZCompressLib.dll` P/Invoke work inside the GE-Proton-10-32 prefix? This is the step 3 question.
 
 ### Answered
+
+**Does the x64 `LZCompressLib.dll` P/Invoke work inside the GE-Proton prefix?** Yes. It works on GE-Proton10-34 and on system Wine 11.13. Both builds write the same bytes. The prefix uses GE-Proton10-34, not the 10-32 that an earlier note named.
 
 **Does `userkeys` appear after one Binary run, and does its content match what `SaveHashList` would write?** Yes to both. The `userkeys/underground2.txt` of the used install holds 1018 labels. One deploy through our own code wrote the same 1018 labels to `customkeys/underground2.txt`. The two match exactly. The used install also holds five empty `userkeys` files, one per game that Binary never edited.

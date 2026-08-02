@@ -51,6 +51,12 @@ namespace Harness
 		/// </summary>
 		public bool ShowBinary { get; private set; }
 
+		/// <summary>
+		/// Probes a directory for link support, letter case, and separator handling.
+		/// Null means do not run the probe.
+		/// </summary>
+		public string ProbeDir { get; private set; }
+
 		public string ManifestPath { get; private set; }
 
 		/// <summary>
@@ -72,7 +78,7 @@ namespace Harness
 		/// True when the run manages the Binary install and applies no manifest.
 		/// </summary>
 		public bool IsInstallCommand =>
-			this.SetBinaryDir != null || this.ForgetBinary || this.ShowBinary;
+			this.SetBinaryDir != null || this.ForgetBinary || this.ShowBinary || this.ProbeDir != null;
 
 		public static bool TryParse(string[] args, out Options options, out string error)
 		{
@@ -126,6 +132,11 @@ namespace Harness
 
 					case "--show-binary":
 						options.ShowBinary = true;
+						break;
+
+					case "--probe":
+						if (!Next(args, ref i, arg, out string probeDir, out error)) return false;
+						options.ProbeDir = probeDir;
 						break;
 
 					case "--choice":
@@ -223,6 +234,10 @@ namespace Harness
 			Console.WriteLine("  --show-binary          Reports the install, the candidates, and the paths.");
 			Console.WriteLine("  --set-binary <dir>     Validates a directory and stores it.");
 			Console.WriteLine("  --forget-binary        Removes the stored directory.");
+			Console.WriteLine();
+			Console.WriteLine("Platform probe. It does its work and stops.");
+			Console.WriteLine();
+			Console.WriteLine("  --probe <dir>          Tests links, letter case, and the backslash separator.");
 			Console.WriteLine();
 			Console.WriteLine("Defaults:");
 			Console.WriteLine($"  --game         {Defaults.VanillaDir}");

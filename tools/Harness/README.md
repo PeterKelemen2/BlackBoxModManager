@@ -54,6 +54,7 @@ Three more commands manage the Binary install. Each one does its work and stops.
 | `--show-binary`       | Reports the install, the candidates, and the resolved paths.  |
 | `--set-binary <dir>`  | Validates a directory and stores it in the settings file.     |
 | `--forget-binary`     | Removes the stored directory.                                 |
+| `--probe <dir>`       | Tests links, letter case, and the backslash separator.        |
 
 The `--game` and `--scratch` defaults hold the paths of one developer machine. They come from [00-test-environment.md](../../docs/roadmap/00-test-environment.md). They are Wine drive `Z` paths. The Binary path is no longer a default. Step 2 replaced it with discovery.
 
@@ -77,8 +78,27 @@ The harness never writes into the Binary install.
 
 ## Environment overrides for the wrapper
 
-| Variable             | Default                                |
-| -------------------- | -------------------------------------- |
-| `HARNESS_OUT`        | `artifacts/harness`                    |
-| `HARNESS_WINEPREFIX` | `~/.local/share/blackbox-harness-wine` |
-| `WINEDEBUG`          | `-all`                                 |
+| Variable             | Default                                                     |
+| -------------------- | ------------------------------------------------------------ |
+| `HARNESS_RUNNER`     | `wine`. Give the path to another wine to test that build.   |
+| `HARNESS_WINEPREFIX` | `~/.local/share/blackbox-harness-wine`                      |
+| `HARNESS_OUT`        | `artifacts/harness`                                         |
+| `HARNESS_SINGLEFILE` | `0`. Set `1` for a single-file publish.                     |
+| `HARNESS_QUIET`      | `1`. Set `0` to keep the graphics driver noise of Wine.     |
+| `WINEDEBUG`          | `-all`                                                      |
+
+## Running under Proton
+
+Point `HARNESS_RUNNER` at the wine of the Proton build and `HARNESS_WINEPREFIX` at the game prefix.
+
+```sh
+HARNESS_RUNNER=~/.config/heroic/tools/proton/GE-Proton10-34/files/bin/wine \
+HARNESS_WINEPREFIX=/mnt/Data/Games/WinePrefixes/NFSU2ModTest \
+HARNESS_SINGLEFILE=1 \
+tools/run-harness.sh "example_mods/NFSU2 - 1 Lap URL And Other Races v2.0/1 Lap URL Races.end" \
+	--binary 'Z:\home\peti\Downloads\Binary_v2.8.3'
+```
+
+**Never mix Wine builds in one prefix.** A wineserver of the wrong version makes every later call fail with `version mismatch`. The wrapper puts the directory of the runner first on `PATH` to keep `wine` and `wineserver` together. Stop a stale server with the matching `wineserver -k`.
+
+The settings file lives inside the prefix, under `%APPDATA%`. Each prefix therefore needs its own `--set-binary`. Use `--binary` instead to avoid storing anything.

@@ -62,14 +62,19 @@ namespace Harness
 			Console.WriteLine($"Application data       {AppPaths.Root}");
 			Console.WriteLine($"Choices                {(options.Choices.Count == 0 ? "(none given)" : String.Join(", ", options.Choices))}");
 
-			// A missing native library gives a silent P/Invoke failure deep in the container code.
-			// Report it here instead.
-			string lzPath = Path.Combine(AppContext.BaseDirectory, "LZCompressLib.dll");
-			Console.WriteLine($"LZCompressLib.dll      {(File.Exists(lzPath) ? "present" : "MISSING")}");
+			// An unresolvable native library gives a DllNotFoundException deep inside a
+			// container operation. Answer the question here instead.
+			//
+			// Do not test for a file beside the executable. A single-file publish extracts
+			// the native libraries to a temporary directory, so the file is not there and
+			// the P/Invoke still works. Ask the runtime to resolve it.
+			Console.WriteLine($"LZCompressLib.dll      {ProbeNativeLibrary()}");
 
-			if (!File.Exists(lzPath))
+			if (!NativeLibraryResolves())
 			{
-				Console.Error.WriteLine("ERROR: LZCompressLib.dll must sit beside the harness executable.");
+				Console.Error.WriteLine("ERROR: The runtime cannot resolve LZCompressLib.dll.");
+				Console.Error.WriteLine("  Check       The publish must be win-x64. The library is x64 only.");
+				Console.Error.WriteLine("  Check       A single-file publish needs IncludeNativeLibrariesForSelfExtract.");
 				return 1;
 			}
 
@@ -268,6 +273,31 @@ namespace Harness
 			Console.WriteLine("PASSED. No error.");
 			Console.WriteLine($"The changed containers sit in {options.ScratchDir}.");
 			return 0;
+		}
+
+		// -------------------------------------------------------------------- native library
+
+		private const string NativeLibrary = "LZCompressLib.dll";
+
+		/// <summary>
+		/// Resolves the native library the same way that the P/Invoke in Nikki does. It
+		/// passes the Nikki assembly, so the probing paths match.
+		/// </summary>
+		private static bool NativeLibraryResolves()
+		{
+			return System.Runtime.InteropServices.NativeLibrary.TryLoad(
+				NativeLibrary, typeof(Nikki.Utils.Interop).Assembly, null, out _);
+		}
+
+		private static string ProbeNativeLibrary()
+		{
+			if (!NativeLibraryResolves()) return "CANNOT RESOLVE";
+
+			// Name the file when it sits beside the executable. A single-file publish
+			// extracts it elsewhere, and that is not a problem.
+			string beside = Path.Combine(AppContext.BaseDirectory, NativeLibrary);
+
+			return File.Exists(beside) ? "resolved, beside the executable" : "resolved, from the single-file bundle";
 		}
 
 		// -------------------------------------------------------------------- manifest
