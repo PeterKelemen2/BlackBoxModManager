@@ -2,30 +2,30 @@
 
 ## Context
 
-I want to build a mod manager for BlackBox-era Need for Speed games (Underground 2, Most Wanted, Carbon, ProStreet). Currently the modding scene for these games relies on three separate, unmanaged mod formats with no unified tooling:
+This project builds a mod manager for the BlackBox-era Need for Speed games. The target titles are Underground 2, Most Wanted, Carbon, and ProStreet. The modding scene for these games uses three separate mod formats. No unified tool manages them.
 
-1. **ASI scripts** — plugin DLLs loaded by an ASI loader. These are simple drop-in files.
-2. **"Binary" mods** — installed via a third-party tool called Binary (version 2.8.3), which edits game data files. This is the hardest category to manage and the primary architectural challenge of this project.
-3. **Texmod packages (.tpf)** — runtime texture injection via a hooking tool. Never touch disk, applied at launch time. **Not in scope for the initial implementation** — deliberately deferred to a later phase. It's recorded here so the architecture leaves room for it, but nothing in the MVP or the Binary work should block on it, and no `.tpf` code needs to be written until the rest is working.
+1. **ASI scripts** — plugin DLLs that an ASI loader reads. These are drop-in files.
+2. **Binary mods** — a third-party tool called Binary (version 2.8.3) installs these. The tool edits game data files. This category is the most difficult to manage. It is the main architectural problem of this project.
+3. **Texmod packages (.tpf)** — a hooking tool injects textures at run time. These files never touch the disk. The tool applies them at launch time. **This category is out of scope for the first implementation.** The brief records it so that the architecture keeps room for it. No part of the MVP or the Binary work depends on it. Do not write `.tpf` code until the rest works.
 
-There is no Vortex/Mod Organizer 2-style manager for this scene. I want to build one.
+No Vortex-style or Mod Organizer 2-style manager exists for this scene. This project builds one.
 
 ## Platform decision
 
-**This is a Windows-only application.** Linux users will run it inside the same Wine prefix as the game itself (same as they already run the game and Binary), so no cross-platform abstraction layer is needed — treat the target as native Windows APIs throughout, and validate behavior under Wine as a compatibility target rather than a separate platform.
+**This is a Windows-only application.** Linux users run it in the same Wine prefix as the game. They already run the game and Binary this way. Therefore the project needs no cross-platform abstraction layer. Use native Windows APIs throughout. Test behavior under Wine as a compatibility target, not as a separate platform.
 
 ## Binary mod format (confirmed against `example_mods`)
 
-Both example mods have been read in full. The format is **two distinct file types that share the `.end` extension**, distinguished by their header line:
+Both example mods have been read in full. The format has **two different file types that share the `.end` extension**. The header line identifies the type.
 
 | Header     | File type    | Body                                                                  |
 | ---------- | ------------ | --------------------------------------------------------------------- |
 | `[VERSN1]` | **Manifest** | A JSON object (`Usage`/`Game`/`Directory`/`Endscript`/`Files`/`Links`) |
 | `[VERSN2]` | **Script**   | Line-oriented commands (`update_*`, `combobox`, `append`, `end`)       |
 
-So `VERSN1` and `VERSN2` are **not two versions of the same schema** — the version tag selects the parser. A reader must dispatch on the header, and must not assume `.end` extension implies manifest. Any other `VERSNn` value encountered should be a hard parse error naming the file, not a silent fallback.
+`VERSN1` and `VERSN2` are **not two versions of one schema**. The version tag selects the parser. A reader must dispatch on the header. A reader must not assume that the `.end` extension means manifest. Any other `VERSNn` value must cause a hard parse error that names the file. Do not fall back without a message.
 
-A mod folder contains one or more `VERSN1` manifests at its root, each pointing via `Endscript` at a `VERSN2` script (typically in a subfolder). Example manifest:
+A mod folder holds one or more `VERSN1` manifests at its root. Each manifest points through `Endscript` at a `VERSN2` script. The script is usually in a subfolder. Example manifest:
 
 ```
 [VERSN1]
@@ -64,26 +64,26 @@ A mod folder contains one or more `VERSN1` manifests at its root, each pointing 
 }
 ```
 
-Breaking this down:
+The parts of the manifest:
 
-- **Header** (`[VERSN1]`) followed by a **JSON body**. Note the JSON is **not valid JSON**: path values contain raw unescaped backslashes (`"MOD\URL.end"`, `"GLOBAL\GLOBALA.BUN"`). `System.Text.Json` will reject `\U`, `\G`, `\a` etc. as invalid escape sequences. The reader must pre-process the body — escape lone backslashes to `\\` before deserializing — or use a tolerant reader. This is a concrete, must-handle detail, not a theoretical concern.
-- **`Game`** — which title the mod targets (`Underground2` here). Confirms mods are game-specific and the manifest is a reliable place to read that from, rather than guessing from folder structure or asking the user. Treat as a closed enum mapped to our game profiles; unknown value → mod flagged unsupported rather than installed hopefully.
-- **`Usage`** — `"User"` in all four manifests inspected. Enum is `Invalid`/`User`/`Modder`. Distributed mods are always `User`; `Modder` is the automation-oriented mode that requires `Directory` to be filled in.
-- **`Directory`** — empty string in all four manifests inspected. **Confirmed from upstream source: this is the game install directory.** It is empty in distributed `User`-mode mods because Binary prompts the user to browse for it; in `Modder` mode it must be present and must exist on disk. `Files` paths resolve against it, as do `Links` entries with `PathType: Absolute`. This is the field *we* populate — pointing it at our staging copy is how we keep the live install untouched.
-- **`Endscript`** — a Windows-style relative path (backslash-separated) to the `VERSN2` script, resolved relative to the manifest's own folder. Must be normalized to the host separator before use.
-- **`Files`** — the list of game data files this mod touches. **Confirmed to be a superset of what the script actually edits**: all four `1 Lap *` manifests and the camera mod's `Install.end` declare `GLOBAL\GLOBALA.BUN` and/or `GLOBAL\GLOBALB.LZC`, but every single `update_*` command across all 1484 script lines targets only `GLOBAL\GLOBALB.LZC`. So `Files` is best read as "the set of containers Binary must open/load together to resolve this script", not "the set of files that get modified". Consequence for us: **conflict detection must key off the script's actual command targets, not `Files`** — using `Files` alone would report a false conflict between any two mods that both merely load `GLOBALA.BUN`. `Files` is still worth capturing, as the set that needs backing up. Includes `GLOBAL\GLOBALA.BUN` and `GLOBAL\GLOBALB.LZC`. A full file listing of a real vanilla install (`game_files.txt`) confirms these exist — `GLOBAL/GLOBALA.BUN`, `GLOBAL/GLOBALB.BUN`, and `GLOBAL/InGameCommon.lzc`/`GLOBAL/GlobalB.lzc` are all present, along with other `.BUN` files scattered across `NIS/`, `TRACKS/`, and `FRONTEND/`, and even a single `.viv` at `SDATA/sdat.viv`. So the earlier note about no `.viv`/`.bun` files being present in the install was simply incorrect — they're there, just not in the specific spot originally checked. No further reconciliation needed here.
-- One more thing the file listing surfaces: `GLOBAL/GLOBALA.BUN.bacc` and `GLOBAL/GLOBALB.LZC.bacc` sit alongside the real files. `.bacc` looks like Binary's own backup-file convention — a copy of the original kept before editing a file in place, presumably so it can revert. This matters for our own design: our snapshot/backup step needs to either recognize and ignore Binary's `.bacc` files (they're not game content, they're Binary's own bookkeeping) or, alternatively, we could investigate whether Binary's `.bacc` files can be leveraged directly for restoring vanilla state instead of maintaining a fully separate backup mechanism of our own. Needs closer inspection of what's actually inside a `.bacc` file (verbatim original copy vs. some other format) before deciding.
-- **`Links`** — a separate mechanism from `Files`/`Endscript`. Each entry has a `LoadType` (`Attributes`, `FeAttrib`, `Labels` seen so far — likely a fixed enum of known loader categories) and a `PathType` (`Absolute` seen so far — implies there may also be a `Relative` variant), pointing at loose `.bin` files (`attributes.bin`, `fe_attrib.bin`, `Labels_Global.bin`, `Labels.bin`). These look like they register additional loose data files with the game's own loader by category, separate from whatever the `Endscript` does to the `Files` list.
+- **Header** (`[VERSN1]`) and then a **JSON body**. The JSON is **not valid JSON**. Path values hold raw backslashes without escapes, such as `"MOD\URL.end"` and `"GLOBAL\GLOBALA.BUN"`. `System.Text.Json` rejects `\U`, `\G`, and `\a` as invalid escape sequences. The reader must process the body first. Change each single backslash to `\\` before deserialization, or use a tolerant reader. This problem is real, not theoretical.
+- **`Game`** — the title that the mod targets. This example targets `Underground2`. Mods are game-specific. The manifest is a reliable source for the game name. Do not guess it from the folder structure and do not ask the user. Treat the field as a closed enum that maps to our game profiles. If the value is unknown, mark the mod as unsupported and do not install it.
+- **`Usage`** — the value is `"User"` in all four manifests that we inspected. The enum is `Invalid`/`User`/`Modder`. Mods that authors distribute always use `User`. `Modder` is the automation mode. `Modder` mode needs a value in `Directory`.
+- **`Directory`** — the value is an empty string in all four manifests that we inspected. **The upstream source confirms that this field holds the game install directory.** Distributed `User`-mode mods leave it empty because Binary asks the user to browse for the directory. In `Modder` mode the field must hold a path, and the path must exist on the disk. `Files` paths resolve against this directory. `Links` entries with `PathType: Absolute` also resolve against it. This is the field that *we* fill in. We point it at our staging copy. This keeps the live install untouched.
+- **`Endscript`** — a Windows-style relative path to the `VERSN2` script. It uses backslashes. It resolves against the folder of the manifest. Normalize it to the host separator before use.
+- **`Files`** — the list of game data files that this mod touches. **This list is a superset of what the script edits.** All four `1 Lap *` manifests and the `Install.end` file of the camera mod declare `GLOBAL\GLOBALA.BUN`, `GLOBAL\GLOBALB.LZC`, or both. But every `update_*` command across all 1484 script lines targets only `GLOBAL\GLOBALB.LZC`. Read `Files` as the set of containers that Binary must open together to resolve the script. Do not read it as the set of files that change. The consequence for us: **conflict detection must use the command targets of the script, not `Files`.** `Files` alone would report a false conflict between any two mods that both load `GLOBALA.BUN`. `Files` is still worth capture as the set that needs a backup. A full file listing of a real vanilla install (`game_files.txt`) confirms that these files exist. The listing holds `GLOBAL/GLOBALA.BUN`, `GLOBAL/GLOBALB.BUN`, `GLOBAL/InGameCommon.lzc`, and `GLOBAL/GlobalB.lzc`. It also holds other `.BUN` files in `NIS/`, `TRACKS/`, and `FRONTEND/`, and one `.viv` file at `SDATA/sdat.viv`. An earlier note said that the install held no `.viv` or `.bun` files. That note was wrong. The files are there, but not in the place that we first checked.
+- The file listing shows one more thing. `GLOBAL/GLOBALA.BUN.bacc` and `GLOBAL/GLOBALB.LZC.bacc` sit beside the real files. `.bacc` looks like the backup-file convention of Binary. Binary appears to copy the original before it edits a file in place, so that it can revert. This matters for our design. Our snapshot step must ignore `.bacc` files, because they are bookkeeping and not game content. Alternatively, we can examine whether the `.bacc` files of Binary restore the vanilla state for us. Then we would not need a fully separate backup mechanism. First inspect what a `.bacc` file holds. It may be a verbatim copy of the original, or another format.
+- **`Links`** — a mechanism separate from `Files` and `Endscript`. Each entry holds a `LoadType` and a `PathType`. We have seen the load types `Attributes`, `FeAttrib`, and `Labels`. These look like a fixed enum of loader categories. We have seen only the path type `Absolute`. A `Relative` variant probably also exists. The entries point at loose `.bin` files: `attributes.bin`, `fe_attrib.bin`, `Labels_Global.bin`, and `Labels.bin`. These entries appear to register extra loose data files with the game loader by category. This is separate from what the `Endscript` does to the `Files` list.
 
-`Links` is **identical across all four manifests inspected** (same four entries, same order: `Attributes`/`GLOBAL\attributes.bin`, `FeAttrib`/`GLOBAL\fe_attrib.bin`, `Labels`/`LANGUAGES\Labels_Global.bin`, `Labels`/`LANGUAGES\Labels.bin`), despite the two mods being unrelated and by different authors. That strongly suggests `Links` is **boilerplate emitted by Binary's own mod-authoring/export mode** describing the standard loose-file set to register for Underground 2, not a per-mod declaration. Design consequence: **do not build conflict detection on `Links`** as originally planned — it would flag every pair of U2 mods as conflicting. Parse and store it, compare it against the expected per-game boilerplate, and only surface it as interesting if a mod deviates from that boilerplate.
+`Links` is **the same in all four manifests that we inspected**. The four entries and their order match: `Attributes`/`GLOBAL\attributes.bin`, `FeAttrib`/`GLOBAL\fe_attrib.bin`, `Labels`/`LANGUAGES\Labels_Global.bin`, and `Labels`/`LANGUAGES\Labels.bin`. The two mods are unrelated and have different authors. This strongly suggests that `Links` is **boilerplate that the mod-authoring mode of Binary writes**. It describes the standard loose-file set for Underground 2. It is not a per-mod declaration. The design consequence: **do not base conflict detection on `Links`.** That approach would flag every pair of U2 mods as a conflict. Parse and store `Links`. Compare it against the expected per-game boilerplate. Report it only when a mod differs from that boilerplate.
 
-This is still useful: Binary mods ship with a machine-readable manifest, so nothing needs to be inferred by diffing. The mod manager should **read and rely on this manifest directly** rather than inventing a parallel schema.
+This is still useful. Binary mods ship with a machine-readable manifest, so we do not need to infer anything by diff. The mod manager must **read this manifest directly** instead of an invented parallel schema.
 
 ### `VERSN2` script grammar (confirmed)
 
-The script is line-oriented; blank lines are ignored. Tokens are whitespace-separated **except** that double-quoted strings are single tokens and may contain spaces — a naive `Split(' ')` is wrong and will break `combobox`. Write a quote-aware tokenizer.
+The script is line-oriented. The parser ignores blank lines. Whitespace separates the tokens, but a double-quoted string is one token and can hold spaces. A plain `Split(' ')` is wrong and breaks `combobox`. Write a quote-aware tokenizer.
 
-Commands observed across 1484 script lines in `example_mods`:
+These commands appear across the 1484 script lines in `example_mods`:
 
 **1. Edit commands — `update_collection` and `update_incareer`**
 
@@ -92,31 +92,31 @@ update_collection GLOBAL\GLOBALB.LZC CarTypeInfos PEUGOT PlayerCamera PLAYER_CAM
 update_incareer   GLOBAL\GLOBALB.LZC GCareers Main GCareerRaces S5_URL_5 Stages STAGE1 NumberOfLaps 1
 ```
 
-Counts: `update_collection` ×1194 (camera mod), `update_incareer` ×290 (1 Lap mod). Every occurrence of `update_collection` has exactly 7 arguments and every `update_incareer` exactly 9 — but **do not hardcode those arities.** Both fit one general shape:
+Counts: `update_collection` 1194 times in the camera mod, `update_incareer` 290 times in the 1 Lap mod. Every `update_collection` has exactly 7 arguments. Every `update_incareer` has exactly 9. **Do not hardcode these counts.** Both commands fit one general shape:
 
 ```
 <verb> <targetFile> <keyPath...> <value>
 ```
 
-where `targetFile` is the first argument, `value` is the last token, and everything between is a variable-length hierarchical key path. Parse to that shape. The `update_` prefix implies sibling verbs (`add_`/`remove_`/etc.) exist in the wild; an unrecognized verb must fail loudly with file and line number rather than being skipped, since silently ignoring an edit produces a subtly wrong install.
+`targetFile` is the first argument. `value` is the last token. The tokens between them form a hierarchical key path of variable length. Parse to this shape. The `update_` prefix implies that sibling verbs such as `add_` and `remove_` exist. An unknown verb must fail loudly with the file name and the line number. Do not skip it. A skipped edit produces an install that is wrong in a way that is hard to see.
 
-`value` is untyped in the script — observed values include integers (`0`, `1`), and floats both positive and negative with full round-trip precision (`-0.19500002`, `2.746582`, `1.016`). **Parse floats with `InvariantCulture` and preserve the original literal text verbatim** for re-emission; reformatting `-0.19500002` through a default `ToString()` would corrupt the value. Type resolution belongs to the container layer, not the script parser — carry values as strings plus a parsed hint.
+The script does not type the `value` token. Observed values include integers such as `0` and `1`. They also include positive and negative floats with full round-trip precision, such as `-0.19500002`, `2.746582`, and `1.016`. **Parse floats with `InvariantCulture`. Keep the original text of the literal for output.** A default `ToString()` would corrupt `-0.19500002`. Type resolution belongs to the container layer, not to the script parser. Carry each value as a string plus a parsed hint.
 
-**2. `combobox` — user-selectable install options.** See the dedicated section below.
+**2. `combobox` — install options that the user selects.** See the section below.
 
-**3. `append "<relative path>"`** — splices in another `.end` script, resolved relative to the *containing script's* folder. The appended files carry their own `[VERSN2]` header line, so the interpreter must tolerate and skip a header in appended content. Implement recursively with a visited-set for cycle detection and a depth cap; nesting deeper than one level hasn't been observed but isn't excluded.
+**3. `append "<relative path>"`** — this command splices in another `.end` script. The path resolves against the folder of the *containing script*. The appended files carry their own `[VERSN2]` header line. The interpreter must accept and skip a header in appended content. Implement this recursively. Use a visited-set for cycle detection and a depth cap. We have not seen nesting deeper than one level, but deeper nesting is possible.
 
-**4. `end`** — terminates the script. Present as the final line of the camera mod's `script.end`; absent from the pure-edit scripts (`MOD/*.end`, `Main/[0]_*.end`, `Main/[1]_*.end`), which simply run to EOF. So treat `end` as optional-but-honored: stop interpreting at `end` or EOF, whichever comes first.
+**4. `end`** — this command terminates the script. It is the last line of `script.end` in the camera mod. It is absent from the pure-edit scripts `MOD/*.end`, `Main/[0]_*.end`, and `Main/[1]_*.end`, which run to the end of the file. Treat `end` as optional but honored. Stop at `end` or at the end of the file, whichever comes first.
 
-**Not observed at all:** any command touching a `.BUN`, any asset/texture/file-replacement command, any conditional or variable. Everything in both example mods is a scalar field write into `GLOBALB.LZC`. That's a narrow but very solid base to build the first working version on.
+**Not observed at all:** no command touches a `.BUN`, and no command replaces an asset, a texture, or a file. No conditional and no variable appears. Everything in both example mods is a scalar field write into `GLOBALB.LZC`. This is a narrow but solid base for the first working version.
 
-## User-selectable install options — two distinct mechanisms
+## Install options that the user selects — two different mechanisms
 
-Both example mods offer the user a choice at install time, and they do it in **two completely different ways**. Both must be supported, and they are supported by *different* parts of the codebase.
+Both example mods give the user a choice at install time. They do this in **two completely different ways**. The project must support both. Different parts of the codebase support them.
 
 ### Mechanism A — `combobox` inside the script (the camera mod)
 
-`Main/script.end` is only nine lines, and is entirely a menu:
+`Main/script.end` has only nine lines and is entirely a menu:
 
 ```
 [VERSN2]
@@ -131,26 +131,26 @@ append "[0]_Restore_Camera_Settings.end"
 end
 ```
 
-The two bulky `Main/[0]_*.end` / `Main/[1]_*.end` files (744 and 450 lines) are the option bodies; neither is referenced by any manifest directly, only via `append` from within the selected branch.
+The two large files `Main/[0]_*.end` and `Main/[1]_*.end` hold 744 and 450 lines. They are the option bodies. No manifest references them directly. Only the `append` command in the selected branch references them.
 
-Inferred grammar:
+The grammar:
 
-- `combobox <string>...` — a list of quoted strings. The **last** one is the prompt/caption shown to the user (`"Choose option you needeed"`); the preceding ones are the selectable option labels.
-- ~~A block-header cross-check heuristic was proposed here.~~ **Unnecessary — confirmed against `ComboboxCommand.Prepare` in the upstream source:** options are `splits[1 .. ^2]` and the description is `splits[^1]`, with a minimum of 4 tokens. The simple "last quoted string is the caption" rule is exactly right.
-- A **block** runs from its header line until the next block header, the `end` command, or EOF. Block bodies contain ordinary commands — here just a single `append` each, but the interpreter should allow any command sequence, not special-case `append`.
-- Note the double space between the second option and the caption in the real file — whitespace between tokens is not significant, another reason the tokenizer must be quote-driven rather than position-driven.
+- `combobox <string>...` — a list of quoted strings. The **last** string is the prompt that the user sees, here `"Choose option you needeed"`. The strings before it are the option labels.
+- The upstream source confirms this rule. `ComboboxCommand.Prepare` takes `splits[1 .. ^2]` as the options and `splits[^1]` as the description. It needs at least 4 tokens. The rule "the last quoted string is the caption" is correct. An earlier draft proposed a block-header cross-check heuristic. That heuristic is unnecessary. Drop it.
+- A **block** runs from its header line to the next block header, the `end` command, or the end of the file. Block bodies hold ordinary commands. Here each body holds one `append`. The interpreter must allow any command sequence. Do not special-case `append`.
+- The real file has two spaces between the second option and the caption. Whitespace between tokens is not significant. This is another reason to drive the tokenizer by quotes and not by position.
 
-**How we handle it: resolve the choice ourselves, in our own UI. Never let Binary ask.** The option labels and caption are plain text we can read out of the script at import time, so:
+**Our approach: we resolve the choice in our own UI. Binary never asks.** The option labels and the caption are plain text. We read them out of the script at import time. Therefore:
 
-1. On mod import, parse the `Endscript`. If it contains a `combobox`, extract `(caption, [labels])` and record them on the mod as a declared **option set**.
-2. Present that as a native WPF control in our own install/configure flow (or a per-mod settings pane), so the choice is visible, re-editable later, and persisted in the profile — a strict improvement over Binary's one-shot modal.
-3. Persist the chosen label with the mod's install state. Changing the selection later is just a re-deploy with a different branch resolved; that's exactly what "Restore original camera settings" is for, and it means our UI gets a real toggle where Binary only had a re-run.
-4. At deploy time, the interpreter takes the resolved selection as an input and walks only the selected block, flattening its `append`s into a single linear command list. **The output of this stage is a flat, fully-resolved list of `<verb> <file> <keyPath...> <value>` edits with no `combobox`, no `append`, and no remaining user questions.** Everything downstream — conflict detection, deployment, the apply engine — sees only that flat list and never needs to know options existed.
-5. Options must be resolvable non-interactively too (headless re-deploy, profile switching): if no selection is stored, default to the **first** option label and log the assumption, rather than blocking on a prompt.
+1. On mod import, parse the `Endscript`. If it holds a `combobox`, extract the caption and the labels. Record them on the mod as a declared **option set**.
+2. Show the option set as a native WPF control in our install flow or in a per-mod settings pane. The choice stays visible, the user can edit it later, and the profile stores it. This improves on the one-shot modal of Binary.
+3. Store the chosen label with the install state of the mod. A later change of the selection is only a re-deploy with a different branch. This is the purpose of the "Restore original camera settings" option. Our UI gets a real toggle where Binary had only a re-run.
+4. At deploy time, the interpreter takes the resolved selection as an input. It walks only the selected block and flattens the `append` commands into one linear command list. **The output of this stage is a flat list of `<verb> <file> <keyPath...> <value>` edits.** It holds no `combobox`, no `append`, and no open question for the user. Everything downstream sees only that flat list. Conflict detection, deployment, and the apply engine never need to know that options existed.
+5. The system must also resolve options without a user. Headless re-deploy and profile switching need this. If no selection is stored, use the **first** option label and log the assumption. Do not block on a prompt.
 
-### Mechanism B — multiple sibling manifests (the 1 Lap mod)
+### Mechanism B — several sibling manifests (the 1 Lap mod)
 
-The 1 Lap mod has **no `combobox`**. Instead it ships five `VERSN1` manifests side by side at its root, each pointing at a different `Endscript`:
+The 1 Lap mod has **no `combobox`**. Instead it ships five `VERSN1` manifests side by side at its root. Each manifest points at a different `Endscript`.
 
 | Manifest                  | `Endscript`      | Script lines |
 | ------------------------- | ---------------- | ------------ |
@@ -160,9 +160,9 @@ The 1 Lap mod has **no `combobox`**. Instead it ships five `VERSN1` manifests si
 | `1 Lap STREET Races.end`  | `MOD\STREET.end`  | 37           |
 | `1 Lap SUV Races.end`     | `MOD\SUV.end`     | 12           |
 
-Apart from `Endscript`, the five manifests are byte-identical. The readme tells the user to open Binary and pick one of the five files — and explicitly says *"You can use 1 or multiple variants of this mod"*, so these are **not mutually exclusive**, unlike a `combobox`. (`ALL` is the union of the other four, so selecting `ALL` alongside another variant is a redundant-but-harmless overlap — the same field written to the same value twice. Our conflict detector should recognize same-value collisions as benign and not nag.)
+Apart from `Endscript`, the five manifests are byte-identical. The readme tells the user to open Binary and pick one of the five files. It also says *"You can use 1 or multiple variants of this mod"*. These variants are therefore **not mutually exclusive**, unlike a `combobox`. `ALL` is the union of the other four. A user who selects `ALL` and another variant creates a redundant but harmless overlap, because the same field gets the same value twice. Our conflict detector must treat same-value collisions as benign and must not warn about them.
 
-**How we handle it:** a mod folder maps to **one `ModPackage` with N discoverable variants**, not N unrelated mods. Discovery = scan the mod root for `VERSN1` files. Present them as a multi-select (checkbox) list, in contrast to the `combobox` single-select. So the internal model needs both:
+**Our approach:** a mod folder maps to **one `ModPackage` with N discoverable variants**. It does not map to N unrelated mods. Discovery scans the mod root for `VERSN1` files. Show the variants as a multi-select checkbox list. This contrasts with the single-select `combobox`. The internal model therefore needs both concepts:
 
 ```
 ModPackage
@@ -171,89 +171,89 @@ ModPackage
                    └── OptionSet? (from combobox)   // single-select, may be null
 ```
 
-Selection state for both lives in the profile, so a profile fully determines the resolved edit list with no prompting. A mod can in principle exercise both mechanisms at once (several manifests, each whose script has a `combobox`) — the model above handles that; don't collapse the two concepts into one list.
+The profile holds the selection state for both. A profile therefore determines the resolved edit list with no prompt. A mod can use both mechanisms at the same time. It can have several manifests, and each script can hold a `combobox`. The model above handles this case. Do not collapse the two concepts into one list.
 
 ## Upstream code: Binary is open source, and its libraries are MIT
 
-**This section supersedes most of the reverse-engineering plan below.** Binary's source is public at `github.com/SpeedReflect/Binary`, and it is a thin WinForms shell over two libraries that do all the real work. Critically, **the libraries and the application have different licenses**:
+**This section supersedes most of the reverse-engineering plan below.** The source of Binary is public at `github.com/SpeedReflect/Binary`. Binary is a thin WinForms shell over two libraries that do the real work. **The libraries and the application have different licenses.**
 
 | Repo                        | License        | Size  | What it is                                                                    |
 | --------------------------- | -------------- | ----- | ----------------------------------------------------------------------------- |
-| `SpeedReflect/Nikki`        | **MIT**        | ~7 MB | Reads/writes the actual game containers (`.BIN`, `.BUN`, `.LZC`). The format. |
-| `SpeedReflect/Endscript`    | **MIT**        | 225 KB | `.end` manifest + script parsing, command model, and execution against Nikki |
-| `MaxHwoy/CoreExtensions`    | **MIT**        | —     | Utility library; Nikki's only dependency                                       |
-| `SpeedReflect/Binary`       | **GPL-3.0** ⚠️ | 1.5 MB | WinForms GUI + a CLI entry point. The application shell only.                |
-| `MaxHwoy/ILWrapper`         | MIT            | —     | DevIL image wrapper — used only by Binary's GUI, **not** needed by us         |
-| `SpeedReflect/SpeedReflect` | MIT            | —     | C++ memory-patching extension for the game; unrelated to modding on disk      |
+| `SpeedReflect/Nikki`        | **MIT**        | ~7 MB | Reads and writes the game containers (`.BIN`, `.BUN`, `.LZC`). The format.    |
+| `SpeedReflect/Endscript`    | **MIT**        | 225 KB | `.end` manifest and script parsing, command model, execution against Nikki   |
+| `MaxHwoy/CoreExtensions`    | **MIT**        | —     | Utility library. The only dependency of Nikki.                                |
+| `SpeedReflect/Binary`       | **GPL-3.0** ⚠️ | 1.5 MB | WinForms GUI and a CLI entry point. The application shell only.               |
+| `MaxHwoy/ILWrapper`         | MIT            | —     | DevIL image wrapper. Only the GUI of Binary uses it. **We do not need it.**   |
+| `SpeedReflect/SpeedReflect` | MIT            | —     | C++ memory-patching extension for the game. Unrelated to on-disk modding.     |
 
-All are by a single author (MaxHwoy, `max.hwoy@gmail.com`), last touched Nov 2021, no other contributors — clean provenance, one person to contact if needed. None are published on NuGet, so consume them as git submodules or a vendored fork.
+One author wrote all of them: MaxHwoy, `max.hwoy@gmail.com`. The last change was in November 2021. There are no other contributors. The provenance is clean and one person can answer questions. None of the repos are on NuGet. Consume them as git submodules or as a vendored fork.
 
 ### The licensing answer
 
-- **Nikki, Endscript, CoreExtensions: yes, use directly.** MIT (`Copyright (c) 2020 MaxHwoy`) — permissive, no copyleft, usable in a closed or differently-licensed project. The only obligation is retaining the copyright notice and license text; ship a `THIRD-PARTY-NOTICES` file listing all three. Forking is fine and advisable (pins the version, lets us retarget the framework), but forking is not required for use.
-- **Binary itself: GPL-3.0 — do not copy code from it.** This is the one real constraint. Linking GPL-3.0 code into our application would require releasing our whole application under GPL-3.0. Since the libraries are MIT and contain everything we need, **there is no reason to touch Binary's source at all** — treat that repo as read-only documentation. Two specific traps:
-  - Don't lift helpers out of `Binary/` even though they're tempting (e.g. `Editor.FixLaunchDirectory`, which the CLI path calls). Reimplement from behavior, not by copy-paste.
-  - Don't add `Binary.csproj` as a project reference "just to reuse its CLI". *Invoking* `Binary.exe` as a separate process is fine — GPL covers distribution and linking, not calling an unmodified program the user already installed — but that's a fallback we probably won't need.
-- **Decide our own license explicitly** and record it in the repo before publishing. MIT keeps us aligned with the libraries we depend on.
-- **One genuine open item:** `Nikki/Nikki/LZCompressLib.dll` is a **checked-in closed-source native x64 PE DLL** (116 KB, build path `C:\Users\Max\source\repos\LZCompressLib`) with no public source repo and no separate license file. Nikki P/Invokes its `BlockCompress`/`BlockDecompress` entry points from `Nikki/Utils/Interop.cs` — i.e. **it is required for container compression**, not optional. It sits inside an MIT-licensed repo by the same author, so it is most likely covered by that MIT grant, but strictly the blob carries no license statement of its own. Low risk, worth one email to MaxHwoy to confirm, and worth noting before we redistribute it.
+- **Nikki, Endscript, and CoreExtensions: use them directly.** They are MIT (`Copyright (c) 2020 MaxHwoy`). MIT is permissive and has no copyleft. A closed project or a differently-licensed project can use them. The only obligation is to keep the copyright notice and the license text. Ship a `THIRD-PARTY-NOTICES` file that lists all three. A fork is advisable, because it pins the version and lets us retarget the framework. A fork is not required for use.
+- **Binary itself is GPL-3.0. Do not copy code from it.** This is the one real constraint. A link to GPL-3.0 code would force us to release our whole application under GPL-3.0. The libraries are MIT and hold everything that we need. **There is no reason to touch the source of Binary.** Treat that repo as read-only documentation. Two specific traps:
+  - Do not take helpers out of `Binary/`, even attractive ones such as `Editor.FixLaunchDirectory`, which the CLI path calls. Reimplement from the behavior. Do not copy and paste.
+  - Do not add `Binary.csproj` as a project reference to reuse its CLI. A call to `Binary.exe` as a separate process is acceptable, because the GPL covers distribution and linking, not a call to an unmodified program that the user already installed. But this is a fallback that we probably do not need.
+- **Choose our own license and record it in the repo before publication.** MIT keeps us aligned with the libraries that we depend on.
+- **One open item:** `Nikki/Nikki/LZCompressLib.dll` is a **closed-source native x64 PE DLL that the repo checks in**. It is 116 KB and its build path is `C:\Users\Max\source\repos\LZCompressLib`. It has no public source repo and no separate license file. Nikki calls its `BlockCompress` and `BlockDecompress` entry points through P/Invoke from `Nikki/Utils/Interop.cs`. **Container compression needs this DLL.** It is not optional. It sits inside an MIT repo by the same author, so the MIT grant most likely covers it. But the blob itself carries no license statement. The risk is low. One email to MaxHwoy can confirm it. Note this before we redistribute the DLL.
 
 ### What this eliminates
 
-Everything below that was framed as reverse-engineering is now a code-reading exercise instead:
+The sections below described reverse-engineering work. That work is now a code-reading exercise.
 
-- **`.LZC`/`.BUN` container format** — no longer needs reverse-engineering. Nikki implements it, including per-game support for **Underground1, Underground2, MostWanted, Carbon, Prostreet, and Undercover** (a superset of our four targets), each with its own `Support.<Game>/` tree of `Attributes`, `Class`, `Parts`, and `Framework` types.
-- **`.end` parsing** — no longer needs writing from scratch. `Endscript` has `EndScriptParser`, `EndScriptManager`, a `BaseCommand` model, and `Launch` (the exact `VERSN1` DTO, including a `Serialize` that reproduces the backslash-unescaped JSON dialect via `settings.Replace(@"\\", @"\")` — confirming that quirk was real and giving us the writer for free).
-- **Guessing at enums and vocabulary** — all now readable as source. See the corrections below.
+- **The `.LZC` and `.BUN` container format** needs no reverse-engineering. Nikki implements it. Nikki supports **Underground 1, Underground 2, Most Wanted, Carbon, ProStreet, and Undercover**. This is a superset of our four targets. Each game has its own `Support.<Game>/` tree with `Attributes`, `Class`, `Parts`, and `Framework` types.
+- **`.end` parsing** needs no new code. `Endscript` provides `EndScriptParser`, `EndScriptManager`, a `BaseCommand` model, and `Launch`. `Launch` is the exact `VERSN1` DTO. Its `Serialize` method reproduces the backslash dialect through `settings.Replace(@"\\", @"\")`. This confirms the dialect quirk and gives us the writer at no cost.
+- **Guesses about enums and vocabulary** are no longer needed. The source answers them. See the corrections below.
 
 ## Corrections and confirmations from the upstream source
 
-Reading `Endscript` and `Nikki` confirms most of the `example_mods` survey and corrects several details. Where this section disagrees with anything above, **this section wins** — it's from the implementation, not inference.
+A read of `Endscript` and `Nikki` confirms most of the `example_mods` survey and corrects several details. Where this section disagrees with anything above, **this section wins**. It comes from the implementation, not from inference.
 
-- **Full command vocabulary is 48 entries**, not 5. `Endscript/Enums/eCommandType.cs`:
+- **The full command vocabulary has 48 entries**, not 5. From `Endscript/Enums/eCommandType.cs`:
   `invalid`, `empty`, `game`, `version`, `append`, `update_collection`, `update_string`, `update_texture`, `update_incareer`, `add_collection`, `add_string`, `add_texture`, `add_incareer`, `remove_collection`, `remove_string`, `remove_texture`, `remove_incareer`, `copy_collection`, `copy_texture`, `copy_incareer`, `replace_texture`, `bind_textures`, `add_or_update_string`, `add_or_replace_texture`, `static`, `import`, `import_all`, `new`, `delete`, `watermark`, `create_file`, `create_folder`, `erase_file`, `erase_folder`, `move_file`, `generate`, `directory`, `filecount`, `capacity`, `checkbox`, `combobox`, `if`, `stop_errors`, `unlock_memory`, `speedreflect`, `unpack_stream`, `pack_stream`, `end`.
-  The predicted `add_`/`remove_` families exist. Note also **`if`** (conditionals — scripts are not purely declarative), **texture commands** (so asset replacement *is* expressible in `.end` after all — the speculative "asset replacement" taxonomy row can likely be dropped), **file/folder manipulation** commands, and **`checkbox`** — a second interactive command alongside `combobox`.
-- **`checkbox` is a second option mechanism** we hadn't seen: a yes/no toggle (Binary's CLI prompts `Select one [yes, no]`, mapping to `Choice` 1/0). Our option UI must handle three shapes, not two: sibling-manifest variants (multi-select), `combobox` (single-select from N), and `checkbox` (boolean).
-- **`combobox` grammar confirmed exactly as inferred.** `ComboboxCommand.Prepare` requires ≥4 tokens, takes `splits[1 .. ^2]` as options and `splits[^1]` as the description. So the trailing-token-is-caption rule is correct and the block-header cross-check heuristic proposed above is unnecessary — drop it.
-- **The tokenizer is `SmartSplitString` in `CoreExtensions/Text/RegX.cs`** — a quote-toggling scanner that splits on `' '` only. Note it does **not** treat tabs as separators, and it emits quoted segments as tokens without the quotes. Matching this behavior exactly matters if we write our own; using `CoreExtensions` avoids the question.
-- **`ePathType.Absolute` does not mean "absolute path".** From `Launch.LoadLinks()`: `Relative` resolves against the *manifest's* folder, `Absolute` resolves against the *game install* directory. Both are relative paths; `Absolute` means "rooted at the game dir". Getting this backwards would break every `Links` entry, since all observed entries are `Absolute`.
-- **`Directory` is the game install directory** — the field that's empty in all our example mods because `User` mode asks the user to browse for it. In `Modder` mode it must be filled in and must exist. So the earlier "fail loudly if non-empty" note is wrong: **non-empty is the normal case for the automation path, and it's the field we populate.**
-- **`eUsage`** = `Invalid`/`User`/`Modder`. **`eLoaderType`** = `Invalid`/`BinKeys`/`VltKeys`/`Attributes`/`FeAttrib`/`Labels` — so two loader types beyond the three we'd seen. **`GameINT`** = `None`/`Carbon`/`MostWanted`/`Underground2`/`Underground1`/`Prostreet`/`Undercover`.
-- **`Files` semantics confirmed**: `Launch.CheckFiles()` only verifies each entry exists under `Directory`. It is a load/verify set, exactly as deduced — not an edit list. The conflict-detection correction above stands.
-- **`Links` requires per-game hash lists**: Binary ships `mainkeys/<game>.txt` and `userkeys/<game>.txt` files and wires them into the profile classes via static properties (`Underground2Profile.MainHashList` etc.). These are string/hash dictionaries the libraries need at runtime. **We must ship or generate the equivalent `mainkeys` data** — it comes from Binary's distribution, not from the MIT libraries, so check its licensing separately. This is a real dependency that isn't obvious from the library source alone.
+  The predicted `add_` and `remove_` families exist. Note also **`if`**, which adds conditionals, so scripts are not purely declarative. Note the **texture commands**. Asset replacement is expressible in `.end` after all, so we can drop the speculative "asset replacement" taxonomy row. Note the **file and folder commands**. Note **`checkbox`**, a second interactive command beside `combobox`.
+- **`checkbox` is a second option mechanism** that we had not seen. It is a yes/no toggle. The CLI of Binary prompts `Select one [yes, no]` and maps the answer to `Choice` 1 or 0. Our option UI must handle three shapes, not two: sibling-manifest variants (multi-select), `combobox` (single-select from N), and `checkbox` (boolean).
+- **The `combobox` grammar matches the inference exactly.** `ComboboxCommand.Prepare` needs at least 4 tokens. It takes `splits[1 .. ^2]` as the options and `splits[^1]` as the description. The trailing-token-is-caption rule is correct. Drop the block-header cross-check heuristic that the section above proposed.
+- **The tokenizer is `SmartSplitString` in `CoreExtensions/Text/RegX.cs`.** It is a quote-toggling scanner that splits only on `' '`. It does **not** treat tabs as separators. It emits quoted segments as tokens without the quotes. If we write our own tokenizer, it must match this behavior exactly. Use of `CoreExtensions` removes the question.
+- **`ePathType.Absolute` does not mean "absolute path".** From `Launch.LoadLinks()`: `Relative` resolves against the folder of the *manifest*, and `Absolute` resolves against the *game install* directory. Both are relative paths. `Absolute` means "rooted at the game directory". A reversal of this rule would break every `Links` entry, because every observed entry is `Absolute`.
+- **`Directory` is the game install directory.** The field is empty in our example mods because `User` mode asks the user to browse for the directory. In `Modder` mode the field must hold a path, and the path must exist. The earlier note said to fail loudly when the field is not empty. That note is wrong. **A filled field is normal for the automation path, and we fill it.**
+- **`eUsage`** = `Invalid`/`User`/`Modder`. **`eLoaderType`** = `Invalid`/`BinKeys`/`VltKeys`/`Attributes`/`FeAttrib`/`Labels`, so two loader types exist beyond the three that we had seen. **`GameINT`** = `None`/`Carbon`/`MostWanted`/`Underground2`/`Underground1`/`Prostreet`/`Undercover`.
+- **The semantics of `Files` are confirmed.** `Launch.CheckFiles()` only verifies that each entry exists under `Directory`. It is a load-and-verify set, exactly as deduced. It is not an edit list. The conflict-detection correction above stands.
+- **`Links` needs per-game hash lists.** Binary ships `mainkeys/<game>.txt` and `userkeys/<game>.txt` files. It wires them into the profile classes through static properties such as `Underground2Profile.MainHashList`. These are string and hash dictionaries that the libraries need at run time. **We must ship or generate the equivalent `mainkeys` data.** It comes from the distribution of Binary, not from the MIT libraries, so check its license separately. This is a real dependency that the library source alone does not show.
 
 ## Applying the edits: use the libraries in-process
 
-The earlier plan had this backwards. Since Nikki and Endscript are MIT and do the container work, **the "long-term" native path is available immediately and should be the primary design.** No external process, no GUI automation, no FlaUI.
+The earlier plan had this backwards. Nikki and Endscript are MIT and do the container work. **The native path that we called long-term is available now and must be the primary design.** No external process, no GUI automation, no FlaUI.
 
-### Primary path: reference Nikki + Endscript directly
+### Primary path: reference Nikki and Endscript directly
 
-The pipeline, mirroring what `Binary/CLI.cs` does (read it as documentation, don't copy it):
+The pipeline mirrors what `Binary/CLI.cs` does. Read that file as documentation. Do not copy it.
 
-1. `Launch.Deserialize(manifestPath, out var launch)` → the `VERSN1` model. Set `launch.ThisDir` to the manifest's folder.
-2. Point `launch.Directory` at our **staging copy** of the game, and set `launch.Usage` to `Modder`.
-3. `BaseProfile.NewProfile(launch.GameID, launch.Directory)` then `profile.Load(launch)` → returns a `string[]` of non-fatal exceptions. **Surface these; don't discard them.**
-4. `new EndScriptParser(path).Read()` → `BaseCommand[]`. The parser exposes `CurrentFile`, `CurrentIndex`, `CurrentLine` for precise error reporting — use them.
-5. `new EndScriptManager(profile, commands, path)`, then `CommandChase()`, then loop `ProcessScript()`. **This loop is the option hook:** it returns `false` and parks on `manager.CurrentCommand` whenever it hits a `ComboboxCommand` or `CheckboxCommand`, waiting for `.Choice` to be set before continuing. Binary's CLI answers these from `Console.ReadLine()`; **we answer them from the profile's stored selections — that is exactly where our WPF option UI plugs in**, with no synthesized-script trickery required.
-6. Check `manager.Errors` — a script can be "applied" *and* have errors. Treat any error as a failed deploy.
-7. `profile.Save()` → writes the containers. Also returns exceptions to surface.
+1. Call `Launch.Deserialize(manifestPath, out var launch)` to get the `VERSN1` model. Set `launch.ThisDir` to the folder of the manifest.
+2. Point `launch.Directory` at our **staging copy** of the game. Set `launch.Usage` to `Modder`.
+3. Call `BaseProfile.NewProfile(launch.GameID, launch.Directory)` and then `profile.Load(launch)`. This returns a `string[]` of non-fatal exceptions. **Show these. Do not discard them.**
+4. Call `new EndScriptParser(path).Read()` to get `BaseCommand[]`. The parser exposes `CurrentFile`, `CurrentIndex`, and `CurrentLine`. Use them for precise error reports.
+5. Call `new EndScriptManager(profile, commands, path)`, then `CommandChase()`, then loop over `ProcessScript()`. **This loop is the option hook.** It returns `false` and parks on `manager.CurrentCommand` when it reaches a `ComboboxCommand` or a `CheckboxCommand`. It waits for a value in `.Choice` before it continues. The CLI of Binary answers these from `Console.ReadLine()`. **We answer them from the stored selections of the profile. This is where our WPF option UI plugs in.** No synthesized script is needed.
+6. Check `manager.Errors`. A script can apply and still produce errors. Treat any error as a failed deploy.
+7. Call `profile.Save()` to write the containers. This also returns exceptions to show.
 
-Because step 5 is a callback-shaped pause, **we don't need to generate `.end` files to control option selection** — the earlier "synthesize a manifest+script so Binary never shows a combobox" plan is no longer necessary for that purpose. Keep script generation only where it's genuinely useful: merging multiple mods' edits into one ordered apply pass, and producing an inspectable/loggable artifact of what a deploy did. Load-order semantics are unchanged — later mod's `update_*` runs last, last write wins.
+Step 5 is a pause with the shape of a callback. **Therefore we do not need to generate `.end` files to control option selection.** The earlier plan synthesized a manifest and a script so that Binary would never show a combobox. That plan is no longer necessary for this purpose. Keep script generation only where it helps. It helps for a merge of several mods into one ordered apply pass. It also helps as an artifact that a user can inspect and log. The load-order semantics do not change. The `update_*` command of the later mod runs last, and the last write wins.
 
-### Fallback: Binary's CLI (now confirmed to exist)
+### Fallback: the CLI of Binary (confirmed to exist)
 
-`Binary/Program.cs` has a real non-interactive entry point, so the open question is answered:
+`Binary/Program.cs` has a real non-interactive entry point, so the open question has an answer:
 
 ```
 Binary.exe <user|modder> <VERSN1-manifest-path> <VERSN2-script-path>
 ```
 
-It calls `AllocConsole()`, then `CLI.LoadProfile(args[1])` → `CLI.ImportEndscript(args[2])` → `CLI.Save()`. Gotchas found by reading it:
+It calls `AllocConsole()`, then `CLI.LoadProfile(args[1])`, then `CLI.ImportEndscript(args[2])`, then `CLI.Save()`. A read of the code shows these problems:
 
-- **`args[0]` is parsed and then never used** — dead code. The mode actually enforced is the manifest's own `Usage` field, and `LoadProfile` **throws unless it is `Modder`**. Our `User`-mode example manifests would be rejected as-is; CLI use requires a synthesized `Modder` manifest with `Directory` filled in.
-- `combobox`/`checkbox` prompt on **stdin**, so a script containing them blocks unless we either pre-resolve them or pipe answers in.
-- **Failure reporting is poor**: parse errors and apply errors are `Console.WriteLine`-d and the method `return`s — no non-zero exit code. Errors also land in `EndError.log`/`MainLog.txt` in the *working directory*. So driving the CLI means scraping stdout and log files rather than checking an exit code — a strong argument for the in-process path, where we get `string[]` exception lists and `manager.Errors` directly.
+- **The program parses `args[0]` and then never uses it.** It is dead code. The enforced mode comes from the `Usage` field of the manifest. `LoadProfile` **throws unless the value is `Modder`**. Our `User`-mode example manifests would fail as they are. CLI use needs a synthesized `Modder` manifest with a value in `Directory`.
+- `combobox` and `checkbox` prompt on **stdin**. A script that holds them blocks, unless we resolve them first or pipe the answers in.
+- **Failure reporting is poor.** The program writes parse errors and apply errors with `Console.WriteLine` and then returns. It sets no non-zero exit code. Errors also go to `EndError.log` and `MainLog.txt` in the *working directory*. Use of the CLI therefore means that we scrape stdout and log files instead of a check of the exit code. This is a strong argument for the in-process path, which gives us `string[]` exception lists and `manager.Errors` directly.
 
-Keep the seam anyway, so the choice isn't load-bearing:
+Keep the seam anyway, so that the choice does not carry weight:
 
 ```csharp
 interface IEndscriptApplyEngine {
@@ -262,95 +262,95 @@ interface IEndscriptApplyEngine {
 // InProcessApplyEngine (primary, via Nikki+Endscript) | BinaryCliApplyEngine (fallback)
 ```
 
-**FlaUI is now unnecessary — drop it from the stack.** Regardless of engine: **apply against a staging copy, verify, then swap into the real game folder.** Never write to the user's live install directly.
+**FlaUI is now unnecessary. Drop it from the stack.** For either engine: **apply against a staging copy, verify, then swap into the real game folder.** Never write to the live install of the user.
 
 ### Integration constraints to plan for
 
-- **Target framework is `netcoreapp3.1`** across all three libraries — long out of support. Our fork should retarget to current .NET (net8/net9). Expect this to be mostly mechanical; `AllowUnsafeBlocks` is already enabled in Nikki and Endscript and must stay.
-- **`LZCompressLib.dll` is native x64.** Consequences: we must build `win-x64` (already planned); the DLL must sit next to the executable, so **`PublishSingleFile=true` needs `IncludeNativeLibrariesForSelfExtract=true`** or the P/Invoke will fail at runtime — the current packaging line in the stack section is insufficient as written. Under Wine this is unproblematic (Wine runs PE binaries natively), and it's a reason the Windows-only decision holds up well.
-- **Binary is WinForms, we are WPF.** Only relevant in that we cannot reuse any of Binary's UI, which we weren't going to anyway.
-- Nikki's culture handling: Binary forces `en-US` on the main thread before doing anything. Given the float literals in scripts, **set `InvariantCulture` explicitly** in our own entry point rather than inheriting it by luck.
+- **The target framework of all three libraries is `netcoreapp3.1`.** Support for it ended long ago. Our fork must retarget to a current .NET version, such as net8 or net9. This work is mostly mechanical. `AllowUnsafeBlocks` is already on in Nikki and Endscript and must stay on.
+- **`LZCompressLib.dll` is native x64.** Therefore we must build `win-x64`, which we already planned. The DLL must sit next to the executable. **`PublishSingleFile=true` therefore needs `IncludeNativeLibrariesForSelfExtract=true`**, or the P/Invoke fails at run time. The current packaging line in the stack section is not sufficient. Wine handles this well, because Wine runs PE binaries natively. This supports the Windows-only decision.
+- **Binary uses WinForms and we use WPF.** This matters only because we cannot reuse the UI of Binary. We did not plan to reuse it.
+- **Culture handling in Nikki:** Binary forces `en-US` on the main thread before it does anything. Our scripts hold float literals, so **set `InvariantCulture` explicitly** in our entry point. Do not inherit it by luck.
 
 ## Tech stack (decided)
 
-- **UI**: WPF, MVVM pattern. Use CommunityToolkit.Mvvm for low-ceremony MVVM (not full Prism unless a need emerges).
-- **Win32 interop**: Direct P/Invoke — `CreateHardLinkW`, `CreateSymbolicLinkW`, registry access via `Microsoft.Win32.Registry` for game install path discovery.
-- **Endscript/container work**: `SpeedReflect/Nikki` + `SpeedReflect/Endscript` + `MaxHwoy/CoreExtensions`, all MIT, referenced in-process as forked submodules retargeted to current .NET. Do **not** reference `SpeedReflect/Binary` (GPL-3.0). See the upstream section above.
-- **Installer automation**: ~~FlaUI~~ **not needed — dropped.** The MIT libraries expose the option-selection pause point directly in-process, and Binary has a real CLI as a fallback. There is no scenario left that requires driving a GUI.
-- **Hashing**: `System.IO.Hashing` (XxHash) for fast internal diffing, or `Blake3.NET` if community-standard checksums matter. Avoid relying on file size + mtime for identity checks — mtimes get reset on extraction and aren't reliable; hash actual content.
-- **Archive handling (mod packages, i.e. the zips/rars mods are distributed in)**: `System.IO.Compression` for zip, `SharpCompress` for rar/7z.
-- **Manifest parsing**: use `Endscript.Core.Launch` (`Deserialize`/`Serialize`) rather than hand-rolling it — it already handles the `[VERSN1]` header and the non-standard backslash-unescaped JSON dialect on both read and write. Keep a round-trip test over `example_mods` (read → write → byte-compare) so a future framework retarget can't silently change the output dialect.
-- **Game container format parsing**: **solved by Nikki** — no byte-level reverse-engineering needed. Per-game support trees cover all four target titles plus Underground 1 and Undercover. Requires `LZCompressLib.dll` (native x64) alongside the executable.
-- **`.end` script handling**: use `Endscript`'s `EndScriptParser`/`EndScriptManager`/`BaseCommand` model and `CoreExtensions`' `SmartSplitString` tokenizer instead of writing our own. Our code contributes the layer *above*: variant discovery, option persistence, answering the `ProcessScript()` option pauses from stored selections, conflict detection over resolved command targets, and multi-mod ordering. A merged-script emitter is still worth having as an inspectable deploy artifact, but it's no longer on the critical path.
-- **Hash lists**: `mainkeys/<game>.txt` string/hash dictionaries are needed at runtime and ship with **Binary's distribution**, not with the MIT libraries. Confirm their licensing before redistributing; otherwise point the profile statics at a user-supplied Binary install.
-- **Packaging**: `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true` — self-contained so Linux users don't need to `winetricks dotnet` into their existing game prefix, and `IncludeNativeLibrariesForSelfExtract` because `LZCompressLib.dll` is P/Invoked by name and will fail at runtime if it isn't extracted next to the host. `win-x64` is mandatory, not a preference: that DLL is x64-only. Ship `THIRD-PARTY-NOTICES` with the three MIT license texts.
+- **UI**: WPF with the MVVM pattern. Use CommunityToolkit.Mvvm for low-ceremony MVVM. Do not use full Prism unless a need appears.
+- **Win32 interop**: direct P/Invoke to `CreateHardLinkW` and `CreateSymbolicLinkW`. Use `Microsoft.Win32.Registry` to find the game install path.
+- **Endscript and container work**: `SpeedReflect/Nikki`, `SpeedReflect/Endscript`, and `MaxHwoy/CoreExtensions`. All are MIT. Reference them in-process as forked submodules that we retarget to a current .NET version. Do **not** reference `SpeedReflect/Binary`, which is GPL-3.0. See the upstream section above.
+- **Installer automation**: dropped. FlaUI is not needed. The MIT libraries expose the option-selection pause in-process, and Binary has a real CLI as a fallback. No scenario needs a GUI driver.
+- **Hashing**: `System.IO.Hashing` (XxHash) for fast internal diffs. Use `Blake3.NET` if community-standard checksums matter. Do not identify files by size and mtime. Extraction resets mtimes, so they are unreliable. Hash the content.
+- **Archive handling** for the zip and rar files that hold mods: `System.IO.Compression` for zip, and `SharpCompress` for rar and 7z.
+- **Manifest parsing**: use `Endscript.Core.Launch` with `Deserialize` and `Serialize`. Do not hand-roll this. The class already handles the `[VERSN1]` header and the non-standard backslash dialect on both read and write. Keep a round-trip test over `example_mods` that reads, writes, and compares bytes. This stops a future framework retarget from a silent change to the output dialect.
+- **Game container format parsing**: **Nikki solves this.** No byte-level reverse-engineering is needed. The per-game support trees cover all four target titles plus Underground 1 and Undercover. This needs `LZCompressLib.dll` (native x64) beside the executable.
+- **`.end` script handling**: use `EndScriptParser`, `EndScriptManager`, and the `BaseCommand` model from `Endscript`. Use the `SmartSplitString` tokenizer from `CoreExtensions`. Do not write our own. Our code adds the layer *above*: variant discovery, option persistence, answers to the `ProcessScript()` option pauses from stored selections, conflict detection over resolved command targets, and multi-mod ordering. A merged-script emitter is still worth building as an inspectable deploy artifact, but it is not on the critical path.
+- **Hash lists**: the `mainkeys/<game>.txt` string and hash dictionaries are needed at run time. They ship with **the distribution of Binary**, not with the MIT libraries. Confirm their license before we redistribute them. Otherwise point the profile statics at an existing Binary install that the user provides.
+- **Packaging**: `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true`. Self-contained means that Linux users do not need `winetricks dotnet` in their existing game prefix. `IncludeNativeLibrariesForSelfExtract` is required because the code P/Invokes `LZCompressLib.dll` by name, and the call fails at run time if the file is not extracted next to the host. `win-x64` is mandatory, not a preference, because that DLL is x64-only. Ship `THIRD-PARTY-NOTICES` with the three MIT license texts.
 
 ## Core architecture
 
-### Mod type taxonomy — separate deployment backends behind a common interface
+### Mod type taxonomy — separate deployment backends behind one interface
 
-Don't unify these into one code path. Build a `ModPackage` abstraction with the following implementations:
+Do not unify these into one code path. Build a `ModPackage` abstraction with these implementations:
 
 | Type                           | Behavior                                                                                                            | Deployment strategy                                                                                                                             |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| ASI/DLL plugins                | Drop-in files                                                                                                       | Direct link (hardlink→symlink→copy fallback), no capture step                                                                                   |
+| ASI/DLL plugins                | Drop-in files                                                                                                       | Direct link (hardlink, then symlink, then copy), no capture step                                                                                |
 | Loose files                    | Drop-in override                                                                                                    | Direct link, no capture step                                                                                                                    |
-| Texmod (.tpf) — **deferred**   | Runtime hook, never touches disk                                                                                    | Out of scope for now. Eventually: no file management — just a launcher wrapper tracking which package to inject                                 |
-| Binary mod — endscript-driven   | One or more `VERSN1` manifests, each pointing at a `VERSN2` script; options via sibling manifests (multi-select), `combobox` (single-select), and `checkbox` (boolean) | Discover variants → load via `Launch` + `BaseProfile` → parse via `EndScriptParser` → drive `EndScriptManager.ProcessScript()`, answering option pauses from stored selections → `profile.Save()` against staging. **This is the main path and covers both example mods completely.** |
+| Texmod (.tpf) — **deferred**   | Run-time hook, never touches the disk                                                                               | Out of scope for now. Later: no file management. Only a launcher wrapper that tracks which package to inject.                                   |
+| Binary mod — endscript-driven   | One or more `VERSN1` manifests, each with a `VERSN2` script. Options come from sibling manifests (multi-select), `combobox` (single-select), and `checkbox` (boolean). | Discover variants, load through `Launch` and `BaseProfile`, parse through `EndScriptParser`, drive `EndScriptManager.ProcessScript()` and answer option pauses from stored selections, then call `profile.Save()` against staging. **This is the main path. It covers both example mods completely.** |
 
-The speculative "asset replacement" row has been **removed**: the command vocabulary includes `update_texture`, `replace_texture`, `add_or_replace_texture`, `bind_textures`, `import`/`import_all`, and `pack_stream`/`unpack_stream`, so asset replacement is expressible in `.end` and flows through the same endscript-driven backend. There is no known mod behavior requiring a separate binary-diff path.
+The speculative "asset replacement" row is **removed**. The command vocabulary holds `update_texture`, `replace_texture`, `add_or_replace_texture`, `bind_textures`, `import`, `import_all`, `pack_stream`, and `unpack_stream`. Asset replacement is therefore expressible in `.end` and flows through the same endscript-driven backend. No known mod behavior needs a separate binary-diff path.
 
 ### Fallback capture pipeline — probably unnecessary, keep only as an escape hatch
 
-With Nikki handling containers and the command vocabulary covering textures, streams, and file operations, there is currently **no identified mod behavior that requires capture-by-diffing**. Do not build this. If a mod ever turns up that the libraries can't express, the shape it would take:
+Nikki handles the containers, and the command vocabulary covers textures, streams, and file operations. **No known mod behavior needs capture by diff.** Do not build this. If a mod appears that the libraries cannot express, the pipeline would take this shape:
 
-1. **Vanilla baseline**: content-hash every file (not size+date), plus full byte copies of container files.
-2. **Staging install**: a resettable working copy; hardlinks or block-cloning where available, full copy otherwise.
-3. **Capture**: reset staging → apply → diff by content hash → the delta becomes the mod's payload.
-4. **Deploy**: merge file trees in load order over vanilla, link into the game folder, keep backups for clean revert.
+1. **Vanilla baseline**: content-hash every file, not size and date. Also keep full byte copies of the container files.
+2. **Staging install**: a working copy that we can reset. Use hardlinks or block cloning where they are available, and a full copy otherwise.
+3. **Capture**: reset staging, apply the mod, then diff by content hash. The delta becomes the payload of the mod.
+4. **Deploy**: merge the file trees in load order over vanilla, link them into the game folder, and keep backups for a clean revert.
 
-Steps 1, 2, and 4 are worth building regardless — **staging and backup/revert are needed by the main path too.** It's only step 3 (diff-based capture) that is speculative.
+Steps 1, 2, and 4 are worth building anyway. **The main path also needs staging and backup/revert.** Only step 3, the diff-based capture, is speculative.
 
 ### Conflict resolution
 
-- **For script-driven mods**: the conflict key is **`(targetFile, keyPath)` from the resolved, flattened command list** — e.g. `(GLOBAL\GLOBALB.LZC, [CarTypeInfos, PEUGOT, PlayerCamera, PLAYER_CAMERA_FAR, CameraAngle])`. Two enabled mods writing the same key with **different** values is a real conflict; writing the same key with the **same** value is benign and must not be reported (this happens legitimately, e.g. 1 Lap's `ALL` variant overlapping `URL`). Case-insensitive comparison on both file paths and key segments, with separators normalized first.
-- **Do not** build conflict detection on the manifest's `Files` list (it's a load-set superset, not an edit list) or on `Links` (it's identical per-game boilerplate). Both were the original plan; both would produce mass false positives. See the manifest breakdown above.
-- Resolution UI: per-conflict "which mod wins" plus a global load order; the resolved decision is realized simply by the order mods' scripts are applied within one profile load (last write wins).
-- **Container-level merging is a non-issue now.** Because all enabled mods' scripts run against a single loaded `BaseProfile` before one `Save()`, edits composite at the collection/entry level automatically — there is never a whole-file "last mod wins" overwrite to guard against. This removes what was previously the hardest planned subsystem. The one thing to preserve: **apply all enabled mods in a single load→apply→save pass**, not one pass per mod, or we reintroduce the problem.
+- **For script-driven mods**, the conflict key is **`(targetFile, keyPath)` from the resolved flat command list**. An example key is `(GLOBAL\GLOBALB.LZC, [CarTypeInfos, PEUGOT, PlayerCamera, PLAYER_CAMERA_FAR, CameraAngle])`. Two enabled mods that write **different** values to the same key have a real conflict. Two mods that write the **same** value to the same key are benign, and the tool must not report them. This case happens legitimately, for example when the `ALL` variant of 1 Lap overlaps `URL`. Compare file paths and key segments case-insensitively. Normalize the separators first.
+- **Do not** base conflict detection on the `Files` list of the manifest, which is a load-set superset and not an edit list. **Do not** base it on `Links`, which is identical per-game boilerplate. Both were the original plan, and both would produce mass false positives. See the manifest breakdown above.
+- The resolution UI needs a per-conflict "which mod wins" control and a global load order. The order in which we apply the scripts of the mods in one profile load realizes the decision. The last write wins.
+- **Container-level merging is no longer a problem.** All enabled mods run their scripts against one loaded `BaseProfile` before one `Save()`. Edits therefore composite at the collection and entry level on their own. There is never a whole-file overwrite where one mod wins. This removes what was the hardest planned subsystem. One rule keeps it that way: **apply all enabled mods in a single load, apply, and save pass.** One pass per mod would bring the problem back.
 
-## Known risks / open questions
+## Known risks and open questions
 
-**Closed by the `example_mods` survey plus the upstream source read.** No longer needs research: `VERSN1`/`VERSN2` are different file types; the full 48-entry command vocabulary; `eUsage`/`eLoaderType`/`ePathType`/`GameINT` enums; `combobox` and `checkbox` grammar and semantics; `Directory` = game install dir; `Files` = load/verify set, not an edit list; `Links` = per-game loader boilerplate; the `.LZC`/`.BUN` container format (Nikki implements it for all six BlackBox titles); the tokenizer's exact behavior; **and whether Binary has a CLI (it does — see the fallback section).**
+**The `example_mods` survey and the upstream source read closed these questions.** They need no more research: `VERSN1` and `VERSN2` are different file types. The command vocabulary has 48 entries. The `eUsage`, `eLoaderType`, `ePathType`, and `GameINT` enums are known. The grammar and semantics of `combobox` and `checkbox` are known. `Directory` is the game install directory. `Files` is a load-and-verify set, not an edit list. `Links` is per-game loader boilerplate. Nikki implements the `.LZC` and `.BUN` container format for all six BlackBox titles. The exact behavior of the tokenizer is known. **Binary has a CLI. See the fallback section.**
 
 **Still open, in rough priority order:**
 
-1. **`mainkeys/<game>.txt` hash-list licensing and sourcing.** Required at runtime, ships with Binary's distribution rather than the MIT libraries. Either confirm we may redistribute them, generate equivalents, or require the user to point at an existing Binary install. This is now the most likely thing to block a redistributable build.
-2. **`LZCompressLib.dll` license confirmation.** Closed-source native blob inside an MIT repo, no separate license text, no public source. Almost certainly covered by Nikki's MIT grant; worth one email to MaxHwoy since we'd be redistributing it.
-3. **Retargeting the three libraries from `netcoreapp3.1` to current .NET.** Expected to be mechanical, but it's the first real integration task and it gates everything else. Verify `unsafe` code and the P/Invoke still behave, and that container round-trips are byte-identical before and after.
-4. **Behavioral verification under Wine.** Both the managed libraries and the native `LZCompressLib.dll` P/Invoke. Do this early — it's the one remaining assumption with no code-reading answer.
-5. **Symlink permissions under Wine**: Windows normally requires `SeCreateSymbolicLinkPrivilege` (admin or Developer Mode); Wine's ntdll enforcement varies by build. Confirm hardlink and symlink behavior on the actual Wine/Proton builds targeted. Relevant to the ASI/loose-file MVP.
-6. **Which of the 48 commands actually need first-class UI/conflict handling.** Our two example mods use 5. Commands like `if`, `static`, `generate`, `create_file`/`erase_file`, and `unlock_memory`/`speedreflect` have side effects outside the collection model, so conflict detection keyed on `(targetFile, keyPath)` won't cover them. Read `Endscript/Commands/` and classify each command by what it touches; treat unclassified commands as opaque and warn rather than silently assuming they're conflict-free.
-7. **`.bacc` backup-file convention.** `GLOBAL/GLOBALA.BUN.bacc` and `GLOBAL/GLOBALB.LZC.bacc` sit next to their originals in the install listing — presumably Binary's own pre-edit backups. Now cheap to answer by grepping the upstream source for `bacc` rather than by inspecting bytes. Decide whether to reuse the mechanism or keep our backups fully independent. Either way, our snapshot step must not treat `.bacc` files as game content.
-8. **Wider manifest/script sample**, for Most Wanted, Carbon, and ProStreet — to validate the per-game `Links` boilerplate assumption and exercise commands the U2 mods don't. Lower priority now that the enums come from source rather than inference.
+1. **The license and source of the `mainkeys/<game>.txt` hash lists.** The run time needs them. They ship with the distribution of Binary, not with the MIT libraries. Confirm that we may redistribute them, generate equivalents, or require the user to point at an existing Binary install. This is now the most likely blocker for a redistributable build.
+2. **License confirmation for `LZCompressLib.dll`.** It is a closed-source native blob inside an MIT repo, with no separate license text and no public source. The MIT grant of Nikki almost certainly covers it. One email to MaxHwoy is worth the effort, because we would redistribute the file.
+3. **Retarget the three libraries from `netcoreapp3.1` to a current .NET version.** We expect mechanical work. This is the first real integration task, and everything else waits on it. Verify that the `unsafe` code and the P/Invoke still behave. Verify that container round-trips stay byte-identical before and after.
+4. **Behavioral verification under Wine.** Test both the managed libraries and the `LZCompressLib.dll` P/Invoke. Do this early. It is the one remaining assumption that a code read cannot answer.
+5. **Symlink permissions under Wine.** Windows normally needs `SeCreateSymbolicLinkPrivilege`, which means admin rights or Developer Mode. Enforcement in the ntdll of Wine varies by build. Confirm hardlink and symlink behavior on the Wine and Proton builds that we target. This affects the ASI and loose-file MVP.
+6. **Which of the 48 commands need first-class UI and conflict handling.** Our two example mods use 5. Commands such as `if`, `static`, `generate`, `create_file`, `erase_file`, `unlock_memory`, and `speedreflect` have side effects outside the collection model. Conflict detection keyed on `(targetFile, keyPath)` does not cover them. Read `Endscript/Commands/` and classify each command by what it touches. Treat unclassified commands as opaque and warn. Do not assume that they are conflict-free.
+7. **The `.bacc` backup-file convention.** `GLOBAL/GLOBALA.BUN.bacc` and `GLOBAL/GLOBALB.LZC.bacc` sit next to their originals in the install listing. They are probably the pre-edit backups of Binary. A grep for `bacc` in the upstream source now answers this cheaply. No byte inspection is needed. Decide whether to reuse the mechanism or to keep our backups fully independent. Either way, our snapshot step must not treat `.bacc` files as game content.
+8. **A wider manifest and script sample** for Most Wanted, Carbon, and ProStreet. This would validate the per-game `Links` boilerplate assumption and exercise commands that the U2 mods do not use. This is lower priority now, because the enums come from the source and not from inference.
 
 ## Suggested roadmap
 
-Format research is **done**, and the container problem is **solved upstream**. Remaining order of work:
+Format research is **done**. The upstream libraries **solve the container problem**. The remaining order of work:
 
-1. **Fork and retarget the three MIT libraries** (`Nikki`, `Endscript`, `CoreExtensions`) to current .NET; get them building and packaged with the native DLL. Prove it end to end with a throwaway console harness that applies one `example_mods` manifest to a scratch copy of the game and produces a working `GLOBALB.LZC`. **This is the single highest-value first step — it de-risks the whole project in one move.** Verify under Wine here, not later.
-2. **Sort out the hash lists and license notices** (open questions 1–2) — small, but they gate anything distributable.
-3. **Our layer over Endscript**: variant discovery from sibling `VERSN1` files, option model (`combobox`/`checkbox`) with persisted selections, answering `ProcessScript()` pauses non-interactively, resolved-command extraction for conflict detection. Testable against `example_mods` without any UI.
-4. **MVP shell** — ASI/DLL + loose-file mods. MVVM scaffolding, game detection, profiles, load order UI, link-deploy engine (hardlink→symlink→copy fallback), staging + backup/revert. Smoke-test under Wine continuously.
-5. **Binary mod deployment** — wire step 3 into the UI: variant multi-select, option controls, conflict list, single load→apply-all→save pass against staging, atomic swap, revert.
-6. **Game profile support** — path/registry/executable differences across Underground 2, Most Wanted, Carbon, and ProStreet. Nikki already covers all four (plus UG1 and Undercover), so this is our own plumbing only.
-7. **Command classification hardening** (open question 6) — proper handling for commands outside the collection model.
-8. **Texmod / `.tpf` support** — explicitly last, explicitly optional. Nothing earlier may depend on it.
+1. **Fork and retarget the three MIT libraries** (`Nikki`, `Endscript`, `CoreExtensions`) to a current .NET version. Get them to build and package with the native DLL. Prove the result end to end with a throwaway console harness. The harness applies one `example_mods` manifest to a scratch copy of the game and produces a working `GLOBALB.LZC`. **This is the single highest-value first step. It de-risks the whole project in one move.** Verify under Wine here, not later.
+2. **Settle the hash lists and the license notices** (open questions 1 and 2). This work is small, but it gates anything that we distribute.
+3. **Build our layer over Endscript**: variant discovery from sibling `VERSN1` files, an option model for `combobox` and `checkbox` with persisted selections, non-interactive answers to the `ProcessScript()` pauses, and resolved-command extraction for conflict detection. All of this is testable against `example_mods` with no UI.
+4. **Build the MVP shell** for ASI/DLL and loose-file mods. This covers MVVM scaffolding, game detection, profiles, the load order UI, the link-deploy engine (hardlink, then symlink, then copy), and staging with backup and revert. Smoke-test under Wine continuously.
+5. **Add Binary mod deployment.** Wire step 3 into the UI: variant multi-select, option controls, the conflict list, a single load, apply-all, and save pass against staging, an atomic swap, and revert.
+6. **Add game profile support** for the path, registry, and executable differences across Underground 2, Most Wanted, Carbon, and ProStreet. Nikki already covers all four plus UG1 and Undercover, so this is our own plumbing only.
+7. **Harden command classification** (open question 6). Handle commands outside the collection model properly.
+8. **Add Texmod and `.tpf` support.** This step is explicitly last and explicitly optional. No earlier step may depend on it.
 
 ## Success criterion for the first Binary-capable build
 
-Both mods in `example_mods` install correctly, together, from our UI, with Binary never launched:
+Both mods in `example_mods` install correctly, together, from our UI, and Binary never runs:
 
-- The camera mod is imported, its `combobox` surfaces in our UI as a two-option single-select with the caption `"Choose option you needeed"`, and the stored selection answers `EndScriptManager.ProcessScript()`'s option pause without any prompt (450 or 744 `update_collection` commands executed).
-- The 1 Lap mod is imported as one mod with five multi-select variants; enabling `URL` + `CIRCUIT` executes 53 + 51 `update_incareer` commands, with the `ALL`-overlap case reported as benign rather than as a conflict.
-- Both enabled at once → no false conflict reported (disjoint key paths: `CarTypeInfos` vs. `GCareers`), applied in **one** load→apply-all→save pass against staging, `manager.Errors` empty, atomic swap into the game folder, and a clean revert to vanilla afterward.
-- The game launches and both mods are observably in effect — camera behavior changed and career races run one lap.
+- The tool imports the camera mod. Its `combobox` appears in our UI as a two-option single-select with the caption `"Choose option you needeed"`. The stored selection answers the option pause of `EndScriptManager.ProcessScript()` with no prompt. The run executes 450 or 744 `update_collection` commands.
+- The tool imports the 1 Lap mod as one mod with five multi-select variants. A user enables `URL` and `CIRCUIT`, which executes 53 plus 51 `update_incareer` commands. The tool reports the `ALL` overlap case as benign.
+- With both mods enabled, the tool reports no false conflict, because the key paths are disjoint: `CarTypeInfos` against `GCareers`. The tool applies both in **one** load, apply-all, and save pass against staging. `manager.Errors` is empty. The tool swaps the result into the game folder atomically and reverts to vanilla cleanly afterward.
+- The game launches and both mods are visibly in effect. The camera behavior changes and career races run one lap.
