@@ -39,6 +39,10 @@ namespace BlackboxModManager.App
 				return DeployTest.Run(args[1], args[2], args[3], revert);
 			}
 
+			// This must run before the first window opens. A window keeps the render mode
+			// that it started with. See Rendering.
+			Rendering.Apply();
+
 			var application = new App();
 			application.InitializeComponent();
 			return application.Run();

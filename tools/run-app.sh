@@ -15,6 +15,10 @@
 #   APP_WINEPREFIX  The prefix to run in.
 #   APP_OUT         The publish directory.
 #   APP_QUIET       "0" keeps the graphics driver noise of Wine.
+#
+# The application picks its render mode itself. It uses the software rasterizer under Wine,
+# because a hardware dropdown paints solid black there. Set BLACKBOX_RENDER_MODE to
+# "hardware" or "software" to compare the two. See src/BlackboxModManager.App/Rendering.cs.
 
 set -euo pipefail
 

@@ -77,6 +77,7 @@ namespace BlackboxModManager.App.ViewModels
 			this._game = StoredGame(this._settings);
 			this._selectedGame = this._game;
 
+			this.Write(Rendering.Report);
 			this.Write($"The application data directory is {AppPaths.Root}.");
 			this.Write($"The mod store is {AppPaths.ModsDirectory}.");
 			this.Write($"This build manages {this.Games.Count} games: {String.Join(", ", this.Games)}.");

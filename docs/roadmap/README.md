@@ -6,19 +6,19 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 
 ## Sequence
 
-| Step | File                                                         | Gates                           |
-| ---- | ------------------------------------------------------------ | ------------------------------- |
-| 0    | Done. See "Completed" below.                                 | —                               |
-| —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.  |
-| 1    | Done. See "Completed" below.                                 | —                               |
-| 2    | Done. See "Completed" below.                                 | —                               |
-| 3    | Done. See "Completed" below.                                 | —                               |
-| 4    | Done. See "Completed" below.                                 | —                               |
-| 5    | Done. See "Completed" below.                                 | —                               |
-| 6    | Done. See "Completed" below.                                 | —                               |
-| 7    | [07-game-profiles.md](07-game-profiles.md)                   | Part done. Three games wait.    |
-| 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.  |
-| 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.       |
+| Step | File                                                         | Gates                          |
+| ---- | ------------------------------------------------------------ | ------------------------------ |
+| 0    | Done. See "Completed" below.                                 | —                              |
+| —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1. |
+| 1    | Done. See "Completed" below.                                 | —                              |
+| 2    | Done. See "Completed" below.                                 | —                              |
+| 3    | Done. See "Completed" below.                                 | —                              |
+| 4    | Done. See "Completed" below.                                 | —                              |
+| 5    | Done. See "Completed" below.                                 | —                              |
+| 6    | Done. See "Completed" below.                                 | —                              |
+| 7    | [07-game-profiles.md](07-game-profiles.md)                   | Part done. Three games wait.   |
+| 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples. |
+| 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.      |
 
 Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, and 6 are done. **The success criterion of the project brief passes.**
 
@@ -100,7 +100,7 @@ Four facts carry forward.
 
 Start the application with `tools/run-app.sh`. Run the platform self test with `BlackboxModManager.exe --selftest <directory>`.
 
-Six facts carry forward.
+Nine facts carry forward.
 
 1. **Hard links work under Wine, and a two-move swap works.** The self test linked every file of the vanilla copy and of the staging copy, and it swapped the directories. A deploy of the 1.7 GB install costs almost no disk space and almost no time.
 2. **A hard link shares its content with the live install.** The staging file, the vanilla file, and the live file are one file with three names. **Step 6 must call `StagingFiles.MakePrivate` for every file that its merged load names**, because `profile.Save()` writes containers in place.
@@ -109,7 +109,9 @@ Six facts carry forward.
 5. **`GameCatalog` holds the games that a listing confirmed.** It held Underground 2 alone at the end of step 5. Step 7 added Most Wanted and ProStreet, and three targets still wait for a listing.
 6. **The window asks every question in a dialog.** `Console.ReadLine` never returns on a Wine console, and a window application has no console. `IUserInteraction` holds the whole set.
 7. **Never scroll a list from inside its own `CollectionChanged` handler, and always set `e.Handled`.** A synchronous `ScrollIntoView` there makes the item container generator run mid-notification, and WPF throws `An ItemsControl is inconsistent with its items source`. A handler that leaves `e.Handled` false then turns one exception into a storm of dialogs and a crash.
-8. **A font family that Wine does not hold kills the process.** WPF reaches `Invariant.FailFast`, which no handler can catch. `FontFamily="Consolas"` on the log list ended the application on its first log line. **Name no font family in the XAML**, and let `tools/run-app.sh` link the fonts of the host into the prefix.
+8. **A hardware popup paints black under Wine.** A ComboBox dropdown is a layered window that WPF composites itself, and the Direct3D path of Wine gives back no content for it. **The application sets `RenderMode.SoftwareOnly` under Wine.** Test the host with the `wine_get_version` export of `ntdll`. Wine reports `Microsoft Windows 10.0.19045`, so a version test finds nothing.
+
+9. **A font family that Wine does not hold kills the process.** WPF reaches `Invariant.FailFast`, which no handler can catch. `FontFamily="Consolas"` on the log list ended the application on its first log line. **Name no font family in the XAML**, and let `tools/run-app.sh` link the fonts of the host into the prefix.
 
 ### Step 6 — Binary mod deployment
 

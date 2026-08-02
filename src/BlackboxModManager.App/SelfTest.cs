@@ -42,6 +42,12 @@ namespace BlackboxModManager.App
 			Line($"The process architecture is {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture}.");
 			Line($"The operating system reports {System.Runtime.InteropServices.RuntimeInformation.OSDescription}.");
 
+			// The window picks its render mode from this same test. A dropdown paints black
+			// under Wine with hardware rendering, so the answer decides whether a user can
+			// read a list. See Rendering.
+			Rendering.Apply();
+			Line($"The host is {(Rendering.IsWine ? "Wine" : "not Wine")}. {Rendering.Report}");
+
 			try
 			{
 				Directory.CreateDirectory(root);

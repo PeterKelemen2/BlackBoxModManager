@@ -76,15 +76,15 @@ Step 5 is done. `src/BlackboxModManager.App` holds the window. `src/BlackboxModM
 
 ### The types
 
-| Namespace                   | Holds                                                                            |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| `Core.Games`                | `GameCatalog`, `GameDefinition`, `GameInstall*`. Detection and validation. 5.2.   |
-| `Core.Store`                | `ModStore`, `ModImporter`, `ModClassifier`, `ArchiveExtractor`. Import. 5.3.      |
-| `Core.Profiles`             | `Profile`, `ProfileEntry`, `ProfileStore`. The enabled set and the order. 5.4.    |
-| `Core.Deploy`               | `IDeployEngine`, `LinkDeployEngine`, `DeployService`, `DeployPolicy`. 5.5.        |
-| `Core.Staging`              | `GameWorkspace`, `SnapshotReader`, `TreeReplicator`, `GameSwap`, `StagingFiles`.  |
-| `Core.Files`                | `FileHash` with XxHash128, `FileTree`. Content identity and tree work.            |
-| `App.ViewModels`            | `MainViewModel`, `ModRowViewModel`. CommunityToolkit.Mvvm.                        |
+| Namespace        | Holds                                                                            |
+| ---------------- | -------------------------------------------------------------------------------- |
+| `Core.Games`     | `GameCatalog`, `GameDefinition`, `GameInstall*`. Detection and validation. 5.2.  |
+| `Core.Store`     | `ModStore`, `ModImporter`, `ModClassifier`, `ArchiveExtractor`. Import. 5.3.     |
+| `Core.Profiles`  | `Profile`, `ProfileEntry`, `ProfileStore`. The enabled set and the order. 5.4.   |
+| `Core.Deploy`    | `IDeployEngine`, `LinkDeployEngine`, `DeployService`, `DeployPolicy`. 5.5.       |
+| `Core.Staging`   | `GameWorkspace`, `SnapshotReader`, `TreeReplicator`, `GameSwap`, `StagingFiles`. |
+| `Core.Files`     | `FileHash` with XxHash128, `FileTree`. Content identity and tree work.           |
+| `App.ViewModels` | `MainViewModel`, `ModRowViewModel`. CommunityToolkit.Mvvm.                       |
 
 `tests/BlackboxModManager.Tests` holds 163 tests. The new ones build a game directory of text files, so they run on native Linux with no Wine and no game.
 
@@ -134,6 +134,16 @@ Two changes came out of it.
 2. `tools/run-app.sh` links the font files of the host into the prefix. A fresh prefix holds an empty `Fonts` directory, and one family with no fallback is a thin base for a UI. With 372 font files linked, a mod name in Cyrillic renders and the window survives.
 
 **Do not add a font family without a run under Wine.** The cost of a wrong one is an unrecoverable crash, and the stack blames the wrong code.
+
+### A hardware popup paints black under Wine
+
+**The application uses the software rasterizer under Wine.** The dropdown of a ComboBox is a `Popup` that carries `AllowsTransparency`, so WPF makes it a layered window and composites the pixels itself. The Direct3D path of Wine returns no content for that window. The list opened as a solid black rectangle, and the user could not read the options.
+
+`Rendering.Apply` sets `RenderOptions.ProcessRenderMode` to `SoftwareOnly` under Wine and leaves hardware rendering on Windows. It runs in `Program.Main`, because a window keeps the mode that it started with. The cost is frame rate that this window does not need.
+
+**Test the host with the ntdll export, not with the version.** Wine adds `wine_get_version` to `ntdll` and Windows does not. `RuntimeInformation.OSDescription` reports `Microsoft Windows 10.0.19045` inside the prefix, so a version test finds nothing. `NativeLibrary.TryGetExport` answers correctly.
+
+Set `BLACKBOX_RENDER_MODE` to `hardware` or `software` to compare the two modes on one machine. The window writes the mode into its log as its first line, and the self test reports it too.
 
 ### Never scroll a list from inside its own CollectionChanged handler
 
