@@ -106,6 +106,26 @@ namespace BlackboxModManager.Core.Games
 		/// </summary>
 		public string DirectoryName => Path.GetFileName(this.Root);
 
+		/// <summary>
+		/// The containers of the descriptor that this install does not hold.
+		///
+		/// <b>This blocks nothing.</b> Only a Binary mod needs a container, and the validator
+		/// passes an install that takes drop-in mods alone. The UI reads this list so that it
+		/// can name the problem before the user enables a Binary mod. The container engine
+		/// reports the same fact later, after the merged load names the real container set.
+		/// </summary>
+		public IReadOnlyList<string> MissingContainers()
+		{
+			var missing = new List<string>();
+
+			foreach (string container in this.Definition.ContainerFiles)
+			{
+				if (!File.Exists(ModPath.Resolve(this.Root, container))) missing.Add(container);
+			}
+
+			return missing;
+		}
+
 		public override string ToString() => $"{this.Definition.DisplayName} at {this.Root}";
 	}
 }

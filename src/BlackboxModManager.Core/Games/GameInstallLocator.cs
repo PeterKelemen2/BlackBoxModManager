@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
+using Nikki.Core;
 
 namespace BlackboxModManager.Core.Games
 {
@@ -16,6 +17,10 @@ namespace BlackboxModManager.Core.Games
 	/// An empty result is normal. A user who copied the game folder by hand leaves no
 	/// registry entry, and the directory can sit anywhere. The UI must offer a browse
 	/// button for that user.
+	///
+	/// <b>The scan collects the candidate directories once and then tests every descriptor
+	/// against them.</b> A separate walk per game would read the same directories six times,
+	/// and the drive scan is the slow part of the operation.
 	/// </summary>
 	public static class GameInstallLocator
 	{
@@ -27,11 +32,75 @@ namespace BlackboxModManager.Core.Games
 		{
 			if (definition is null) throw new ArgumentNullException(nameof(definition));
 
-			var found = new List<string>();
-			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			return FindAll(new[] { definition })[definition.Game];
+		}
 
-			foreach (string path in FromRegistry(definition)) Add(path, found, seen);
-			foreach (string path in FromCommonDirectories(definition)) Add(path, found, seen);
+		/// <summary>
+		/// Returns the candidate directories of every game that this application manages.
+		/// Every game gets an entry, and a game with no candidate gets an empty list.
+		/// </summary>
+		public static IReadOnlyDictionary<GameINT, IReadOnlyList<string>> FindAll()
+		{
+			return FindAll(GameCatalog.All);
+		}
+
+		/// <summary>
+		/// Returns the candidate directories of the given games. One scan serves them all.
+		/// </summary>
+		public static IReadOnlyDictionary<GameINT, IReadOnlyList<string>> FindAll(
+			IReadOnlyList<GameDefinition> definitions)
+		{
+			if (definitions is null) throw new ArgumentNullException(nameof(definitions));
+
+			var hinted = new Dictionary<GameINT, List<string>>();
+			var others = new Dictionary<GameINT, List<string>>();
+			var seen = new Dictionary<GameINT, HashSet<string>>();
+
+			foreach (GameDefinition definition in definitions)
+			{
+				hinted[definition.Game] = new List<string>();
+				others[definition.Game] = new List<string>();
+				seen[definition.Game] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			}
+
+			// The registry answers first, because an installer wrote those paths.
+			foreach (string directory in RegistryDirectories())
+			{
+				Offer(directory, definitions, hinted, others, seen);
+			}
+
+			foreach (string directory in ScanDirectories())
+			{
+				Offer(directory, definitions, hinted, others, seen);
+			}
+
+			var result = new Dictionary<GameINT, IReadOnlyList<string>>();
+
+			foreach (GameDefinition definition in definitions)
+			{
+				List<string> found = hinted[definition.Game];
+				found.AddRange(others[definition.Game]);
+				result[definition.Game] = found;
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// Returns every game that one directory can be. The list holds more than one entry
+		/// only when two games share an executable name. No pair of our descriptors does.
+		///
+		/// The browse dialog calls this. A user who picks a Most Wanted directory while the
+		/// window manages Underground 2 then gets a message that names the real game.
+		/// </summary>
+		public static IReadOnlyList<GameDefinition> Identify(string directory)
+		{
+			var found = new List<GameDefinition>();
+
+			foreach (GameDefinition definition in GameCatalog.All)
+			{
+				if (GameInstallValidator.LooksLike(definition, directory)) found.Add(definition);
+			}
 
 			return found;
 		}
@@ -46,14 +115,153 @@ namespace BlackboxModManager.Core.Games
 		public static IReadOnlyList<string> FromRegistry(GameDefinition definition)
 		{
 			if (definition is null) throw new ArgumentNullException(nameof(definition));
-			if (!OperatingSystem.IsWindows()) return Array.Empty<string>();
 
-			return ReadKeys(definition);
+			var found = new List<string>();
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (string directory in RegistryDirectories())
+			{
+				if (!GameInstallValidator.LooksLike(definition, directory)) continue;
+
+				string full = Normalize(directory);
+
+				if (full != null && seen.Add(full)) found.Add(full);
+			}
+
+			return found;
+		}
+
+		/// <summary>
+		/// Scans the directories where a game usually sits. It tests each parent directory
+		/// and each direct child of it.
+		/// </summary>
+		public static IReadOnlyList<string> FromCommonDirectories(GameDefinition definition)
+		{
+			if (definition is null) throw new ArgumentNullException(nameof(definition));
+
+			var hinted = new List<string>();
+			var others = new List<string>();
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (string directory in ScanDirectories())
+			{
+				if (!GameInstallValidator.LooksLike(definition, directory)) continue;
+
+				string full = Normalize(directory);
+
+				if (full is null || !seen.Add(full)) continue;
+
+				if (MatchesHint(definition, full)) hinted.Add(full);
+				else others.Add(full);
+			}
+
+			hinted.AddRange(others);
+			return hinted;
+		}
+
+		// ---------------------------------------------------------------- the shared scan
+
+		/// <summary>
+		/// Tests one directory against every descriptor and files it under each game that it
+		/// can be.
+		/// </summary>
+		private static void Offer(string directory, IReadOnlyList<GameDefinition> definitions,
+			Dictionary<GameINT, List<string>> hinted, Dictionary<GameINT, List<string>> others,
+			Dictionary<GameINT, HashSet<string>> seen)
+		{
+			string full = Normalize(directory);
+
+			if (full is null) return;
+
+			foreach (GameDefinition definition in definitions)
+			{
+				if (!GameInstallValidator.LooksLike(definition, full)) continue;
+				if (!seen[definition.Game].Add(full)) continue;
+
+				if (MatchesHint(definition, full)) hinted[definition.Game].Add(full);
+				else others[definition.Game].Add(full);
+			}
+		}
+
+		/// <summary>
+		/// True when the directory name carries a name that this game usually carries. A
+		/// directory of that name is the better guess. This is not a check.
+		/// </summary>
+		private static bool MatchesHint(GameDefinition definition, string directory)
+		{
+			string name = Path.GetFileName(directory);
+
+			if (String.IsNullOrEmpty(name)) return false;
+
+			foreach (string hint in definition.DirectoryHints)
+			{
+				if (String.IsNullOrEmpty(hint)) continue;
+
+				if (name.Contains(hint, StringComparison.OrdinalIgnoreCase)) return true;
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// Every directory that the scan offers. It yields each common parent and each direct
+		/// child of it, once.
+		/// </summary>
+		private static IEnumerable<string> ScanDirectories()
+		{
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (string parent in CommonParents())
+			{
+				if (String.IsNullOrWhiteSpace(parent)) continue;
+				if (!seen.Add(parent)) continue;
+
+				IEnumerable<string> children;
+
+				try
+				{
+					if (!Directory.Exists(parent)) continue;
+
+					children = Directory.EnumerateDirectories(parent);
+				}
+				catch (Exception)
+				{
+					continue;
+				}
+
+				yield return parent;
+
+				// EnumerateDirectories reads lazily, so the read can still throw below.
+				using IEnumerator<string> walk = children.GetEnumerator();
+
+				while (true)
+				{
+					string child;
+
+					try
+					{
+						if (!walk.MoveNext()) break;
+
+						child = walk.Current;
+					}
+					catch (Exception)
+					{
+						break;
+					}
+
+					yield return child;
+				}
+			}
 		}
 
 		/// <summary>
 		/// The registry keys that can hold a game path. We read the publisher keys and the
 		/// uninstall keys.
+		///
+		/// <b>The descriptors name no registry key.</b> This scan reads every value of these
+		/// keys that can hold a directory, and it then tests the directory itself. A per-game
+		/// key name would need a real Windows install of that game to confirm it. See the
+		/// Results section of 07-game-profiles.md.
 		/// </summary>
 		private static readonly string[] SearchKeys =
 		{
@@ -65,8 +273,19 @@ namespace BlackboxModManager.Core.Games
 			@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
 		};
 
+		/// <summary>
+		/// Every directory that the registry offers, plus the parent of each one. An
+		/// uninstall entry can name the uninstaller and not the directory.
+		/// </summary>
+		private static IReadOnlyList<string> RegistryDirectories()
+		{
+			if (!OperatingSystem.IsWindows()) return Array.Empty<string>();
+
+			return ReadKeys();
+		}
+
 		[SupportedOSPlatform("windows")]
-		private static IReadOnlyList<string> ReadKeys(GameDefinition definition)
+		private static IReadOnlyList<string> ReadKeys()
 		{
 			var found = new List<string>();
 
@@ -79,14 +298,14 @@ namespace BlackboxModManager.Core.Games
 						using RegistryKey parent = hive.OpenSubKey(path);
 						if (parent is null) continue;
 
-						ReadEntry(parent, definition, found);
+						ReadEntry(parent, found);
 
 						foreach (string name in parent.GetSubKeyNames())
 						{
 							using RegistryKey entry = parent.OpenSubKey(name);
 							if (entry is null) continue;
 
-							ReadEntry(entry, definition, found);
+							ReadEntry(entry, found);
 						}
 					}
 					catch (Exception)
@@ -101,15 +320,14 @@ namespace BlackboxModManager.Core.Games
 		}
 
 		/// <summary>
-		/// Reads every value of one key that can hold a directory, and keeps the ones that
-		/// hold the game.
+		/// Reads every value of one key that can hold a directory.
 		///
-		/// The value names differ between the publisher keys and the uninstall keys, and
-		/// they differ between game versions. Test each candidate value instead of a name
-		/// that we would have to guess.
+		/// The value names differ between the publisher keys and the uninstall keys, and they
+		/// differ between game versions. Collect every candidate value instead of a name that
+		/// we would have to guess.
 		/// </summary>
 		[SupportedOSPlatform("windows")]
-		private static void ReadEntry(RegistryKey key, GameDefinition definition, List<string> found)
+		private static void ReadEntry(RegistryKey key, List<string> found)
 		{
 			foreach (string name in key.GetValueNames())
 			{
@@ -119,17 +337,11 @@ namespace BlackboxModManager.Core.Games
 				if (String.IsNullOrWhiteSpace(value)) continue;
 
 				string directory = value.Trim().Trim('"');
+				found.Add(directory);
 
-				if (GameInstallValidator.LooksLike(definition, directory))
-				{
-					found.Add(directory);
-					continue;
-				}
-
-				// An uninstall entry can name the uninstaller and not the directory.
 				string parent = ParentOf(directory);
 
-				if (parent != null && GameInstallValidator.LooksLike(definition, parent)) found.Add(parent);
+				if (parent != null) found.Add(parent);
 			}
 		}
 
@@ -152,53 +364,6 @@ namespace BlackboxModManager.Core.Games
 			{
 				return null;
 			}
-		}
-
-		/// <summary>
-		/// Scans the directories where a game usually sits. It tests each parent directory
-		/// and each direct child of it.
-		/// </summary>
-		public static IReadOnlyList<string> FromCommonDirectories(GameDefinition definition)
-		{
-			if (definition is null) throw new ArgumentNullException(nameof(definition));
-
-			var hinted = new List<string>();
-			var others = new List<string>();
-
-			foreach (string parent in CommonParents())
-			{
-				if (String.IsNullOrWhiteSpace(parent)) continue;
-
-				IEnumerable<string> children;
-
-				try
-				{
-					if (!Directory.Exists(parent)) continue;
-
-					if (GameInstallValidator.LooksLike(definition, parent)) others.Add(parent);
-
-					children = Directory.EnumerateDirectories(parent);
-				}
-				catch (Exception)
-				{
-					continue;
-				}
-
-				foreach (string child in children)
-				{
-					if (!GameInstallValidator.LooksLike(definition, child)) continue;
-
-					// A directory whose name matches the game is the better guess.
-					bool matches = !String.IsNullOrEmpty(definition.DirectoryHint)
-						&& Path.GetFileName(child).Contains(definition.DirectoryHint, StringComparison.OrdinalIgnoreCase);
-
-					if (matches) hinted.Add(child);
-					else others.Add(child);
-				}
-			}
-
-			hinted.AddRange(others);
-			return hinted;
 		}
 
 		/// <summary>
@@ -291,20 +456,16 @@ namespace BlackboxModManager.Core.Games
 			}
 		}
 
-		private static void Add(string path, List<string> found, HashSet<string> seen)
+		private static string Normalize(string path)
 		{
-			string full;
-
 			try
 			{
-				full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+				return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 			}
 			catch (Exception)
 			{
-				return;
+				return null;
 			}
-
-			if (seen.Add(full)) found.Add(full);
 		}
 	}
 }

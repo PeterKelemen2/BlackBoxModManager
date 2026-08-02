@@ -106,8 +106,8 @@ namespace BlackboxModManager.App
 
 			var importer = new ModImporter(store, Path.Combine(AppPaths.Root, "deploytest-import"));
 
-			InstalledMod camera = importer.Import(Path.Combine(modsRoot, CameraFolder)).Mod;
-			InstalledMod lap = importer.Import(Path.Combine(modsRoot, OneLapFolder)).Mod;
+			InstalledMod camera = importer.Import(Path.Combine(modsRoot, CameraFolder), GameINT.Underground2).Mod;
+			InstalledMod lap = importer.Import(Path.Combine(modsRoot, OneLapFolder), GameINT.Underground2).Mod;
 
 			Expect(camera.Kind == ModKind.Binary, $"The camera mod is a Binary mod. It is {camera.Kind}.");
 			Expect(lap.Kind == ModKind.Binary, $"The 1 Lap mod is a Binary mod. It is {lap.Kind}.");

@@ -16,11 +16,13 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 4    | Done. See "Completed" below.                                 | —                               |
 | 5    | Done. See "Completed" below.                                 | —                               |
 | 6    | Done. See "Completed" below.                                 | —                               |
-| 7    | [07-game-profiles.md](07-game-profiles.md)                   | Games other than Underground 2. |
+| 7    | [07-game-profiles.md](07-game-profiles.md)                   | Part done. Three games wait.    |
 | 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.  |
 | 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.       |
 
-Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, and 6 are done. **The success criterion of the project brief passes.** Step 7 is open.
+Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, and 6 are done. **The success criterion of the project brief passes.**
+
+**Step 7 is part done.** The plumbing carries any number of games, and the application manages three of the six targets. Underground 1, Carbon, and Undercover wait for a listing of a real install. Read the Results section of [07-game-profiles.md](07-game-profiles.md).
 
 ## Completed
 
@@ -104,7 +106,7 @@ Six facts carry forward.
 2. **A hard link shares its content with the live install.** The staging file, the vanilla file, and the live file are one file with three names. **Step 6 must call `StagingFiles.MakePrivate` for every file that its merged load names**, because `profile.Save()` writes containers in place.
 3. **The workspace sits beside the game install on purpose.** A hard link cannot cross a volume, and a move across a volume copies every byte. `Settings.WorkRootOverride` moves it, and the deploy then reports the cost.
 4. **A Binary mod stops a deploy with a message that names step 6.** The store classifies it and no engine in this build claims it. A silent skip would look like a deploy that worked.
-5. **`GameCatalog` holds Underground 2 only.** It is the one install that we listed file by file. Step 7 adds Underground 1, Most Wanted, Carbon, ProStreet, and Undercover, one confirmed listing at a time.
+5. **`GameCatalog` holds the games that a listing confirmed.** It held Underground 2 alone at the end of step 5. Step 7 added Most Wanted and ProStreet, and three targets still wait for a listing.
 6. **The window asks every question in a dialog.** `Console.ReadLine` never returns on a Wine console, and a window application has no console. `IUserInteraction` holds the whole set.
 7. **Never scroll a list from inside its own `CollectionChanged` handler, and always set `e.Handled`.** A synchronous `ScrollIntoView` there makes the item container generator run mid-notification, and WPF throws `An ItemsControl is inconsistent with its items source`. A handler that leaves `e.Handled` false then turns one exception into a storm of dialogs and a crash.
 8. **A font family that Wine does not hold kills the process.** WPF reaches `Invariant.FailFast`, which no handler can catch. `FontFamily="Consolas"` on the log list ended the application on its first log line. **Name no font family in the XAML**, and let `tools/run-app.sh` link the fonts of the host into the prefix.
@@ -125,6 +127,19 @@ Six facts carry forward.
 4. **Pass the full path of the script to `EndScriptManager`.** The third argument becomes `Path.GetDirectoryName(launcher)`, and seventeen commands read a file relative to it. The step 1 harness passed a bare name.
 5. **A link to a file that does not exist is normal.** A vanilla install holds one of the four links that every manifest names, and every loader in Nikki returns for a missing file.
 6. **A combobox option is named by the quoted string in the script**, not by the file that the block appends. A stored answer holds that name.
+
+### Step 7 — game profile support, part done
+
+**Part done.** The application manages Underground 2, Most Wanted, and ProStreet. It detects each one, imports mods for it, deploys, and reverts. The window holds a game picker, and every mod in the store carries one game. Read [07-game-profiles.md](07-game-profiles.md) for the game table and the open work.
+
+**Three targets have no descriptor.** This machine holds no Underground 1, no Carbon, and no Undercover install. Every value in a descriptor comes from a listing of a real install, so those three wait. `GameCatalog.Absent` names them.
+
+Four facts carry forward.
+
+1. **A game is supported when a descriptor exists.** Never read the membership of `GameINT` instead. `GameCatalog.All` answers "which games does this application manage". `GameCatalog.Absent` answers "which target is missing".
+2. **The manifest decides the game of a Binary mod.** The window decides the game of a drop-in mod. An import that disagrees with the manifest follows the manifest and writes a note.
+3. **A drop-in deploy is game-independent, and a container deploy is not proven so.** The link engine reads a descriptor and nothing else, and a test deploys and reverts on all three games. Only Underground 2 has a container proof, because we hold no Binary mod sample for another game.
+4. **The `Links` boilerplate is confirmed for Underground 2 alone.** `ManifestLinkAudit` reports the differences, and a game with an empty expected set produces no report. **Silence there means "not checked" and never "clean".**
 
 ## Reference files
 

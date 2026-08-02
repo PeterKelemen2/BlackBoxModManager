@@ -118,7 +118,7 @@ Need for Speed Underground 2.blackbox/
 
 4. **The verify checks the last writer of a path, not every writer.** Two mods can supply one file. The earlier one lost, so its content is not in the staging copy, and a check against it fails for the wrong reason.
 
-5. **`GameCatalog` holds one game.** Underground 2 is the only install that we listed file by file, so it is the only entry. Step 7 adds the other five target games, which are Underground 1, Most Wanted, Carbon, ProStreet, and Undercover. Add an entry only after a listing of a real install confirms the executable name and the markers.
+5. **`GameCatalog` holds one game.** Underground 2 is the only install that we listed file by file, so it is the only entry. Add an entry only after a listing of a real install confirms the executable name and the markers. **Step 7 added Most Wanted and ProStreet under that rule.** Underground 1, Carbon, and Undercover still wait for a listing.
 
 6. **A Binary mod stops a deploy with a message.** The store classifies it, the profile can hold it, and no engine in this build claims it. `DeployService` names step 6 and changes nothing. A silent skip would look like a successful deploy that did nothing.
 

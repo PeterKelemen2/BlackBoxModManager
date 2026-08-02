@@ -16,6 +16,12 @@ namespace BlackboxModManager.Core.Store
 
 		public ModContent Content { get; }
 
+		/// <summary>
+		/// What the user has to know about this import. It holds the notes of the directory
+		/// and the notes that the game decision added. Report these lines.
+		/// </summary>
+		public IReadOnlyList<string> Notes => this.Mod.Manifest.Notes;
+
 		internal ModImportResult(InstalledMod mod, ModContent content)
 		{
 			this.Mod = mod;
@@ -64,12 +70,18 @@ namespace BlackboxModManager.Core.Store
 		}
 
 		/// <summary>
-		/// Imports one archive or one directory. Pass a name in displayName to override the
-		/// name that the source gives.
+		/// Imports one archive or one directory for one game. Pass a name in displayName to
+		/// override the name that the source gives.
+		///
+		/// <b>The manifest of a Binary mod decides the game, not the game argument.</b> A
+		/// manifest that names Most Wanted produces a Most Wanted mod, and the result then
+		/// carries a note. A drop-in mod names no game, so it takes the game argument.
 		/// </summary>
-		public ModImportResult Import(string source, string displayName = null)
+		public ModImportResult Import(string source, GameINT game, string displayName = null)
 		{
 			if (String.IsNullOrWhiteSpace(source)) throw new ArgumentException("The source is empty.", nameof(source));
+
+			if (game == GameINT.None) throw new ArgumentOutOfRangeException(nameof(game), "GameINT.None is not a game.");
 
 			string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(source));
 			bool isDirectory = Directory.Exists(full);
@@ -102,16 +114,18 @@ namespace BlackboxModManager.Core.Store
 				// file in the store blocks a later removal of the mod.
 				FileTree.ClearReadOnly(contentRoot);
 
+				var notes = new List<string>(content.Notes);
+
 				var manifest = new ModManifest
 				{
 					Name = String.IsNullOrWhiteSpace(displayName) ? NameOf(full, isDirectory) : displayName.Trim(),
 					Kind = content.Kind,
-					Game = GameOf(content, contentRoot),
+					Game = GameOf(content, contentRoot, game, notes).ToString(),
 					Source = Path.GetFileName(full),
 					Imported = DateTimeOffset.UtcNow,
 					FileCount = content.Files.Count,
 					TotalBytes = content.TotalBytes,
-					Notes = new List<string>(content.Notes),
+					Notes = notes,
 				};
 
 				InstalledMod mod = this._store.Adopt(contentRoot, manifest);
@@ -158,12 +172,23 @@ namespace BlackboxModManager.Core.Store
 		}
 
 		/// <summary>
-		/// Reads the game out of a Binary mod. An ASI mod and a loose-file mod name no game,
-		/// so this returns null for both. The user assigns those.
+		/// Decides which game a mod belongs to, and adds a note when the answer surprises the
+		/// user.
+		///
+		/// An ASI mod and a loose-file mod name no game, so both take the game that the caller
+		/// gave. A Binary mod names its own game, and this application trusts the manifest.
+		///
+		/// <b>A Binary mod that names no game still enters the store.</b> The import stores a
+		/// file, and it does not install anything. VariantReader refuses such a mod at deploy
+		/// time with a message that names the variant. A refused import would leave the user
+		/// with a file and no way to look at it.
 		/// </summary>
-		private static string GameOf(ModContent content, string contentRoot)
+		private static GameINT GameOf(ModContent content, string contentRoot, GameINT wanted,
+			List<string> notes)
 		{
-			if (content.Kind != ModKind.Binary) return null;
+			if (content.Kind != ModKind.Binary) return wanted;
+
+			var named = new List<GameINT>();
 
 			try
 			{
@@ -171,16 +196,34 @@ namespace BlackboxModManager.Core.Store
 
 				foreach (ModVariant variant in package.Variants)
 				{
-					if (variant.Game != GameINT.None) return variant.Game.ToString();
+					if (variant.Game != GameINT.None && !named.Contains(variant.Game)) named.Add(variant.Game);
 				}
 			}
 			catch (Exception)
 			{
-				// A manifest that does not read leaves the game unknown. The import still
-				// succeeds, and step 6 reports the real problem when the user enables it.
+				// A manifest that does not read leaves the game unknown. The note below says
+				// so, and the deploy reports the real problem.
 			}
 
-			return null;
+			if (named.Count == 0)
+			{
+				notes.Add($"No manifest of this mod names a game. The import files it under {wanted}. " +
+					"A deploy refuses it until a manifest names a game.");
+				return wanted;
+			}
+
+			if (named.Count > 1)
+			{
+				notes.Add($"The manifests of this mod name {named.Count} games: " +
+					$"{String.Join(", ", named)}. The import files it under {named[0]}.");
+			}
+			else if (named[0] != wanted)
+			{
+				notes.Add($"The manifest names {named[0]} and not {wanted}. The import files the mod " +
+					$"under {named[0]}. Switch the game to {named[0]} to see it.");
+			}
+
+			return named[0];
 		}
 
 		private static string NameOf(string source, bool isDirectory)

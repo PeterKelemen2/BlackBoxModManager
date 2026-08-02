@@ -38,12 +38,16 @@ namespace BlackboxModManager.App.ViewModels
 		private Profile _profile;
 		private GameInstall _install;
 		private BinaryInstall _binaryInstall;
+		private GameDefinition _game;
 
 		/// <summary>
-		/// The game that the window manages. GameCatalog holds one entry today, and step 7
-		/// adds the others.
+		/// The games that this application manages. The picker shows this list.
 		/// </summary>
-		public GameINT Game { get; } = GameINT.Underground2;
+		public ObservableCollection<GameDefinition> Games { get; } =
+			new ObservableCollection<GameDefinition>(GameCatalog.All);
+
+		/// <summary>The game that the window manages.</summary>
+		public GameINT Game => this._game.Game;
 
 		public ObservableCollection<ModRowViewModel> Mods { get; } = new ObservableCollection<ModRowViewModel>();
 
@@ -70,13 +74,38 @@ namespace BlackboxModManager.App.ViewModels
 
 			AppPaths.CreateRoot();
 			this._settings = SettingsStore.Load();
+			this._game = StoredGame(this._settings);
+			this._selectedGame = this._game;
 
 			this.Write($"The application data directory is {AppPaths.Root}.");
 			this.Write($"The mod store is {AppPaths.ModsDirectory}.");
+			this.Write($"This build manages {this.Games.Count} games: {String.Join(", ", this.Games)}.");
+
+			if (GameCatalog.Absent.Count > 0)
+			{
+				this.Write($"It does not manage {String.Join(", ", GameCatalog.Absent)} yet. " +
+					"A descriptor for each one needs a listing of a real install.");
+			}
 
 			this.RefreshGame();
 			this.RefreshBinary();
 			this.RefreshProfiles();
+		}
+
+		/// <summary>
+		/// The game of the settings file, or the first game of the catalog. A stored name that
+		/// the catalog no longer holds falls back in the same way.
+		/// </summary>
+		private static GameDefinition StoredGame(Settings settings)
+		{
+			if (Enum.TryParse(settings.LastGame, ignoreCase: true, out GameINT game))
+			{
+				GameDefinition definition = GameCatalog.Find(game);
+
+				if (definition != null) return definition;
+			}
+
+			return GameCatalog.All[0];
 		}
 
 		// ---------------------------------------------------------------- state
@@ -101,6 +130,50 @@ namespace BlackboxModManager.App.ViewModels
 
 		[ObservableProperty]
 		private string _detailsHeader = "Select a mod to see what it offers.";
+
+		private GameDefinition _selectedGame;
+
+		/// <summary>
+		/// The game that the picker shows.
+		///
+		/// A switch reloads the install, the profiles, and the mods. It touches no file of any
+		/// game, so it is safe while nothing else runs. The setter refuses a switch during a
+		/// long operation, because a deploy holds the install of the game that it started with.
+		/// </summary>
+		public GameDefinition SelectedGame
+		{
+			get => this._selectedGame;
+			set
+			{
+				if (value is null) return;
+
+				if (this.IsBusy)
+				{
+					// The picker already shows the new value. Put the old one back.
+					this.OnPropertyChanged();
+					this._ask.ShowMessage("An operation runs. Wait for it, then switch the game.");
+					return;
+				}
+
+				if (!this.SetProperty(ref this._selectedGame, value)) return;
+
+				this.SwitchGame(value);
+			}
+		}
+
+		private void SwitchGame(GameDefinition definition)
+		{
+			this._game = definition;
+			this._settings.LastGame = definition.Game.ToString();
+			SettingsStore.Save(this._settings);
+
+			this.OnPropertyChanged(nameof(this.Game));
+			this.Write($"The window now manages {definition.DisplayName}.");
+
+			this.SelectedMod = null;
+			this.RefreshGame();
+			this.RefreshProfiles();
+		}
 
 		private ModRowViewModel _selectedMod;
 
@@ -235,8 +308,21 @@ namespace BlackboxModManager.App.ViewModels
 			this._install = resolution.Install;
 			this.GamePath = resolution.Status.Root ?? String.Empty;
 			this.GameStatus = resolution.IsUsable
-				? $"{GameCatalog.Demand(this.Game).DisplayName} is ready."
+				? $"{this._game.DisplayName} is ready."
 				: resolution.Status.Message;
+
+			// A Binary mod needs the containers. A drop-in mod does not, so this reports and
+			// blocks nothing.
+			if (this._install != null)
+			{
+				IReadOnlyList<string> missing = this._install.MissingContainers();
+
+				if (missing.Count > 0)
+				{
+					this.Write($"The install holds no {String.Join(", ", missing)}. " +
+						"A Binary mod that edits one of those containers cannot deploy.");
+				}
+			}
 
 			this.OnPropertyChanged(nameof(this.IsGameReady));
 			this.RefreshDeployedState();
@@ -401,19 +487,16 @@ namespace BlackboxModManager.App.ViewModels
 
 		private async Task ImportAsync(string source)
 		{
+			GameINT game = this.Game;
+
 			await this.RunAsync($"Import {Path.GetFileName(source)}.", report =>
 			{
-				ModImportResult result = this._importer.Import(source);
+				ModImportResult result = this._importer.Import(source, game);
 
-				report($"The import added \"{result.Mod.Name}\" of kind {result.Mod.Kind}, " +
-					$"with {result.Content.Files.Count} files.");
+				report($"The import added \"{result.Mod.Name}\" of kind {result.Mod.Kind} " +
+					$"for {result.Mod.Game}, with {result.Content.Files.Count} files.");
 
-				foreach (string note in result.Content.Notes) report(note);
-
-				if (result.Mod.Kind == ModKind.Binary)
-				{
-					report("This build does not deploy a Binary mod. Step 6 adds that engine.");
-				}
+				foreach (string note in result.Notes) report(note);
 			});
 
 			this.RefreshMods();
@@ -434,6 +517,32 @@ namespace BlackboxModManager.App.ViewModels
 			this.RefreshMods();
 
 			this.Write($"The store no longer holds \"{row.Name}\".");
+		}
+
+		/// <summary>
+		/// Gives the selected mod the game that the window manages.
+		///
+		/// The store held mods with no game before metadata version 2, and such a mod shows
+		/// under every game. This command ends that. It refuses a Binary mod, because the
+		/// manifest of that mod names the game.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(IsIdle))]
+		private void SetModGame()
+		{
+			ModRowViewModel row = this.SelectedMod;
+
+			if (row is null) return;
+
+			try
+			{
+				this._store.Assign(row.Mod, this.Game);
+				this.Write($"The mod \"{row.Name}\" now belongs to {this.Game}.");
+				this.RefreshMods();
+			}
+			catch (Exception ex)
+			{
+				this._ask.ShowError(ex.Message);
+			}
 		}
 
 		[RelayCommand(CanExecute = nameof(IsIdle))]
@@ -466,7 +575,9 @@ namespace BlackboxModManager.App.ViewModels
 		{
 			if (this._profile is null) return;
 
-			IReadOnlyList<InstalledMod> mods = this._store.List();
+			// Only the mods of this game. A profile of one game must never hold a mod of
+			// another game, and Reconcile drops any entry that this list does not name.
+			IReadOnlyList<InstalledMod> mods = this._store.List(this.Game);
 			var ids = new List<string>(mods.Count);
 
 			foreach (InstalledMod mod in mods) ids.Add(mod.Id);
@@ -551,6 +662,14 @@ namespace BlackboxModManager.App.ViewModels
 				}
 
 				foreach (string problem in package.Problems) this.Write($"{row.Name}: {problem}");
+
+				// The Links boilerplate is confirmed for Underground 2 only. A deviation is
+				// information for the person who gathers the samples of a new game, and it
+				// blocks nothing.
+				foreach (LinkDeviation deviation in ManifestLinkAudit.Run(package, this._game))
+				{
+					this.Write($"{row.Name}: {deviation}");
+				}
 
 				this.DetailsHeader = this.Variants.Count == 1
 					? $"\"{row.Name}\" holds one variant. Switch it on to apply it."
@@ -716,6 +835,7 @@ namespace BlackboxModManager.App.ViewModels
 			this.ImportArchiveCommand.NotifyCanExecuteChanged();
 			this.ImportFolderCommand.NotifyCanExecuteChanged();
 			this.RemoveModCommand.NotifyCanExecuteChanged();
+			this.SetModGameCommand.NotifyCanExecuteChanged();
 			this.MoveUpCommand.NotifyCanExecuteChanged();
 			this.MoveDownCommand.NotifyCanExecuteChanged();
 			this.RefreshModsCommand.NotifyCanExecuteChanged();

@@ -26,6 +26,12 @@ namespace BlackboxModManager.App.ViewModels
 
 		public int FileCount => this.Mod.Manifest.FileCount;
 
+		/// <summary>
+		/// The game of the mod. "Any game" means that the metadata names none, and the mod
+		/// then shows under every game. The Set game button gives it one.
+		/// </summary>
+		public string GameName => this.Mod.Game?.ToString() ?? "Any game";
+
 		/// <summary>The size of the mod, in a unit that a person reads.</summary>
 		public string Size
 		{

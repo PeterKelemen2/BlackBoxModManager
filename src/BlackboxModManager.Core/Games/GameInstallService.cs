@@ -97,6 +97,42 @@ namespace BlackboxModManager.Core.Games
 		}
 
 		/// <summary>
+		/// Resolves every game that this application manages, in catalog order. One entry
+		/// comes back per game, and an entry can report that the game has no path yet.
+		///
+		/// This reads the settings file only. It runs no scan, so the window can call it on
+		/// every game switch.
+		/// </summary>
+		public IReadOnlyList<GameInstallResolution> ResolveAll()
+		{
+			var found = new List<GameInstallResolution>();
+			Settings settings = SettingsStore.Load(this._settingsFile);
+
+			foreach (GameDefinition definition in GameCatalog.All)
+			{
+				settings.GameDirectories.TryGetValue(Key(definition.Game), out string stored);
+
+				GameInstallSource source = String.IsNullOrWhiteSpace(stored)
+					? GameInstallSource.None
+					: GameInstallSource.Settings;
+
+				found.Add(new GameInstallResolution(
+					source, GameInstallValidator.Validate(definition.Game, stored), null));
+			}
+
+			return found;
+		}
+
+		/// <summary>
+		/// Scans the machine once and returns the candidates of every game. This is the slow
+		/// operation. Run it on a background thread.
+		/// </summary>
+		public IReadOnlyDictionary<GameINT, IReadOnlyList<string>> DetectAll()
+		{
+			return GameInstallLocator.FindAll();
+		}
+
+		/// <summary>
 		/// Validates a path and stores it when it passes. A path that fails is not stored,
 		/// so the settings file never holds a value that the validator rejects.
 		/// </summary>

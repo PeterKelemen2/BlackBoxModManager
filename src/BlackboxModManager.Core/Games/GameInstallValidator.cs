@@ -65,7 +65,7 @@ namespace BlackboxModManager.Core.Games
 			{
 				return Fail(GameInstallCheck.ExecutableMissing, game, full, definition,
 					$"The directory {full} holds no {definition.Executable}. " +
-					$"It is not an install of {definition.DisplayName}.");
+					$"It is not an install of {definition.DisplayName}.{OtherGame(full)}");
 			}
 
 			var missing = new List<string>();
@@ -109,6 +109,24 @@ namespace BlackboxModManager.Core.Games
 			{
 				return false;
 			}
+		}
+
+		/// <summary>
+		/// Names the game that the directory really holds, or returns an empty string.
+		///
+		/// Six games look alike from the outside. A user who picks the directory of another
+		/// game gets the name of that game, and not a message that says only "no executable".
+		/// </summary>
+		private static string OtherGame(string directory)
+		{
+			var names = new List<string>();
+
+			foreach (GameDefinition other in GameInstallLocator.Identify(directory))
+			{
+				names.Add(other.DisplayName);
+			}
+
+			return names.Count == 0 ? String.Empty : $" It holds {String.Join(" or ", names)}.";
 		}
 
 		private static GameInstallStatus Fail(GameInstallCheck check, GameINT game, string root,

@@ -31,7 +31,7 @@ namespace BlackboxModManager.Tests
 
 		public void Dispose() => this._temp.Dispose();
 
-		private InstalledMod Import(string source) => this._importer.Import(source).Mod;
+		private InstalledMod Import(string source) => this._importer.Import(source, GameINT.Underground2).Mod;
 
 		/// <summary>
 		/// Builds a profile that switches on the named variants of one mod.
@@ -330,7 +330,7 @@ namespace BlackboxModManager.Tests
 
 			// The camera mod holds one combobox. Its two options write the same fields with
 			// different values, so two copies of the mod with different answers disagree.
-			InstalledMod other = this._importer.Import(ExampleMods.Camera, "Camera again").Mod;
+			InstalledMod other = this._importer.Import(ExampleMods.Camera, GameINT.Underground2, "Camera again").Mod;
 
 			var profile = new Profile("Test", nameof(GameINT.Underground2));
 			profile.Ensure(camera.Id).Enabled = true;

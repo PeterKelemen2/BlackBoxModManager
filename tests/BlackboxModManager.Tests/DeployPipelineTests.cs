@@ -9,6 +9,7 @@ using BlackboxModManager.Core.Profiles;
 using BlackboxModManager.Core.Staging;
 using BlackboxModManager.Core.Store;
 using Xunit;
+using Nikki.Core;
 
 namespace BlackboxModManager.Tests
 {
@@ -51,7 +52,7 @@ namespace BlackboxModManager.Tests
 				File.WriteAllText(full, content);
 			}
 
-			return this._importer.Import(root).Mod;
+			return this._importer.Import(root, GameINT.Underground2).Mod;
 		}
 
 		private Profile ProfileWith(params InstalledMod[] mods)
@@ -305,7 +306,7 @@ namespace BlackboxModManager.Tests
 				mod.WriteManifest("Install.end", "Underground2", "script.end");
 				mod.WriteScript("script.end", "update_collection GLOBAL\\GLOBALB.LZC CarTypeInfos SUPRA Manufacturer 4");
 
-				InstalledMod binary = this._importer.Import(mod.Path).Mod;
+				InstalledMod binary = this._importer.Import(mod.Path, GameINT.Underground2).Mod;
 				Assert.Equal(ModKind.Binary, binary.Kind);
 
 				Profile profile = this.ProfileWith(binary);

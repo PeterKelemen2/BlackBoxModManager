@@ -116,8 +116,8 @@ namespace BlackboxModManager.App
 			Write(second, "GLOBAL/GLOBALA.BUN", "from the second mod");
 			Write(second, "scripts/plugin.ini", "setting=1");
 
-			InstalledMod one = importer.Import(first).Mod;
-			InstalledMod two = importer.Import(second).Mod;
+			InstalledMod one = importer.Import(first, GameINT.Underground2).Mod;
+			InstalledMod two = importer.Import(second, GameINT.Underground2).Mod;
 
 			Expect(one.Kind == ModKind.Asi, $"The first mod is an ASI mod. It is {one.Kind}.");
 			Expect(two.Kind == ModKind.LooseFiles, $"The second mod holds loose files. It is {two.Kind}.");

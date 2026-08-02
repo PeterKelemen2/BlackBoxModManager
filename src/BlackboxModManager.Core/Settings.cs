@@ -32,6 +32,13 @@ namespace BlackboxModManager.Core
 			new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
+		/// The GameINT name of the game that the window showed last. This is null until the
+		/// user picks a game. A name that the catalog does not hold falls back to the first
+		/// game of the catalog.
+		/// </summary>
+		public string LastGame { get; set; }
+
+		/// <summary>
 		/// The active profile of each game, keyed by the GameINT name. A name that no longer
 		/// exists falls back to the first profile.
 		/// </summary>

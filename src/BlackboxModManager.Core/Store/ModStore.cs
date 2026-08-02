@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BlackboxModManager.Core.Files;
+using Nikki.Core;
 
 namespace BlackboxModManager.Core.Store
 {
@@ -14,8 +15,13 @@ namespace BlackboxModManager.Core.Store
 	/// </summary>
 	public sealed class ModManifest
 	{
-		/// <summary>The shape of the file. Raise this when a change needs a migration.</summary>
-		public int Version { get; set; } = 1;
+		/// <summary>
+		/// The shape of the file. Raise this when a change needs a migration.
+		///
+		/// Version 2 added the rule that every mod carries a game. Version 1 wrote a game for
+		/// a Binary mod only. See InstalledMod.Matches.
+		/// </summary>
+		public int Version { get; set; } = 2;
 
 		/// <summary>The directory name of the mod inside the store. It never changes.</summary>
 		public string Id { get; set; }
@@ -26,8 +32,13 @@ namespace BlackboxModManager.Core.Store
 		public ModKind Kind { get; set; }
 
 		/// <summary>
-		/// The GameINT name that the mod belongs to. This is null when the mod names no
-		/// game. Only a Binary manifest names one.
+		/// The GameINT name that the mod belongs to. Every mod of version 2 carries one.
+		///
+		/// A Binary manifest names the game itself, and the import takes the name from there.
+		/// A drop-in mod names nothing, so the import writes the game that the window managed
+		/// at that moment.
+		///
+		/// This is null for a version 1 mod, and such a mod then belongs to every game.
 		/// </summary>
 		public string Game { get; set; }
 
@@ -69,6 +80,29 @@ namespace BlackboxModManager.Core.Store
 		{
 			this.Manifest = manifest;
 			this.Root = root;
+		}
+
+		/// <summary>
+		/// The game that this mod belongs to, or null when the metadata names none. A version
+		/// 1 mod and a mod with a name that GameINT does not hold both read as null.
+		/// </summary>
+		public GameINT? Game =>
+			Enum.TryParse(this.Manifest.Game, ignoreCase: true, out GameINT game) && game != GameINT.None
+				? game
+				: null;
+
+		/// <summary>
+		/// True when this mod belongs in the list of one game.
+		///
+		/// <b>A mod with no game belongs to every game.</b> The store held such mods before
+		/// version 2, and hiding them would look like a store that lost them. Call
+		/// ModStore.Assign to give one of them a game.
+		/// </summary>
+		public bool Matches(GameINT game)
+		{
+			GameINT? mine = this.Game;
+
+			return mine is null || mine.Value == game;
 		}
 
 		public override string ToString() => $"{this.Name} ({this.Kind})";
@@ -126,11 +160,59 @@ namespace BlackboxModManager.Core.Store
 			return found;
 		}
 
+		/// <summary>
+		/// Returns the mods of one game, by name.
+		///
+		/// <b>A profile of one game must never hold a mod of another game.</b> The window and
+		/// every profile operation read this list, and Profile.Reconcile then drops an entry
+		/// that belongs elsewhere. A mod with no game passes this filter for every game.
+		/// </summary>
+		public IReadOnlyList<InstalledMod> List(GameINT game)
+		{
+			var found = new List<InstalledMod>();
+
+			foreach (InstalledMod mod in this.List())
+			{
+				if (mod.Matches(game)) found.Add(mod);
+			}
+
+			return found;
+		}
+
 		public InstalledMod Find(string id)
 		{
 			if (String.IsNullOrWhiteSpace(id)) return null;
 
 			return ReadDirectory(Path.Combine(this.Root, id));
+		}
+
+		/// <summary>
+		/// Writes a game into the metadata of one mod and saves it.
+		///
+		/// Two callers need this. A mod that the store held before version 2 carries no game.
+		/// A user can also move a drop-in mod from one game to another.
+		///
+		/// It refuses a Binary mod, because the manifest of that mod names the game and this
+		/// application trusts the manifest.
+		/// </summary>
+		public void Assign(InstalledMod mod, GameINT game)
+		{
+			if (mod is null) throw new ArgumentNullException(nameof(mod));
+
+			if (mod.Kind == ModKind.Binary)
+			{
+				throw new ArgumentException(
+					$"The mod \"{mod.Name}\" is a Binary mod. Its manifest names the game, and this " +
+					"application does not overrule the manifest.", nameof(mod));
+			}
+
+			if (game == GameINT.None)
+			{
+				throw new ArgumentOutOfRangeException(nameof(game), "GameINT.None is not a game.");
+			}
+
+			mod.Manifest.Game = game.ToString();
+			this.Save(mod);
 		}
 
 		/// <summary>

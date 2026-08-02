@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using BlackboxModManager.Core.Store;
 using Xunit;
+using Nikki.Core;
 
 namespace BlackboxModManager.Tests
 {
@@ -42,7 +43,7 @@ namespace BlackboxModManager.Tests
 		{
 			string source = this.MakeSource("Widescreen Fix", ("scripts/widescreen.asi", "plugin"));
 
-			ModImportResult result = this._importer.Import(source);
+			ModImportResult result = this._importer.Import(source, GameINT.Underground2);
 
 			Assert.Equal(ModKind.Asi, result.Mod.Kind);
 			Assert.Equal("Widescreen Fix", result.Mod.Name);
@@ -55,7 +56,7 @@ namespace BlackboxModManager.Tests
 		{
 			string source = this.MakeSource("Texture Pack", ("CARS/car.bin", "a car"));
 
-			ModImportResult result = this._importer.Import(source);
+			ModImportResult result = this._importer.Import(source, GameINT.Underground2);
 
 			Assert.Equal(ModKind.LooseFiles, result.Mod.Kind);
 			Assert.Single(result.Content.Files);
@@ -71,7 +72,7 @@ namespace BlackboxModManager.Tests
 				mod.WriteManifest("Install.end", "Underground2", "script.end");
 				mod.WriteScript("script.end", "update_collection GLOBAL\\GLOBALB.LZC CarTypeInfos SUPRA Manufacturer 4");
 
-				ModImportResult result = this._importer.Import(mod.Path);
+				ModImportResult result = this._importer.Import(mod.Path, GameINT.Underground2);
 
 				Assert.Equal(ModKind.Binary, result.Mod.Kind);
 				Assert.Single(result.Content.Manifests);
@@ -92,7 +93,7 @@ namespace BlackboxModManager.Tests
 		{
 			string source = this.MakeSource("Wrapped", ("Wrapped v1.0/scripts/plugin.asi", "plugin"));
 
-			ModImportResult result = this._importer.Import(source);
+			ModImportResult result = this._importer.Import(source, GameINT.Underground2);
 
 			Assert.Equal(new[] { "scripts/plugin.asi" }, result.Content.Files);
 		}
@@ -108,7 +109,7 @@ namespace BlackboxModManager.Tests
 				("readme.txt", "read me"),
 				("GLOBAL/GLOBALA.BUN", "container"));
 
-			ModImportResult result = this._importer.Import(source);
+			ModImportResult result = this._importer.Import(source, GameINT.Underground2);
 
 			Assert.Contains("readme.txt", result.Content.Files);
 			Assert.Contains("GLOBAL/GLOBALA.BUN", result.Content.Files);
@@ -118,12 +119,12 @@ namespace BlackboxModManager.Tests
 		public void TwoModsOfOneNameGetTwoIdentifiers()
 		{
 			string first = this.MakeSource("Same Name", ("a.asi", "one"));
-			InstalledMod one = this._importer.Import(first).Mod;
+			InstalledMod one = this._importer.Import(first, GameINT.Underground2).Mod;
 
 			string second = Path.Combine(this._temp.Path, "second", "Same Name");
 			Directory.CreateDirectory(second);
 			File.WriteAllText(Path.Combine(second, "b.asi"), "two");
-			InstalledMod other = this._importer.Import(second).Mod;
+			InstalledMod other = this._importer.Import(second, GameINT.Underground2).Mod;
 
 			Assert.NotEqual(one.Id, other.Id);
 			Assert.Equal(2, this._store.List().Count);
@@ -133,7 +134,7 @@ namespace BlackboxModManager.Tests
 		public void TheStoreReadsBackWhatTheImportWrote()
 		{
 			string source = this.MakeSource("Round Trip", ("scripts/x.asi", "plugin"));
-			InstalledMod written = this._importer.Import(source).Mod;
+			InstalledMod written = this._importer.Import(source, GameINT.Underground2).Mod;
 
 			InstalledMod read = this._store.Find(written.Id);
 
@@ -146,7 +147,7 @@ namespace BlackboxModManager.Tests
 		public void RemoveTakesTheModAndItsFiles()
 		{
 			string source = this.MakeSource("Throwaway", ("x.asi", "plugin"));
-			InstalledMod mod = this._importer.Import(source).Mod;
+			InstalledMod mod = this._importer.Import(source, GameINT.Underground2).Mod;
 
 			this._store.Remove(mod.Id);
 
@@ -160,7 +161,7 @@ namespace BlackboxModManager.Tests
 			string source = Path.Combine(this._temp.Path, "empty");
 			Directory.CreateDirectory(source);
 
-			Assert.Throws<ModImportException>(() => this._importer.Import(source));
+			Assert.Throws<ModImportException>(() => this._importer.Import(source, GameINT.Underground2));
 		}
 
 		[Fact]
@@ -175,7 +176,7 @@ namespace BlackboxModManager.Tests
 				writer.Write("plugin");
 			}
 
-			ModImportResult result = this._importer.Import(archive);
+			ModImportResult result = this._importer.Import(archive, GameINT.Underground2);
 
 			Assert.Equal("Zipped Mod", result.Mod.Name);
 			Assert.Equal(ModKind.Asi, result.Mod.Kind);

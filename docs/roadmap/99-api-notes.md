@@ -91,6 +91,8 @@ public static string CustomHashList { get; set; }
 
 One pair exists per game class: `Underground2Profile`, `MostWantedProfile`, `CarbonProfile`, `ProstreetProfile`, and the rest. The properties are `static`, so they are process-global. Set them before you call `Load`.
 
+**All six classes hold the same code.** Each one is about 60 lines. Each one overrides `GameINT`, `GameSTR`, and `Directory`, declares the two statics, and implements `LoadHashList` and `SaveHashList` with the same body. No game needs different wiring, so one switch on `GameINT` covers every game. `ProfileHashLists` is that switch. `BaseProfile.NewProfile` holds the matching switch for the constructor.
+
 `LoadHashList` calls `Map.ReloadBinKeys()` and then `Loader.LoadBinKeys(new[] { MainHashList, CustomHashList })`.
 
 `SaveHashList` writes a file. It calls `System.IO.Directory.CreateDirectory(Path.GetDirectoryName(CustomHashList))` and then creates `CustomHashList` with `FileMode.Create`. See the pitfall in [02-binary-install.md](02-binary-install.md).

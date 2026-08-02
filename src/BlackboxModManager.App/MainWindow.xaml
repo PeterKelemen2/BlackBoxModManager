@@ -19,6 +19,15 @@
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <StackPanel Grid.Column="0" Margin="0,0,8,0">
+          <!-- The picker holds the games that a listing of a real install confirmed. A
+               switch reloads the install, the profiles, and the mods. -->
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <TextBlock Text="Game" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ComboBox Width="260"
+                      ItemsSource="{Binding Games}"
+                      DisplayMemberPath="DisplayName"
+                      SelectedItem="{Binding SelectedGame, Mode=TwoWay}" />
+          </StackPanel>
           <TextBlock Text="{Binding GameStatus}" Style="{StaticResource Heading}" TextWrapping="Wrap" />
           <TextBlock Text="{Binding GamePath}" Style="{StaticResource Hint}" />
           <TextBlock Text="{Binding DeployedState}" Style="{StaticResource Hint}" Margin="0,4,0,0" />
@@ -67,6 +76,7 @@
             <DataGridTextColumn Header="#" Width="36" IsReadOnly="True" Binding="{Binding Order}" />
             <DataGridTextColumn Header="Mod" Width="*" IsReadOnly="True" Binding="{Binding Name}" />
             <DataGridTextColumn Header="Kind" Width="90" IsReadOnly="True" Binding="{Binding Kind}" />
+            <DataGridTextColumn Header="Game" Width="100" IsReadOnly="True" Binding="{Binding GameName}" />
             <DataGridTextColumn Header="Files" Width="60" IsReadOnly="True" Binding="{Binding FileCount}" />
             <DataGridTextColumn Header="Size" Width="80" IsReadOnly="True" Binding="{Binding Size}" />
           </DataGrid.Columns>
@@ -170,6 +180,8 @@
         <Button Content="Import archive" Command="{Binding ImportArchiveCommand}" MinWidth="110" />
         <Button Content="Import folder" Command="{Binding ImportFolderCommand}" MinWidth="110" />
         <Button Content="Remove" Command="{Binding RemoveModCommand}" />
+        <Button Content="Set game" Command="{Binding SetModGameCommand}"
+                ToolTip="Give the selected drop-in mod the game that this window manages." />
         <Button Content="Move up" Command="{Binding MoveUpCommand}" />
         <Button Content="Move down" Command="{Binding MoveDownCommand}" />
       </StackPanel>
