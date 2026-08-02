@@ -8,6 +8,8 @@
 #
 # Usage:
 #   tools/run-harness.sh <manifest path> [harness options...]
+#   tools/run-harness.sh --show-binary
+#   tools/run-harness.sh --set-binary '<windows path>'
 #
 # The manifest path can be a Linux path. This script converts it for Wine.
 # Every other option goes to the harness without a change. See --help.
@@ -18,17 +20,18 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 out="${HARNESS_OUT:-$root/artifacts/harness}"
 prefix="${HARNESS_WINEPREFIX:-$HOME/.local/share/blackbox-harness-wine}"
 
-if [ $# -lt 1 ]; then
-	echo "Usage: tools/run-harness.sh <manifest path> [harness options...]" >&2
-	exit 2
-fi
+manifest=""
 
-manifest="$1"
-shift
+# A first argument that is not an option is the manifest. The Binary install commands
+# take no manifest, so they start with an option and this block does not run.
+if [ $# -ge 1 ] && [ "${1#--}" = "$1" ]; then
+	manifest="$1"
+	shift
 
-if [ ! -f "$manifest" ]; then
-	echo "ERROR: The manifest $manifest does not exist." >&2
-	exit 2
+	if [ ! -f "$manifest" ]; then
+		echo "ERROR: The manifest $manifest does not exist." >&2
+		exit 2
+	fi
 fi
 
 dotnet publish "$root/tools/Harness/Harness.csproj" \
@@ -39,6 +42,10 @@ export WINEPREFIX="$prefix"
 export WINEDEBUG="${WINEDEBUG:--all}"
 
 mkdir -p "$prefix"
+
+if [ -z "$manifest" ]; then
+	exec wine "$out/Harness.exe" "$@"
+fi
 
 manifest_win="$(winepath -w "$(realpath "$manifest")" 2>/dev/null)"
 

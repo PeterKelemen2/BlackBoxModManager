@@ -6,7 +6,7 @@ using System.Text;
 using Endscript.Core;
 using Xunit;
 
-namespace Endscript.Tests
+namespace BlackboxModManager.Tests
 {
 	/// <summary>
 	/// Verification 1 of docs/roadmap/01-console-harness.md.

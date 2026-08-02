@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using BlackboxModManager.Core;
 
 namespace Harness
 {
@@ -20,9 +21,35 @@ namespace Harness
 		/// </summary>
 		public string ScratchDir { get; private set; } = Defaults.ScratchDir;
 
-		public string MainHashList { get; private set; } = Defaults.MainHashList;
+		/// <summary>
+		/// Overrides the hash list that the Binary install would give. Null means derive it.
+		/// </summary>
+		public string MainHashList { get; private set; }
 
-		public string CustomHashList { get; private set; } = Defaults.CustomHashList;
+		/// <summary>
+		/// Overrides the hash list output path. Null means put it under our application data.
+		/// </summary>
+		public string CustomHashList { get; private set; }
+
+		/// <summary>
+		/// The Binary install for this run only. Null means read the stored answer.
+		/// </summary>
+		public string BinaryDir { get; private set; }
+
+		/// <summary>
+		/// Validates a Binary install directory, stores it, and stops.
+		/// </summary>
+		public string SetBinaryDir { get; private set; }
+
+		/// <summary>
+		/// Removes the stored Binary install directory and stops.
+		/// </summary>
+		public bool ForgetBinary { get; private set; }
+
+		/// <summary>
+		/// Reports the Binary install that this machine gives, and stops.
+		/// </summary>
+		public bool ShowBinary { get; private set; }
 
 		public string ManifestPath { get; private set; }
 
@@ -40,6 +67,12 @@ namespace Harness
 		/// Parses the script and reports the counts. Loads no container and writes no file.
 		/// </summary>
 		public bool CountOnly { get; private set; }
+
+		/// <summary>
+		/// True when the run manages the Binary install and applies no manifest.
+		/// </summary>
+		public bool IsInstallCommand =>
+			this.SetBinaryDir != null || this.ForgetBinary || this.ShowBinary;
 
 		public static bool TryParse(string[] args, out Options options, out string error)
 		{
@@ -77,6 +110,24 @@ namespace Harness
 						options.CustomHashList = customKeys;
 						break;
 
+					case "--binary":
+						if (!Next(args, ref i, arg, out string binary, out error)) return false;
+						options.BinaryDir = binary;
+						break;
+
+					case "--set-binary":
+						if (!Next(args, ref i, arg, out string setBinary, out error)) return false;
+						options.SetBinaryDir = setBinary;
+						break;
+
+					case "--forget-binary":
+						options.ForgetBinary = true;
+						break;
+
+					case "--show-binary":
+						options.ShowBinary = true;
+						break;
+
 					case "--choice":
 						if (!Next(args, ref i, arg, out string choices, out error)) return false;
 						if (!ParseChoices(choices, options.Choices, out error)) return false;
@@ -101,6 +152,9 @@ namespace Harness
 						return false;
 				}
 			}
+
+			// The install management commands do their work and stop. They need no manifest.
+			if (options.IsInstallCommand) return true;
 
 			if (String.IsNullOrEmpty(options.ManifestPath))
 			{
@@ -157,24 +211,34 @@ namespace Harness
 			Console.WriteLine("  --choice <n[,n...]>    One answer for each option pause, in order.");
 			Console.WriteLine("  --game <dir>           The vanilla install to copy. The harness reads it only.");
 			Console.WriteLine("  --scratch <dir>        The scratch copy. The harness deletes this on every run.");
-			Console.WriteLine("  --main-keys <file>     The mainkeys list of Binary for Underground 2.");
-			Console.WriteLine("  --custom-keys <file>   The hash list output path. Never point this into Binary.");
+			Console.WriteLine("  --binary <dir>         The Binary install for this run only.");
+			Console.WriteLine("  --main-keys <file>     Overrides the mainkeys list that the install gives.");
+			Console.WriteLine("  --custom-keys <file>   Overrides the hash list output path.");
 			Console.WriteLine("  --skip-copy            Keeps the scratch copy from the last run.");
 			Console.WriteLine("  --count-only           Parses the script and stops. Writes no file.");
 			Console.WriteLine("  --help                 Shows this text.");
 			Console.WriteLine();
+			Console.WriteLine("Binary install commands. Each one does its work and stops.");
+			Console.WriteLine();
+			Console.WriteLine("  --show-binary          Reports the install, the candidates, and the paths.");
+			Console.WriteLine("  --set-binary <dir>     Validates a directory and stores it.");
+			Console.WriteLine("  --forget-binary        Removes the stored directory.");
+			Console.WriteLine();
 			Console.WriteLine("Defaults:");
 			Console.WriteLine($"  --game         {Defaults.VanillaDir}");
 			Console.WriteLine($"  --scratch      {Defaults.ScratchDir}");
-			Console.WriteLine($"  --main-keys    {Defaults.MainHashList}");
-			Console.WriteLine($"  --custom-keys  {Defaults.CustomHashList}");
+			Console.WriteLine($"  settings       {AppPaths.SettingsFile}");
+			Console.WriteLine($"  custom keys    {AppPaths.CustomKeysDirectory}");
 		}
 	}
 
 	/// <summary>
-	/// Machine paths for step 1. Step 2 replaces the Binary path with discovery.
-	/// The values are Wine drive Z paths, because the harness runs under Wine.
-	/// The paths come from docs/roadmap/00-test-environment.md.
+	/// The game paths of one developer machine. They come from
+	/// docs/roadmap/00-test-environment.md. The values are Wine drive Z paths, because the
+	/// harness runs under Wine.
+	///
+	/// The Binary install is no longer here. Step 2 replaced it with discovery. The hash
+	/// list paths come from BinaryInstallService and AppPaths.
 	/// </summary>
 	internal static class Defaults
 	{
@@ -183,13 +247,5 @@ namespace Harness
 
 		public const string ScratchDir =
 			@"Z:\mnt\Data\Games\HarnessScratch\Need for Speed Underground 2";
-
-		public const string MainHashList =
-			@"Z:\mnt\Data\Games\Binary_v2.8.3\mainkeys\underground2.txt";
-
-		// Defect 7: Save writes this file and creates its directory. Keep it out of the
-		// Binary install, and keep it out of the scratch copy that the next run deletes.
-		public const string CustomHashList =
-			@"Z:\mnt\Data\Games\HarnessData\userkeys\underground2.txt";
 	}
 }

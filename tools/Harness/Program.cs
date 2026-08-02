@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using BlackboxModManager.Core;
 using Endscript.Commands;
 using Endscript.Core;
 using Endscript.Enums;
 using Endscript.Helpers;
 using Endscript.Interfaces;
 using Endscript.Profiles;
+using Nikki.Core;
 
 namespace Harness
 {
@@ -36,7 +38,7 @@ namespace Harness
 
 			try
 			{
-				return Run(options);
+				return options.IsInstallCommand ? BinaryInstallCommands.Run(options) : Run(options);
 			}
 			catch (Exception ex)
 			{
@@ -57,8 +59,7 @@ namespace Harness
 			Console.WriteLine($"Manifest               {options.ManifestPath}");
 			Console.WriteLine($"Vanilla install        {options.VanillaDir}");
 			Console.WriteLine($"Scratch copy           {options.ScratchDir}");
-			Console.WriteLine($"Main hash list         {options.MainHashList}");
-			Console.WriteLine($"Custom hash list       {options.CustomHashList}");
+			Console.WriteLine($"Application data       {AppPaths.Root}");
 			Console.WriteLine($"Choices                {(options.Choices.Count == 0 ? "(none given)" : String.Join(", ", options.Choices))}");
 
 			// A missing native library gives a silent P/Invoke failure deep in the container code.
@@ -78,10 +79,13 @@ namespace Harness
 				return 1;
 			}
 
-			if (!File.Exists(options.MainHashList))
+			// ---------------------------------------------------------------- Binary install
+
+			Section("Binary install");
+
+			if (!BinaryInstallCommands.TryResolve(options.BinaryDir, out BinaryInstall install))
 			{
-				Console.Error.WriteLine($"ERROR: The main hash list {options.MainHashList} does not exist.");
-				return 1;
+				return 2;
 			}
 
 			// ---------------------------------------------------------------- manifest
@@ -142,7 +146,9 @@ namespace Harness
 			}
 
 			// Point the manifest at the scratch copy. Never at a real install.
-			launch.Directory = options.ScratchDir;
+			// Resolve it now. Deploy moves the current directory, and a relative path would
+			// then resolve against the log directory.
+			launch.Directory = Path.GetFullPath(options.ScratchDir);
 			launch.Usage = nameof(eUsage.Modder);
 
 			// ---------------------------------------------------------------- script
@@ -161,13 +167,35 @@ namespace Harness
 				return 0;
 			}
 
-			// ---------------------------------------------------------------- load
+			// ------------------------------------------------ load, run, and save
 
+			// One gate covers the static assignment, Load, the script run, and Save. Every
+			// one of those touches global state in Nikki. See defect 8.
+			using (LibraryGate.Enter())
+			{
+				return Deploy(options, install, launch, commands);
+			}
+		}
+
+		private static int Deploy(Options options, BinaryInstall install, Launch launch, BaseCommand[] commands)
+		{
 			Section("Load");
 
+			// Nikki writes MainLog.txt into the current directory. Point that at our own
+			// data before any container work. See defect 9.
+			Directory.CreateDirectory(AppPaths.LogDirectory);
+			Directory.SetCurrentDirectory(AppPaths.LogDirectory);
+
+			GameINT game = launch.GameID;
+			string mainKeys = options.MainHashList ?? install.MainHashList(game);
+			string customKeys = options.CustomHashList ?? HashListPaths.CustomHashList(game);
+
 			// Both statics must hold a value before Load. Load calls LoadHashList first.
-			Underground2Profile.MainHashList = options.MainHashList;
-			Underground2Profile.CustomHashList = options.CustomHashList;
+			ProfileHashLists.Apply(mainKeys, customKeys, game);
+
+			Console.WriteLine($"Main hash list    {mainKeys}");
+			Console.WriteLine($"Custom hash list  {customKeys}");
+			Console.WriteLine($"Log directory     {AppPaths.LogDirectory}");
 
 			launch.CheckEndscript();
 			launch.CheckFiles();

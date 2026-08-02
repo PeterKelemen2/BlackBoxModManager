@@ -15,8 +15,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- This one reference pulls in Nikki and CoreExtensions. -->
-    <ProjectReference Include="..\..\third_party\Endscript\Endscript\Endscript.csproj" />
+    <!-- This one reference pulls in Endscript, Nikki, and CoreExtensions. -->
+    <ProjectReference Include="..\..\src\BlackboxModManager.Core\BlackboxModManager.Core.csproj" />
   </ItemGroup>
 
 </Project>

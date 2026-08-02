@@ -11,7 +11,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 0    | Done. See "Completed" below.                                 | —                                      |
 | —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.         |
 | 1    | Done. See "Completed" below.                                 | —                                      |
-| 2    | [02-binary-install.md](02-binary-install.md)                 | Any container work on a clean machine. |
+| 2    | Done. See "Completed" below.                                 | —                                      |
 | 3    | [03-wine-verification.md](03-wine-verification.md)           | The Linux target.                      |
 | 4    | [04-endscript-layer.md](04-endscript-layer.md)               | All Binary mod features.               |
 | 5    | [05-mvp-shell.md](05-mvp-shell.md)                           | The UI.                                |
@@ -20,7 +20,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.         |
 | 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.              |
 
-Steps 1 to 3 prove that the foundation works. Do not start step 4 until all three pass. Steps 2 and 3 can run in parallel with each other. Both need step 1 to finish first.
+Steps 1 to 3 prove that the foundation works. Steps 1 and 2 pass. Do not start step 4 until step 3 passes as well.
 
 ## Completed
 
@@ -59,6 +59,16 @@ Three facts carry forward.
 3. **The game accepts a `GlobalB.lzc` that carries no whole-file compression.** Nikki writes it that way, and the file grows by 60 percent. This matches what Binary does.
 
 **Throw the harness away after step 3.** Do not grow it into the application.
+
+### Step 2 — Binary install discovery
+
+**Done.** `src/BlackboxModManager.Core` holds the first application code. The harness drives it, and no Binary path is hardcoded anywhere. Read [02-binary-install.md](02-binary-install.md) for the type list and the findings.
+
+Three facts carry forward.
+
+1. **`Console.ReadLine` never returns on a Wine console.** A minimal test program behaves the same way, so this is Wine. The harness therefore has no first-run prompt. **The step 5 UI must ask its questions in a dialog.**
+2. **Automatic discovery works.** The common directory scan finds an unpacked Binary install with no help from the user. The registry scan finds nothing, which is expected.
+3. **`userkeys` is generated output, and our redirect matches it.** One deploy wrote the same 1018 labels that a Binary run wrote. See [00-test-environment.md](00-test-environment.md).
 
 ## Reference files
 

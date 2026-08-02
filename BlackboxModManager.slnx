@@ -1,6 +1,9 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BlackboxModManager.Core/BlackboxModManager.Core.csproj" />
+  </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Endscript.Tests/Endscript.Tests.csproj" />
+    <Project Path="tests/BlackboxModManager.Tests/BlackboxModManager.Tests.csproj" />
   </Folder>
   <Folder Name="/third_party/" />
   <Folder Name="/third_party/CoreExtensions/">
