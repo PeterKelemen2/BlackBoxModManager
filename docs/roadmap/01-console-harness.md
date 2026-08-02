@@ -33,11 +33,36 @@ Both paths for this machine sit in [00-test-environment.md](00-test-environment.
 Run these four checks in order. Each one answers a different question.
 
 1. **Manifest round trip.** For every `VERSN1` file in `example_mods`, call `Launch.Deserialize` and then `Launch.Serialize` to a temporary path. Compare the bytes against the original. This proves that the backslash dialect survives our retarget. Keep this as a permanent test, not as harness output.
-2. **The 1 Lap mod, URL variant.** Apply `1 Lap URL Races.end`. Expect 53 `update_incareer` commands. Expect no errors.
-3. **The camera mod, either branch.** Apply `Install.end` with choice 0 and then with choice 1. Expect 744 commands for one branch and 450 for the other. Expect no errors.
+2. **The 1 Lap mod, URL variant.** Apply `1 Lap URL Races.end`. Expect 51 `update_incareer` commands. Expect no errors.
+3. **The camera mod, either branch.** Apply `Install.end` with choice 0 and then with choice 1. Expect 450 commands for choice 0 and 744 for choice 1. Expect no errors.
 4. **The game runs.** Copy the scratch directory over a real install and launch it. Confirm that career races run one lap, or that the camera moved. A clean save proves nothing on its own — the container must still load in the game.
 
 Check 4 is the one that matters. Checks 1 to 3 can all pass while the written container is unreadable by the game.
+
+## Results
+
+All four checks pass. Step 1 is done.
+
+| Check                  | Result                                                         |
+| ---------------------- | -------------------------------------------------------------- |
+| 1. Manifest round trip | Pass. 6 manifests, 13 test cases. See `tests/Endscript.Tests`. |
+| 2. 1 Lap URL           | Pass. 51 commands, 2 containers, no error.                     |
+| 3. Camera, choice 0    | Pass. 450 commands, 1 container, no error.                     |
+| 4. Camera, choice 1    | Pass. 744 commands, 1 container, no error.                     |
+| 5. The game runs       | Pass. The URL career races run one lap.                        |
+
+**The game runs from the scratch directory.** Start `SPEED2.EXE` in the scratch copy under the Proton prefix. A copy over the install is not needed to test. The game read the container that Nikki wrote, and the mod took effect. This proves the pipeline end to end.
+
+Two facts that the acceptance run confirmed:
+
+1. **Nikki writes `GlobalB.lzc` without whole-file compression, and the game accepts it.** The file grew from 5,145,778 to 8,263,472 bytes. See [00-test-environment.md](00-test-environment.md).
+2. **`Save` rewrites every loaded container, not only the edited ones.** No command targets `GLOBALA.BUN`, and the file still changed from 145,408 to 145,792 bytes. Step 6 must decide whether to skip an untouched container or to accept the churn.
+
+Three counts in the first draft of this file were wrong. They counted file lines, not commands. `URL.end` holds 53 lines, and 51 of them are commands. The camera counts of 744 and 450 were correct, and this file now names the branch for each one.
+
+The round trip test compares the bytes after it normalizes the line ending. `System.Text.Json` ends a line with `Environment.NewLine`, so a Linux run writes LF where the example files hold CRLF. That difference belongs to the platform, not to the dialect. A second test asserts that no double backslash reaches the output, which is the property that defect 4 puts at risk.
+
+The harness runs a self-contained `win-x64` publish under system Wine 11.13. A fresh prefix needs no configuration. The .NET 10 runtime starts, and the `LZCompressLib.dll` P/Invoke works. Step 3 still has to confirm the same inside the GE-Proton prefix.
 
 ## Pitfalls
 
@@ -64,6 +89,8 @@ Check 4 is the one that matters. Checks 1 to 3 can all pass while the written co
 **`Load` returns an empty array when `Files` is empty.** It loads nothing and reports nothing. An empty result is not proof of success.
 
 **Watch for a silent P/Invoke failure.** `LZCompressLib.dll` must sit beside the harness executable. Confirm that it is there before you blame the container code.
+
+**Clear the read-only flag on the scratch copy.** The game install holds read-only files. `server.dll` is one. `FileInfo.CopyTo` carries the flag across, and the next `Directory.Delete` stops with `UnauthorizedAccessException`. Clear the flag on each copied file, and clear it again over the whole tree before a delete.
 
 ## Done when
 

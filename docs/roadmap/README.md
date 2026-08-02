@@ -10,7 +10,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | ---- | ------------------------------------------------------------ | -------------------------------------- |
 | 0    | Done. See "Completed" below.                                 | —                                      |
 | —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.         |
-| 1    | [01-console-harness.md](01-console-harness.md)               | Everything. Do this first.             |
+| 1    | Done. See "Completed" below.                                 | —                                      |
 | 2    | [02-binary-install.md](02-binary-install.md)                 | Any container work on a clean machine. |
 | 3    | [03-wine-verification.md](03-wine-verification.md)           | The Linux target.                      |
 | 4    | [04-endscript-layer.md](04-endscript-layer.md)               | All Binary mod features.               |
@@ -23,6 +23,8 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 Steps 1 to 3 prove that the foundation works. Do not start step 4 until all three pass. Steps 2 and 3 can run in parallel with each other. Both need step 1 to finish first.
 
 ## Completed
+
+### Step 0 — the library forks
 
 The three MIT libraries are forked, retargeted, and building.
 
@@ -38,6 +40,25 @@ Four facts from that work carry into everything below. Read them before you touc
 2. **The `ProjectReference` paths point at flat siblings.** Upstream wires the libraries through nested submodules under `Modules/`, which clone empty. Our forks reference `..\..\<Repo>\<Repo>\<Repo>.csproj` instead. The forks therefore build only inside this `third_party/` layout.
 3. **`CoreExtensions` at that pin was `PlatformTarget x86`.** We changed it to x64. An x86-marked assembly cannot load into the x64 process that `LZCompressLib.dll` forces.
 4. **Eight call sites in `CoreExtensions/Native/ASMBuilder.cs` needed a cast.** `Half` gained an implicit conversion from `byte`, so `BitConverter.GetBytes(value)` became ambiguous. We cast to `(short)`. See [98-known-upstream-defects.md](98-known-upstream-defects.md) — the cast preserves an upstream defect on purpose.
+
+### Step 1 — the console harness
+
+**All four checks of [01-console-harness.md](01-console-harness.md) pass.** The libraries work end to end. The game reads the container that Nikki wrote, and the mod takes effect.
+
+- `tools/Harness` applies one manifest to a scratch copy of the game.
+- `tools/run-harness.sh` publishes the harness for `win-x64` and starts it under Wine.
+- `tests/Endscript.Tests` holds the permanent manifest round trip test.
+- `BlackboxModManager.slnx` ties the five projects together.
+
+Read [tools/Harness/README.md](../../tools/Harness/README.md) to run it.
+
+Three facts carry forward.
+
+1. **A self-contained `win-x64` build of .NET 10 runs under system Wine 11.13.** A fresh prefix needs no configuration. The `LZCompressLib.dll` P/Invoke works. Step 3 still has to confirm the same inside the GE-Proton prefix.
+2. **`Save` rewrites every loaded container, not only the edited ones.** No command targets `GLOBALA.BUN`, and the file still changed. Step 6 must decide what to do about that.
+3. **The game accepts a `GlobalB.lzc` that carries no whole-file compression.** Nikki writes it that way, and the file grows by 60 percent. This matches what Binary does.
+
+**Throw the harness away after step 3.** Do not grow it into the application.
 
 ## Reference files
 

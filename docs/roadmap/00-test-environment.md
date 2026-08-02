@@ -81,6 +81,12 @@ The install is at the path in the table above. `SPEED2.EXE` is the executable.
 
 **Consequence:** the step 1 harness must run under Wine, or it must resolve paths case-insensitively itself. Do not conclude that the container code is broken when `CheckFiles` throws `FileNotFoundException` for a file you can see in the directory listing.
 
+**The install holds read-only files.** `server.dll` is mode 444. A copy of the install carries the flag across, and a later delete of that copy fails with `UnauthorizedAccessException`. Clear the read-only flag on every file that we copy. Clear it again over the whole tree before we delete a staging copy.
+
+**Nikki writes `GlobalB.lzc` without whole-file compression, and the game accepts it.** The vanilla file is 5,145,778 bytes. After one harness run it is 8,263,472 bytes. `DatabaseSaver.WriteFromBuffer` decompresses the source and writes the assembled blocks straight out. Nikki still compresses single blocks through `Interop.Compress`. Binary behaves the same way. The step 1 acceptance run confirmed that the game loads the result.
+
+**A scratch copy runs as a game.** Start `SPEED2.EXE` in the scratch directory under the Proton prefix. The game runs from any path. A copy over the install is not needed to test a change.
+
 **A vanilla install holds no `.bacc` files.** The directory listing confirms this. Binary creates them when it first edits a container. The brief recorded them from a used install. Our snapshot step must still ignore them, because a user can point us at an install that Binary has already touched.
 
 ## Open items this environment can still answer

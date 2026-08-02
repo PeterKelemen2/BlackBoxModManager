@@ -1,1 +1,8 @@
 example_mods
+artifacts/
+bin/
+obj/
+
+# Nikki and Endscript write these into the working directory.
+MainLog.txt
+EndError.log

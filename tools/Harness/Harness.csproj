@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Harness</RootNamespace>
+    <AssemblyName>Harness</AssemblyName>
+    <!-- LZCompressLib.dll is a native x64 library. The host process must be x64. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- This one reference pulls in Nikki and CoreExtensions. -->
+    <ProjectReference Include="..\..\third_party\Endscript\Endscript\Endscript.csproj" />
+  </ItemGroup>
+
+</Project>

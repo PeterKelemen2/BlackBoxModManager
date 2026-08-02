@@ -75,3 +75,19 @@ Review this list when a symptom does not match the code you wrote.
 **What happens:** `MainHashList` and `CustomHashList` are `static`. `LoadHashList` calls `Map.ReloadBinKeys()`, which resets global state. Two profiles loaded at the same time overwrite each other.
 
 **Work around it:** serialize all library access behind one lock. Never load two profiles at once. Never run a deploy for two games in parallel. If the UI needs to stay responsive, run the whole deploy on one background thread, not on several.
+
+## 9. Nikki writes log files into the working directory
+
+**Where:** every `DatabaseLoader` and `DatabaseSaver` in Nikki, plus `Logger` in `CoreExtensions`.
+
+**What happens:** each loader and saver constructs `new Logger("MainLog.txt", ...)`. `Logger` opens that name with no directory, so the file lands in the current working directory of the process. The harness run left a `MainLog.txt` in the repository root. Binary ships one beside `Binary.exe` for the same reason.
+
+**Work around it:** set the working directory of the process before any container work. Put it under our own application data directory. Never leave it at the directory the user started us from.
+
+## 10. `DatabaseSaver.WriteFromStream` writes a temporary file beside the executable
+
+**Where:** `Nikki/Support.<Game>/Framework/DatabaseSaver.cs`.
+
+**What happens:** the method takes the directory from `Process.GetCurrentProcess().MainModule.FileName` and writes the new container there, then moves it over the target. `Invoke` selects this path for a container that is not compressed and is larger than 64 MB. An installation directory that we cannot write to therefore fails the save.
+
+**Act on this only if** we hit a container over 64 MB. `GLOBALB.LZC` is compressed, so Underground 2 takes the buffer path instead. Later games may not.

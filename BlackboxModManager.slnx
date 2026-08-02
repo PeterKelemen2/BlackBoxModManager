@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/Endscript.Tests/Endscript.Tests.csproj" />
+  </Folder>
+  <Folder Name="/third_party/" />
+  <Folder Name="/third_party/CoreExtensions/">
+    <Project Path="third_party/CoreExtensions/CoreExtensions/CoreExtensions.csproj" />
+  </Folder>
+  <Folder Name="/third_party/Endscript/">
+    <Project Path="third_party/Endscript/Endscript/Endscript.csproj" />
+  </Folder>
+  <Folder Name="/third_party/Nikki/">
+    <Project Path="third_party/Nikki/Nikki/Nikki.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Harness/Harness.csproj" />
+  </Folder>
+</Solution>
