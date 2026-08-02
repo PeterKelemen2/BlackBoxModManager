@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,7 +15,7 @@ namespace BlackboxModManager.Core
 		/// <summary>
 		/// The shape of the file. Raise this when a change needs a migration.
 		/// </summary>
-		public int Version { get; set; } = 1;
+		public int Version { get; set; } = 2;
 
 		/// <summary>
 		/// The Binary install directory that the user confirmed. This is null until the
@@ -22,6 +23,55 @@ namespace BlackboxModManager.Core
 		/// every launch.
 		/// </summary>
 		public string BinaryInstallDirectory { get; set; }
+
+		/// <summary>
+		/// The confirmed install directory of each game, keyed by the GameINT name. A stored
+		/// path can go stale, so validate it on every launch.
+		/// </summary>
+		public Dictionary<string, string> GameDirectories { get; set; } =
+			new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// The active profile of each game, keyed by the GameINT name. A name that no longer
+		/// exists falls back to the first profile.
+		/// </summary>
+		public Dictionary<string, string> ActiveProfiles { get; set; } =
+			new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Where the workspace of every game goes. A workspace holds the vanilla copy and
+		/// the staging copy.
+		///
+		/// Null puts the workspace beside the game install. That default matters. A hard
+		/// link cannot cross a volume, and a directory move across a volume is a full copy.
+		/// Both the staging build and the swap are cheap only on the volume of the game.
+		/// Set this value only when the volume of the game has no free space.
+		/// </summary>
+		public string WorkRootOverride { get; set; }
+
+		/// <summary>
+		/// Rebuilds both dictionaries so that they ignore letter case.
+		///
+		/// A deserialized dictionary carries the default comparer, which compares letter
+		/// case. SettingsStore.Load calls this, so every reader gets the same lookup that a
+		/// fresh instance gives.
+		/// </summary>
+		public void Normalize()
+		{
+			this.GameDirectories = CaseInsensitive(this.GameDirectories);
+			this.ActiveProfiles = CaseInsensitive(this.ActiveProfiles);
+		}
+
+		private static Dictionary<string, string> CaseInsensitive(Dictionary<string, string> source)
+		{
+			var target = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+			if (source is null) return target;
+
+			foreach (KeyValuePair<string, string> entry in source) target[entry.Key] = entry.Value;
+
+			return target;
+		}
 	}
 
 	/// <summary>
@@ -46,7 +96,11 @@ namespace BlackboxModManager.Core
 				if (!File.Exists(path)) return new Settings();
 
 				Settings settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path), Options);
-				return settings ?? new Settings();
+
+				if (settings is null) return new Settings();
+
+				settings.Normalize();
+				return settings;
 			}
 			catch (Exception)
 			{

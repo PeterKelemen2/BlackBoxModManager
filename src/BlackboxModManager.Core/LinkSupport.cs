@@ -130,6 +130,54 @@ namespace BlackboxModManager.Core
 		}
 
 		/// <summary>
+		/// Tests each method from a source directory into a target directory.
+		///
+		/// Probe returns the answer for one directory. A deploy reads from the mod store and
+		/// writes into the staging copy, and those two can sit on different volumes. A hard
+		/// link then fails while the same-directory probe reports success. Ask this question
+		/// with the two real directories.
+		/// </summary>
+		public static LinkProbeResult ProbeBetween(string sourceDirectory, string targetDirectory)
+		{
+			if (String.IsNullOrWhiteSpace(sourceDirectory)) throw new ArgumentException("The source directory is empty.", nameof(sourceDirectory));
+			if (String.IsNullOrWhiteSpace(targetDirectory)) throw new ArgumentException("The target directory is empty.", nameof(targetDirectory));
+
+			string sourceWork = Path.Combine(sourceDirectory, $".blackbox-probe-{Guid.NewGuid():N}");
+			string targetWork = Path.Combine(targetDirectory, $".blackbox-probe-{Guid.NewGuid():N}");
+			var probes = new List<LinkProbe>(3);
+
+			try
+			{
+				Directory.CreateDirectory(sourceWork);
+				Directory.CreateDirectory(targetWork);
+
+				string source = Path.Combine(sourceWork, "source.bin");
+				File.WriteAllText(source, Content);
+
+				probes.Add(Try(LinkKind.HardLink, source, Path.Combine(targetWork, "hard.bin")));
+				probes.Add(Try(LinkKind.SymbolicLink, source, Path.Combine(targetWork, "soft.bin")));
+				probes.Add(Try(LinkKind.Copy, source, Path.Combine(targetWork, "copy.bin")));
+			}
+			catch (Exception ex)
+			{
+				// One of the two directories is not writable. Report every method as failed.
+				probes.Clear();
+
+				foreach (LinkKind kind in new[] { LinkKind.HardLink, LinkKind.SymbolicLink, LinkKind.Copy })
+				{
+					probes.Add(new LinkProbe(kind, false, $"The probe directory is not usable. {ex.Message}"));
+				}
+			}
+			finally
+			{
+				Remove(sourceWork);
+				Remove(targetWork);
+			}
+
+			return new LinkProbeResult(targetDirectory, probes);
+		}
+
+		/// <summary>
 		/// Puts source in place at target with the named method. Throws when the method
 		/// fails. Probe first, then call this with a method that the probe accepted.
 		/// </summary>

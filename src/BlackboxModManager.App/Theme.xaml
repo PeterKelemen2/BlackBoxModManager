@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Wine renders the default WPF theme. Keep the styling to spacing and type, so that
+       the window looks the same on Windows and under Wine. -->
+
+  <Thickness x:Key="RowSpacing">0,0,0,6</Thickness>
+
+  <Style TargetType="TextBlock" x:Key="Heading">
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+
+  <Style TargetType="TextBlock" x:Key="Hint">
+    <Setter Property="Opacity" Value="0.75" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style TargetType="Button">
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="Margin" Value="0,0,6,0" />
+    <Setter Property="MinWidth" Value="80" />
+  </Style>
+
+</ResourceDictionary>

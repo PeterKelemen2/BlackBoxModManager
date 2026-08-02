@@ -48,6 +48,8 @@ One pass per mod reintroduces it, and worse. See the first pitfall below.
 
 ## Pitfalls
 
+**Call `StagingFiles.MakePrivate` for every file of the merged `Files` union, before the load.** Step 5 builds the staging copy with hard links, so a staging file, the vanilla file, and the live file are one file with three names. `profile.Save()` writes a container in place, and that write would reach the vanilla baseline and the live install of the user. `MakePrivate` replaces the linked name with a private copy and breaks the share. The link engine of step 5 never needs the call, because it deletes the target and then creates a new name. **The container engine does need it.** See the results section of [05-mvp-shell.md](05-mvp-shell.md).
+
 **Never call `profile.Load(launch)` once per mod.** `Load` calls `AddNew` for every entry in `Files` with no duplicate check. Two mods that both declare `GLOBALB.LZC` produce two container objects for one file. `Save` then writes that file twice from two different in-memory states, and the edits of the first mod vanish with no error reported. Build the merged `Files` union and load once. See defect 6.
 
 **A `Load` that reports nothing may have loaded nothing.** `Load` returns an empty array immediately when `Files` is empty. Verify the profile holds the containers you expect.

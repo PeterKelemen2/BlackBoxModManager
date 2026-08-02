@@ -14,13 +14,13 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 2    | Done. See "Completed" below.                                 | —                               |
 | 3    | Done. See "Completed" below.                                 | —                               |
 | 4    | Done. See "Completed" below.                                 | —                               |
-| 5    | [05-mvp-shell.md](05-mvp-shell.md)                           | The UI.                         |
+| 5    | Done. See "Completed" below.                                 | —                               |
 | 6    | [06-binary-deployment.md](06-binary-deployment.md)           | The success criterion.          |
 | 7    | [07-game-profiles.md](07-game-profiles.md)                   | Games other than Underground 2. |
 | 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.  |
 | 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.       |
 
-Steps 1 to 3 prove that the foundation works. **All three pass.** Step 4 is done. Step 5 is open.
+Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4 and 5 are done. Step 6 is open.
 
 ## Completed
 
@@ -91,6 +91,23 @@ Four facts carry forward.
 2. **A variant holds a list of option sets, not one.** A script can pause more than once, so the roadmap model needed a list.
 3. **An unknown verb and an option block header parse to the same type.** Only the enclosing question separates them. `ScriptFlattener` does that and stops on a real unknown verb.
 4. **An `if` command cannot resolve without loaded containers.** The flattener says so and never guesses. Step 8 owns the fix.
+
+### Step 5 — the MVP shell
+
+**Done.** `src/BlackboxModManager.App` holds the WPF window, and `src/BlackboxModManager.Core` grew the game, store, profile, deploy, and staging namespaces. The application detects the game, imports ASI and loose-file mods, orders them, deploys them, and reverts to vanilla. Read [05-mvp-shell.md](05-mvp-shell.md) for the type list, the workspace layout, and the findings.
+
+Start the application with `tools/run-app.sh`. Run the platform self test with `BlackboxModManager.exe --selftest <directory>`.
+
+Six facts carry forward.
+
+1. **Hard links work under Wine, and a two-move swap works.** The self test linked every file of the vanilla copy and of the staging copy, and it swapped the directories. A deploy of the 1.7 GB install costs almost no disk space and almost no time.
+2. **A hard link shares its content with the live install.** The staging file, the vanilla file, and the live file are one file with three names. **Step 6 must call `StagingFiles.MakePrivate` for every file that its merged load names**, because `profile.Save()` writes containers in place.
+3. **The workspace sits beside the game install on purpose.** A hard link cannot cross a volume, and a move across a volume copies every byte. `Settings.WorkRootOverride` moves it, and the deploy then reports the cost.
+4. **A Binary mod stops a deploy with a message that names step 6.** The store classifies it and no engine in this build claims it. A silent skip would look like a deploy that worked.
+5. **`GameCatalog` holds Underground 2 only.** It is the one install that we listed file by file. Step 7 adds the rest, one confirmed listing at a time.
+6. **The window asks every question in a dialog.** `Console.ReadLine` never returns on a Wine console, and a window application has no console. `IUserInteraction` holds the whole set.
+7. **Never scroll a list from inside its own `CollectionChanged` handler, and always set `e.Handled`.** A synchronous `ScrollIntoView` there makes the item container generator run mid-notification, and WPF throws `An ItemsControl is inconsistent with its items source`. A handler that leaves `e.Handled` false then turns one exception into a storm of dialogs and a crash.
+8. **A font family that Wine does not hold kills the process.** WPF reaches `Invariant.FailFast`, which no handler can catch. `FontFamily="Consolas"` on the log list ended the application on its first log line. **Name no font family in the XAML**, and let `tools/run-app.sh` link the fonts of the host into the prefix.
 
 ## Reference files
 

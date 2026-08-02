@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>BlackboxModManager.App</RootNamespace>
+    <AssemblyName>BlackboxModManager</AssemblyName>
+    <!-- LZCompressLib.dll is a native x64 library. The host process must be x64. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <!-- The developer machine runs Linux. The Windows Desktop reference pack needs this
+         switch to restore there. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Program.Main sets the culture before it starts the application. The entry point
+         that WPF generates would run first, so it is not the entry point. -->
+    <StartupObject>BlackboxModManager.App.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BlackboxModManager.Core\BlackboxModManager.Core.csproj" />
+  </ItemGroup>
+
+</Project>

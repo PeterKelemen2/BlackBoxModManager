@@ -32,6 +32,28 @@ namespace BlackboxModManager.Core
 		/// </summary>
 		public static string LogDirectory => Path.Combine(Root, "logs");
 
+		/// <summary>
+		/// The managed mod store. Each mod gets one directory here. This sits outside every
+		/// game directory, so a game reinstall does not delete the library of the user.
+		/// </summary>
+		public static string ModsDirectory => Path.Combine(Root, "mods");
+
+		/// <summary>
+		/// The profiles of every game. One subdirectory per game.
+		/// </summary>
+		public static string ProfilesDirectory => Path.Combine(Root, "profiles");
+
+		/// <summary>
+		/// The scratch space of an import. An import extracts here first, and it moves the
+		/// result into the mod store only after the read succeeds.
+		/// </summary>
+		public static string ImportDirectory => Path.Combine(Root, "import");
+
+		/// <summary>
+		/// The vanilla snapshot of every game install. One file per install.
+		/// </summary>
+		public static string SnapshotDirectory => Path.Combine(Root, "snapshots");
+
 		public static void CreateRoot()
 		{
 			Directory.CreateDirectory(Root);

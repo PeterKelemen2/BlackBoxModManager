@@ -1,0 +1,300 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using BlackboxModManager.Core.Games;
+using BlackboxModManager.Core.Profiles;
+using BlackboxModManager.Core.Staging;
+using BlackboxModManager.Core.Store;
+
+namespace BlackboxModManager.Core.Deploy
+{
+	/// <summary>
+	/// Thrown when a deploy or a revert stops. The game directory is untouched unless the
+	/// message says otherwise.
+	/// </summary>
+	public sealed class DeployServiceException : Exception
+	{
+		public DeployServiceException(string message, Exception inner = null) : base(message, inner) { }
+	}
+
+	/// <summary>
+	/// What one deploy produced.
+	/// </summary>
+	public sealed class DeployResult
+	{
+		public DeployReport Report { get; }
+
+		public VerificationResult Verification { get; }
+
+		public ReplicationReport Staging { get; }
+
+		public DeployResult(DeployReport report, VerificationResult verification, ReplicationReport staging)
+		{
+			this.Report = report;
+			this.Verification = verification;
+			this.Staging = staging;
+		}
+	}
+
+	/// <summary>
+	/// Runs one deploy from end to end.
+	///
+	/// The order is fixed and every step depends on the one before it.
+	///
+	/// 1. Take the vanilla snapshot, once, before the first deploy.
+	/// 2. Build the staging copy from the vanilla copy.
+	/// 3. Let each engine put its mods into the staging copy, in load order.
+	/// 4. Verify the staging copy.
+	/// 5. Swap the staging copy into the game directory.
+	///
+	/// <b>No step writes into the game directory.</b> Only the swap changes it, and only
+	/// after the verify passes.
+	///
+	/// Run one deploy at a time, on one background thread. The library statics of Nikki are
+	/// process-global, and step 6 loads containers inside this same flow. See defect 8.
+	/// </summary>
+	public sealed class DeployService
+	{
+		private readonly ModStore _store;
+		private readonly IReadOnlyList<IDeployEngine> _engines;
+		private readonly string _workRootOverride;
+
+		public DeployService(ModStore store, string workRootOverride = null)
+			: this(store, new IDeployEngine[] { new LinkDeployEngine() }, workRootOverride) { }
+
+		public DeployService(ModStore store, IReadOnlyList<IDeployEngine> engines, string workRootOverride = null)
+		{
+			this._store = store ?? throw new ArgumentNullException(nameof(store));
+			this._engines = engines ?? throw new ArgumentNullException(nameof(engines));
+			this._workRootOverride = workRootOverride;
+		}
+
+		public GameWorkspace WorkspaceOf(GameInstall install) => new GameWorkspace(install, this._workRootOverride);
+
+		/// <summary>
+		/// Applies one profile to one game install.
+		/// </summary>
+		public DeployResult Deploy(GameInstall install, Profile profile, bool fullVerify = false,
+			Action<string> log = null)
+		{
+			if (install is null) throw new ArgumentNullException(nameof(install));
+			if (profile is null) throw new ArgumentNullException(nameof(profile));
+
+			Action<string> write = log ?? (line => { });
+			GameWorkspace workspace = this.WorkspaceOf(install);
+
+			if (!workspace.SharesVolumeWithGame())
+			{
+				write($"The workspace {workspace.Root} sits on another volume than the game. " +
+					"Every build and every swap copies every byte.");
+			}
+
+			VanillaSnapshot snapshot = this.EnsureVanilla(workspace, write);
+
+			write("Build the staging copy.");
+			ReplicationReport staging = TreeReplicator.Build(
+				workspace.VanillaDirectory, workspace.StagingDirectory, write);
+
+			var context = new DeployContext(install, workspace.StagingDirectory, profile, this._store, write);
+			DeployReport report = this.RunEngines(context, profile, write);
+
+			VerificationResult verification = StagingVerifier.Verify(
+				workspace.StagingDirectory, snapshot, report, this._store, fullVerify, write);
+
+			if (!verification.IsClean)
+			{
+				throw new DeployServiceException(
+					$"The verify found {verification.Problems.Count} problems, so the swap did not run. " +
+					$"The game directory did not change. The first problem is: {verification.Problems[0]}");
+			}
+
+			GameSwap.Swap(workspace, workspace.StagingDirectory, write);
+
+			workspace.WriteState(new WorkspaceState
+			{
+				DeployedProfile = profile.Name,
+				Deployed = DateTimeOffset.UtcNow,
+				DeployedFileCount = report.FileCount,
+			});
+
+			write(report.Summary());
+			write("The deploy finished.");
+
+			return new DeployResult(report, verification, staging);
+		}
+
+		/// <summary>
+		/// Puts the vanilla state back into the game directory.
+		/// </summary>
+		public void Revert(GameInstall install, Action<string> log = null)
+		{
+			if (install is null) throw new ArgumentNullException(nameof(install));
+
+			Action<string> write = log ?? (line => { });
+			GameWorkspace workspace = this.WorkspaceOf(install);
+
+			if (!workspace.HasVanilla)
+			{
+				throw new DeployServiceException(
+					$"The workspace {workspace.Root} holds no vanilla copy, so a revert has nothing to restore. " +
+					"This application has never deployed to this install.");
+			}
+
+			// Build the replacement first. A revert must never move the vanilla copy
+			// itself, because a failure would then leave no baseline.
+			write("Build the vanilla copy for the swap.");
+			TreeReplicator.Build(workspace.VanillaDirectory, workspace.StagingDirectory, write);
+
+			GameSwap.Swap(workspace, workspace.StagingDirectory, write);
+
+			workspace.WriteState(new WorkspaceState());
+
+			write("The game directory holds the vanilla state again.");
+		}
+
+		/// <summary>
+		/// Reads the vanilla state of the install, once. Later deploys reuse the result.
+		///
+		/// A snapshot of an install that already carries mods would record those mods as the
+		/// vanilla state. The state file answers that question, and a first run against a
+		/// modded install has no way to know. Say so, and let the user decide.
+		/// </summary>
+		public VanillaSnapshot EnsureVanilla(GameWorkspace workspace, Action<string> log = null)
+		{
+			if (workspace is null) throw new ArgumentNullException(nameof(workspace));
+
+			Action<string> write = log ?? (line => { });
+
+			if (workspace.HasVanilla)
+			{
+				VanillaSnapshot stored = workspace.ReadSnapshot();
+
+				if (stored != null) return stored;
+
+				write("The snapshot file did not read. Take the snapshot again from the vanilla copy.");
+
+				VanillaSnapshot rebuilt = SnapshotReader.Create(workspace.VanillaDirectory, write);
+				SnapshotReader.Save(workspace.SnapshotFile, rebuilt);
+
+				return rebuilt;
+			}
+
+			workspace.Create();
+
+			write($"Read the vanilla state of {workspace.Install.Root}. This runs once.");
+			VanillaSnapshot snapshot = SnapshotReader.Create(workspace.Install.Root, write);
+
+			write("Build the vanilla copy.");
+			TreeReplicator.Build(workspace.Install.Root, workspace.VanillaDirectory, write);
+
+			// Point the snapshot at the copy. Every later compare runs against a directory
+			// that this application owns.
+			snapshot.Root = workspace.VanillaDirectory;
+			SnapshotReader.Save(workspace.SnapshotFile, snapshot);
+
+			workspace.WriteState(new WorkspaceState());
+
+			return snapshot;
+		}
+
+		/// <summary>
+		/// Lets each engine deploy the mods that it claims, in load order, and joins the
+		/// reports.
+		/// </summary>
+		private DeployReport RunEngines(DeployContext context, Profile profile, Action<string> write)
+		{
+			var files = new List<DeployedFile>();
+			var overrides = new List<DeployOverride>();
+			var methods = new Dictionary<LinkKind, int>();
+			string note = String.Empty;
+
+			IReadOnlyList<InstalledMod> enabled = this.ResolveEnabled(profile);
+
+			if (enabled.Count == 0)
+			{
+				write("The profile enables no mod. The staging copy holds the vanilla state.");
+				return new DeployReport(files, overrides, methods, note);
+			}
+
+			// Group the mods by engine and keep the load order inside each group. A mod
+			// whose kind no engine claims stops the deploy.
+			foreach (IDeployEngine engine in this._engines)
+			{
+				var mine = new List<InstalledMod>();
+
+				foreach (InstalledMod mod in enabled)
+				{
+					if (engine.Kinds.Contains(mod.Kind)) mine.Add(mod);
+				}
+
+				if (mine.Count == 0) continue;
+
+				write($"The {engine.Name} deploys {mine.Count} mods.");
+				DeployReport report = engine.Deploy(context, mine);
+
+				files.AddRange(report.Files);
+				overrides.AddRange(report.Overrides);
+
+				foreach (KeyValuePair<LinkKind, int> entry in report.Methods)
+				{
+					methods[entry.Key] = methods.TryGetValue(entry.Key, out int count)
+						? count + entry.Value
+						: entry.Value;
+				}
+
+				if (note.Length == 0) note = report.MethodNote;
+			}
+
+			return new DeployReport(files, overrides, methods, note);
+		}
+
+		/// <summary>
+		/// Reads the enabled mods of a profile out of the store, in load order.
+		/// </summary>
+		private IReadOnlyList<InstalledMod> ResolveEnabled(Profile profile)
+		{
+			var found = new List<InstalledMod>();
+			var unclaimed = new List<string>();
+
+			foreach (string id in profile.EnabledInOrder())
+			{
+				InstalledMod mod = this._store.Find(id);
+
+				if (mod is null)
+				{
+					throw new DeployServiceException(
+						$"The profile \"{profile.Name}\" enables the mod \"{id}\", which the store no longer holds. " +
+						"Remove the mod from the profile, then deploy again.");
+				}
+
+				bool claimed = false;
+
+				foreach (IDeployEngine engine in this._engines)
+				{
+					if (!engine.Kinds.Contains(mod.Kind)) continue;
+
+					claimed = true;
+					break;
+				}
+
+				if (!claimed)
+				{
+					unclaimed.Add($"\"{mod.Name}\" of kind {mod.Kind}");
+					continue;
+				}
+
+				found.Add(mod);
+			}
+
+			if (unclaimed.Count > 0)
+			{
+				throw new DeployServiceException(
+					$"The profile \"{profile.Name}\" enables {String.Join(", ", unclaimed)}. " +
+					"No engine in this build deploys that kind. Step 6 adds the container engine. " +
+					"Disable those mods, then deploy again.");
+			}
+
+			return found;
+		}
+	}
+}

@@ -17,7 +17,7 @@ namespace BlackboxModManager.Core.Mods
 	/// </summary>
 	public static class ModPackageReader
 	{
-		private const string Version1 = "[VERSN1]";
+		public const string Version1 = "[VERSN1]";
 
 		/// <summary>Matches any version header, so that we can name an unknown one.</summary>
 		private static readonly Regex VersionHeader = new Regex(@"^\[VERSN(\d+)\]", RegexOptions.Compiled);
@@ -95,7 +95,19 @@ namespace BlackboxModManager.Core.Mods
 			return found;
 		}
 
-		private static string ReadHeader(string path)
+		/// <summary>
+		/// Tests one file for the manifest header. The mod classifier calls this.
+		/// </summary>
+		public static bool IsManifest(string path) => ReadHeader(path) == Version1;
+
+		/// <summary>
+		/// Returns the version header of a file, such as [VERSN1]. It returns null when the
+		/// first line carries no header.
+		///
+		/// Read the first line, not the extension. A VERSN1 manifest and a VERSN2 script
+		/// both use ".end", so an extension filter cannot tell them apart.
+		/// </summary>
+		public static string ReadHeader(string path)
 		{
 			try
 			{

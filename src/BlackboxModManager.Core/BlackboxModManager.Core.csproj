@@ -15,4 +15,11 @@
     <ProjectReference Include="..\..\third_party\Endscript\Endscript\Endscript.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- XxHash. We identify a file by the hash of its content, never by size and time. -->
+    <PackageReference Include="System.IO.Hashing" Version="10.0.10" />
+    <!-- rar and 7z. System.IO.Compression reads zip, and it reads nothing else. -->
+    <PackageReference Include="SharpCompress" Version="1.0.0" />
+  </ItemGroup>
+
 </Project>
