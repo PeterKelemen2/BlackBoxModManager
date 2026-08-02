@@ -45,7 +45,9 @@ The published harness runs inside the Wine prefix, produces a byte-identical con
 
 ## Results
 
-Work items 1 to 5 pass. Item 6, the game launch, waits for a human.
+**Every work item passes. Step 3 is done.**
+
+The game launched from the scratch directory inside the GE-Proton10-34 prefix and the URL career races ran one lap. The container came from the single-file `win-x64` publish, written by the Proton runner. That is the exact shape that users will run.
 
 ### The run matrix
 

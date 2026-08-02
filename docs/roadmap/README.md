@@ -12,7 +12,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1.         |
 | 1    | Done. See "Completed" below.                                 | —                                      |
 | 2    | Done. See "Completed" below.                                 | —                                      |
-| 3    | [03-wine-verification.md](03-wine-verification.md)           | Items 1 to 5 pass. The game launch is open. |
+| 3    | Done. See "Completed" below.                                 | —                                      |
 | 4    | [04-endscript-layer.md](04-endscript-layer.md)               | All Binary mod features.               |
 | 5    | [05-mvp-shell.md](05-mvp-shell.md)                           | The UI.                                |
 | 6    | [06-binary-deployment.md](06-binary-deployment.md)           | The success criterion.                 |
@@ -20,7 +20,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples.         |
 | 9    | [09-texmod.md](09-texmod.md)                                 | Nothing. Explicitly last.              |
 
-Steps 1 to 3 prove that the foundation works. Steps 1 and 2 pass. Step 3 passes every check that does not need a human. Only the game launch inside the Proton prefix is open.
+Steps 1 to 3 prove that the foundation works. **All three pass.** Step 4 is open. Nothing blocks it.
 
 ## Completed
 
@@ -72,7 +72,7 @@ Three facts carry forward.
 
 ### Step 3 — Wine verification
 
-**Items 1 to 5 pass. Item 6, the game launch, waits for a human.** Read [03-wine-verification.md](03-wine-verification.md) for the run matrix and the probe results.
+**Done.** The game launched from the scratch directory inside the GE-Proton10-34 prefix, from a single-file `win-x64` publish, and the URL career races ran one lap. Read [03-wine-verification.md](03-wine-verification.md) for the run matrix and the probe results.
 
 Four facts carry forward.
 
