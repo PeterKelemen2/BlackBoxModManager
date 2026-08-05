@@ -61,6 +61,12 @@ namespace BlackboxModManager.Tests
 			File.WriteAllText(full, content);
 		}
 
+		/// <summary>The full path of one file inside the install.</summary>
+		public string FullPath(string relative)
+		{
+			return Path.Combine(this.Root, relative.Replace('/', Path.DirectorySeparatorChar));
+		}
+
 		public string Read(string relative)
 		{
 			return File.ReadAllText(Path.Combine(this.Root, relative.Replace('/', Path.DirectorySeparatorChar)));

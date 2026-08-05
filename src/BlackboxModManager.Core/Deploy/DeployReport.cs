@@ -20,15 +20,105 @@ namespace BlackboxModManager.Core.Deploy
 		/// <summary>True when this file replaced a file of the vanilla install.</summary>
 		public bool OverridesGameFile { get; }
 
-		public DeployedFile(string relativePath, string modId, LinkKind kind, bool overridesGameFile)
+		/// <summary>
+		/// True when the deploy changed the content after it placed the file. A settings file
+		/// that carries an answer of the profile lands here.
+		///
+		/// <b>The verify cannot compare an edited file against the mod store.</b> It differs
+		/// from the store copy on purpose, so the check on it is existence and a length above
+		/// zero. See StagingVerifier.
+		/// </summary>
+		public bool Edited { get; }
+
+		public DeployedFile(string relativePath, string modId, LinkKind kind, bool overridesGameFile,
+			bool edited = false)
 		{
 			this.RelativePath = relativePath;
 			this.ModId = modId;
 			this.Kind = kind;
 			this.OverridesGameFile = overridesGameFile;
+			this.Edited = edited;
 		}
 
-		public override string ToString() => $"{this.RelativePath} from {this.ModId} by {this.Kind}";
+		public override string ToString() =>
+			this.Edited
+				? $"{this.RelativePath} from {this.ModId} by {this.Kind}, with settings applied"
+				: $"{this.RelativePath} from {this.ModId} by {this.Kind}";
+	}
+
+	/// <summary>
+	/// One settings file that the deploy rewrote with the answers of the profile.
+	/// </summary>
+	public sealed class SettingsWrite
+	{
+		public string RelativePath { get; }
+
+		public string ModId { get; }
+
+		/// <summary>The options whose value the deploy changed, as <c>SECTION/Key</c>.</summary>
+		public IReadOnlyList<string> Changed { get; }
+
+		/// <summary>
+		/// The options that the profile named and the file does not hold. A mod update that
+		/// renames a key produces these.
+		/// </summary>
+		public IReadOnlyList<string> Skipped { get; }
+
+		public SettingsWrite(string relativePath, string modId, IReadOnlyList<string> changed,
+			IReadOnlyList<string> skipped)
+		{
+			this.RelativePath = relativePath;
+			this.ModId = modId;
+			this.Changed = changed ?? Array.Empty<string>();
+			this.Skipped = skipped ?? Array.Empty<string>();
+		}
+
+		public override string ToString()
+		{
+			string tail = this.Skipped.Count == 0
+				? String.Empty
+				: $" It does not hold {String.Join(", ", this.Skipped)}.";
+
+			return $"{this.RelativePath} of \"{this.ModId}\": {this.Changed.Count} options changed.{tail}";
+		}
+	}
+
+	/// <summary>
+	/// One ASI loader file, with the mod that supplied it and the mods that lost.
+	/// </summary>
+	public sealed class LoaderChoice
+	{
+		/// <summary>The loader file name, such as <c>dinput8.dll</c>.</summary>
+		public string ProxyName { get; }
+
+		public string WinnerModId { get; }
+
+		public string WinnerModName { get; }
+
+		/// <summary>The version or the short hash of the file that the deploy placed.</summary>
+		public string WinnerVersion { get; }
+
+		/// <summary>The mods whose copy the deploy skipped, by name.</summary>
+		public IReadOnlyList<string> Skipped { get; }
+
+		public LoaderChoice(string proxyName, string winnerModId, string winnerModName,
+			string winnerVersion, IReadOnlyList<string> skipped)
+		{
+			this.ProxyName = proxyName;
+			this.WinnerModId = winnerModId;
+			this.WinnerModName = winnerModName;
+			this.WinnerVersion = winnerVersion;
+			this.Skipped = skipped ?? Array.Empty<string>();
+		}
+
+		public override string ToString()
+		{
+			string tail = this.Skipped.Count == 0
+				? " No other mod supplies it."
+				: $" The deploy skipped the copy of {String.Join(", ", this.Skipped)}.";
+
+			return $"{this.ProxyName} comes from \"{this.WinnerModName}\", {this.WinnerVersion}.{tail}";
+		}
 	}
 
 	/// <summary>
@@ -111,17 +201,33 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public string MethodNote { get; }
 
+		/// <summary>
+		/// The settings files that the deploy rewrote with the answers of the profile. This is
+		/// empty when the profile changed no option.
+		/// </summary>
+		public IReadOnlyList<SettingsWrite> Settings { get; }
+
+		/// <summary>
+		/// The ASI loader files, with the mod that supplied each one. This is empty when no
+		/// enabled mod ships a loader.
+		/// </summary>
+		public IReadOnlyList<LoaderChoice> Loaders { get; }
+
 		public int FileCount => this.Files.Count;
 
 		public DeployReport(IReadOnlyList<DeployedFile> files, IReadOnlyList<DeployOverride> overrides,
 			IReadOnlyDictionary<LinkKind, int> methods, string methodNote,
-			IReadOnlyList<ContainerWrite> containers = null)
+			IReadOnlyList<ContainerWrite> containers = null,
+			IReadOnlyList<SettingsWrite> settings = null,
+			IReadOnlyList<LoaderChoice> loaders = null)
 		{
 			this.Files = files ?? Array.Empty<DeployedFile>();
 			this.Overrides = overrides ?? Array.Empty<DeployOverride>();
 			this.Methods = methods ?? new Dictionary<LinkKind, int>();
 			this.MethodNote = methodNote ?? String.Empty;
 			this.Containers = containers ?? Array.Empty<ContainerWrite>();
+			this.Settings = settings ?? Array.Empty<SettingsWrite>();
+			this.Loaders = loaders ?? Array.Empty<LoaderChoice>();
 		}
 
 		/// <summary>

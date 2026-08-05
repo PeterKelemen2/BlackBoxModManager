@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Games;
 using BlackboxModManager.Core.Profiles;
 using BlackboxModManager.Core.Staging;
@@ -109,6 +110,11 @@ namespace BlackboxModManager.Core.Deploy
 			// list before the deploy can still change the load order.
 			ConflictReport conflicts = this.CheckConflicts(install, profile, write);
 
+			// Settle the ASI loader before anything writes. A contest with no stored answer
+			// stops the deploy here, where the game directory is still untouched.
+			ProxyPlan proxies = this.PlanLoaders(profile);
+			IReadOnlyList<LoaderChoice> loaders = LoaderPreflight.Settle(proxies, write);
+
 			VanillaSnapshot snapshot = this.EnsureVanilla(workspace, write);
 
 			write("Build the staging copy.");
@@ -116,9 +122,9 @@ namespace BlackboxModManager.Core.Deploy
 				workspace.VanillaDirectory, workspace.StagingDirectory, write);
 
 			var context = new DeployContext(
-				install, workspace.StagingDirectory, profile, this._store, this._binary, write);
+				install, workspace.StagingDirectory, profile, this._store, this._binary, write, proxies);
 
-			DeployReport report = this.RunEngines(context, profile, write);
+			DeployReport report = this.RunEngines(context, profile, write, loaders);
 
 			VerificationResult verification = StagingVerifier.Verify(
 				workspace.StagingDirectory, snapshot, report, this._store, fullVerify, write);
@@ -240,12 +246,14 @@ namespace BlackboxModManager.Core.Deploy
 		/// Lets each engine deploy the mods that it claims, in load order, and joins the
 		/// reports.
 		/// </summary>
-		private DeployReport RunEngines(DeployContext context, Profile profile, Action<string> write)
+		private DeployReport RunEngines(DeployContext context, Profile profile, Action<string> write,
+			IReadOnlyList<LoaderChoice> loaders = null)
 		{
 			var files = new List<DeployedFile>();
 			var overrides = new List<DeployOverride>();
 			var methods = new Dictionary<LinkKind, int>();
 			var containers = new List<ContainerWrite>();
+			var settings = new List<SettingsWrite>();
 			string note = String.Empty;
 
 			IReadOnlyList<InstalledMod> enabled = this.ResolveEnabled(profile);
@@ -275,6 +283,7 @@ namespace BlackboxModManager.Core.Deploy
 				files.AddRange(report.Files);
 				overrides.AddRange(report.Overrides);
 				containers.AddRange(report.Containers);
+				settings.AddRange(report.Settings);
 
 				foreach (KeyValuePair<LinkKind, int> entry in report.Methods)
 				{
@@ -286,7 +295,30 @@ namespace BlackboxModManager.Core.Deploy
 				if (note.Length == 0) note = report.MethodNote;
 			}
 
-			return new DeployReport(files, overrides, methods, note, containers);
+			return new DeployReport(files, overrides, methods, note, containers, settings, loaders);
+		}
+
+		/// <summary>
+		/// Reads which mod supplies each ASI loader file. It writes nothing, so the window can
+		/// call it whenever the selection changes.
+		///
+		/// A mod that the store no longer holds is not an error here. <c>ResolveEnabled</c>
+		/// reports that case with a message that names the mod, and this call runs first.
+		/// </summary>
+		public ProxyPlan PlanLoaders(Profile profile)
+		{
+			if (profile is null) throw new ArgumentNullException(nameof(profile));
+
+			var mods = new List<InstalledMod>();
+
+			foreach (string id in profile.EnabledInOrder())
+			{
+				InstalledMod mod = this._store.Find(id);
+
+				if (mod != null) mods.Add(mod);
+			}
+
+			return LoaderPreflight.Plan(profile, mods);
 		}
 
 		/// <summary>

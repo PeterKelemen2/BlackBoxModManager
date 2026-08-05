@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading.Tasks;
 using BlackboxModManager.App.Services;
 using BlackboxModManager.Core;
+using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Deploy;
 using BlackboxModManager.Core.Games;
 using BlackboxModManager.Core.Mods;
@@ -66,6 +67,17 @@ namespace BlackboxModManager.App.ViewModels
 		/// One line per conflict, plus one per variant that the check could not read.
 		/// </summary>
 		public ObservableCollection<string> Conflicts { get; } = new ObservableCollection<string>();
+
+		/// <summary>
+		/// The settings files of the mod that the user selected. This is empty unless that mod
+		/// ships an <c>.ini</c> file.
+		/// </summary>
+		public ObservableCollection<SettingsFileViewModel> SettingsFiles { get; } =
+			new ObservableCollection<SettingsFileViewModel>();
+
+		/// <summary>One row per ASI loader file that the enabled mods supply.</summary>
+		public ObservableCollection<LoaderRowViewModel> Loaders { get; } =
+			new ObservableCollection<LoaderRowViewModel>();
 
 		public MainViewModel(IUserInteraction ask)
 		{
@@ -132,6 +144,12 @@ namespace BlackboxModManager.App.ViewModels
 		[ObservableProperty]
 		private string _detailsHeader = "Select a mod to see what it offers.";
 
+		[ObservableProperty]
+		private string _settingsHeader = "Select a mod to see its settings.";
+
+		[ObservableProperty]
+		private string _loaderHeader = String.Empty;
+
 		private GameDefinition _selectedGame;
 
 		/// <summary>
@@ -186,6 +204,7 @@ namespace BlackboxModManager.App.ViewModels
 				if (!this.SetProperty(ref this._selectedMod, value)) return;
 
 				this.LoadVariants(value);
+				this.LoadSettings(value);
 			}
 		}
 
@@ -610,6 +629,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			this.Status = $"{this.Mods.Count} mods, {this._profile.EnabledCount} enabled.";
 			this.RefreshConflicts();
+			this.RefreshLoaders();
 		}
 
 		private void OnModToggled()
@@ -617,6 +637,7 @@ namespace BlackboxModManager.App.ViewModels
 			this.SaveProfile();
 			this.Status = $"{this.Mods.Count} mods, {this._profile.EnabledCount} enabled.";
 			this.RefreshConflicts();
+			this.RefreshLoaders();
 		}
 
 		// ---------------------------------------------------------------- variants
@@ -689,6 +710,198 @@ namespace BlackboxModManager.App.ViewModels
 			this.RefreshConflicts();
 		}
 
+		// ---------------------------------------------------------------- ASI settings
+
+		/// <summary>
+		/// Reads the settings files of one mod and builds one panel for each of them.
+		///
+		/// A Binary mod has no settings panel. Its answers live in its script, and the Mod tab
+		/// shows those.
+		/// </summary>
+		private void LoadSettings(ModRowViewModel row)
+		{
+			this.SettingsFiles.Clear();
+			this.SettingsHeader = "Select a mod to see its settings.";
+
+			if (row is null) return;
+
+			ProfileEntry entry = this._profile?.Find(row.Id);
+
+			if (entry is null)
+			{
+				this.SettingsHeader = $"The profile holds no entry for \"{row.Name}\".";
+				return;
+			}
+
+			try
+			{
+				AsiLayout layout = AsiLayoutReader.Read(row.Mod.ContentRoot);
+
+				foreach (AsiSettingsFile file in layout.Settings)
+				{
+					this.SettingsFiles.Add(SettingsFileViewModel.Build(file, entry, this.OnSettingChanged));
+				}
+
+				if (this.SettingsFiles.Count == 0)
+				{
+					this.SettingsHeader = $"\"{row.Name}\" ships no .ini file, so it has no settings " +
+						"that this window can change.";
+					return;
+				}
+
+				int answered = entry.IniAnswerCount;
+
+				this.SettingsHeader = answered == 0
+					? $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
+						"Every value is the one that the mod ships."
+					: $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
+						$"The profile changes {answered} options. A change needs a new deploy.";
+			}
+			catch (Exception ex)
+			{
+				this.SettingsHeader = $"The settings of \"{row.Name}\" did not read. {ex.Message}";
+				this.Write($"{row.Name}: {ex.Message}");
+			}
+		}
+
+		private void OnSettingChanged()
+		{
+			this.SaveProfile();
+
+			ModRowViewModel row = this.SelectedMod;
+
+			if (row is null) return;
+
+			int answered = this._profile?.Find(row.Id)?.IniAnswerCount ?? 0;
+
+			this.SettingsHeader = answered == 0
+				? $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
+					"Every value is the one that the mod ships."
+				: $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
+					$"The profile changes {answered} options. A change needs a new deploy.";
+
+			this.Status = answered == 0
+				? "The settings match the mod."
+				: $"{answered} settings changed. Deploy to apply them.";
+		}
+
+		// ---------------------------------------------------------------- the ASI loader
+
+		/// <summary>
+		/// Reads which mod supplies each ASI loader file. It writes nothing, so it runs after
+		/// every change of the enabled set.
+		/// </summary>
+		private void RefreshLoaders()
+		{
+			this.Loaders.Clear();
+			this.LoaderHeader = String.Empty;
+
+			if (this._profile is null) return;
+
+			try
+			{
+				ProxyPlan plan = new DeployService(this._store).PlanLoaders(this._profile);
+
+				foreach (ProxyContest contest in plan.Contests) this.Loaders.Add(new LoaderRowViewModel(contest));
+
+				foreach (string note in plan.Unmanaged) this.Write(note);
+
+				if (this.Loaders.Count == 0)
+				{
+					this.LoaderHeader = "No enabled mod ships an ASI loader.";
+					return;
+				}
+
+				this.LoaderHeader = plan.IsSettled
+					? $"{this.Loaders.Count} loader files. Every one of them has a supplier."
+					: "A loader file has more than one supplier and the profile names none of them. " +
+						"Choose one, then deploy. This application never picks a loader for you.";
+			}
+			catch (Exception ex)
+			{
+				this.LoaderHeader = $"The loader scan failed. {ex.Message}";
+			}
+		}
+
+		/// <summary>
+		/// Asks about every loader that has more than one supplier and no stored answer.
+		///
+		/// It returns false when the user cancels a dialog. The deploy would then stop with a
+		/// message from <c>LoaderPreflight</c>, and a dialog that the user just closed is a
+		/// clearer answer than an error.
+		///
+		/// <b>Keep the first answer until the user changes it.</b> A deploy that already holds a
+		/// valid choice asks nothing.
+		/// </summary>
+		private bool AskForLoaders()
+		{
+			this.RefreshLoaders();
+
+			foreach (LoaderRowViewModel row in this.Loaders)
+			{
+				if (!row.NeedsAnswer) continue;
+
+				this.ChooseLoader(row);
+
+				// The choice went into the profile, so read the row again.
+				LoaderRowViewModel again = this.FindLoader(row.ProxyName);
+
+				if (again is null || !again.NeedsAnswer) continue;
+
+				this.Write($"{row.ProxyName} still has no supplier, so the deploy did not start.");
+				this.Status = $"{row.ProxyName} needs a supplier.";
+
+				return false;
+			}
+
+			return true;
+		}
+
+		private LoaderRowViewModel FindLoader(string proxyName)
+		{
+			foreach (LoaderRowViewModel row in this.Loaders)
+			{
+				if (String.Equals(row.ProxyName, proxyName, StringComparison.OrdinalIgnoreCase)) return row;
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Asks which mod supplies one loader file, and stores the answer.
+		///
+		/// The dialog lists every enabled mod that supplies the file with the version of each.
+		/// It ranks nothing. Version numbers on these files are often absent or wrong, so a
+		/// dialog that preselected the highest number would give the user a reason to trust a
+		/// number that means nothing.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(IsIdle))]
+		private void ChooseLoader(LoaderRowViewModel row)
+		{
+			if (row is null || this._profile is null) return;
+
+			string answer = this._ask.PickChoice(
+				$"Which mod supplies {row.ProxyName}?\n\n" +
+				"This file is the ASI loader. One of them runs the plugins of every mod. A version " +
+				"that forwards wrongly breaks sound or input rather than a plugin, so this " +
+				"application never chooses for you.",
+				row.Choices(), row.SupplierId);
+
+			// Null means that the user cancelled. An empty string means "ask me again".
+			if (answer is null) return;
+
+			this._profile.ChooseLoader(row.ProxyName, answer);
+			this.SaveProfile();
+
+			this.Write(answer.Length == 0
+				? $"{row.ProxyName}: the profile holds no supplier again. The next deploy stops and asks."
+				: $"{row.ProxyName}: the profile now names \"{answer}\". Deploy to place that file.");
+
+			this.Status = "The loader choice changed. Deploy to apply it.";
+
+			this.RefreshLoaders();
+		}
+
 		// ---------------------------------------------------------------- conflicts
 
 		/// <summary>
@@ -753,6 +966,10 @@ namespace BlackboxModManager.App.ViewModels
 			Profile profile = this._profile;
 			bool full = this.FullVerify;
 
+			// A deploy asks no question of its own. Settle every loader contest here, before
+			// the deploy starts, and stop when the user cancels.
+			if (!this.AskForLoaders()) return;
+
 			await this.RunAsync($"Deploy the profile \"{profile.Name}\".", report =>
 			{
 				DeployResult result = this.Service().Deploy(install, profile, full, report);
@@ -766,9 +983,20 @@ namespace BlackboxModManager.App.ViewModels
 				{
 					report($"Container: {container}");
 				}
+
+				foreach (SettingsWrite settings in result.Report.Settings)
+				{
+					report($"Settings: {settings}");
+				}
+
+				foreach (LoaderChoice loader in result.Report.Loaders)
+				{
+					report($"Loader: {loader}");
+				}
 			});
 
 			this.RefreshDeployedState();
+			this.RefreshLoaders();
 		}
 
 		[RelayCommand(CanExecute = nameof(CanDeploy))]

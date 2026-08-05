@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using BlackboxModManager.App.Views;
+
 namespace BlackboxModManager.App.Services
 {
 	/// <summary>
@@ -16,6 +19,13 @@ namespace BlackboxModManager.App.Services
 
 		/// <summary>Asks for one line of text. It returns null when the user cancels.</summary>
 		string AskText(string question, string value = null);
+
+		/// <summary>
+		/// Asks the user to pick one of several things. It returns the key of the chosen row.
+		/// It returns null when the user cancels, and an empty string when the user chooses
+		/// "ask me again".
+		/// </summary>
+		string PickChoice(string question, IReadOnlyList<UserChoice> choices, string current = null);
 
 		bool Confirm(string question);
 

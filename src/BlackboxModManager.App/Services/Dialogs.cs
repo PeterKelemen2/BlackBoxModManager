@@ -50,6 +50,15 @@ namespace BlackboxModManager.App.Services
 			return TextPromptWindow.Ask(owner, question, value);
 		}
 
+		/// <summary>
+		/// Asks the user to pick one of several things. It returns null when the user cancels.
+		/// </summary>
+		public static string PickChoice(Window owner, string question,
+			System.Collections.Generic.IReadOnlyList<UserChoice> choices, string current = null)
+		{
+			return ChoiceWindow.Ask(owner, question, choices, current);
+		}
+
 		public static bool Confirm(Window owner, string question, string title = "Blackbox Mod Manager")
 		{
 			return MessageBox.Show(owner, question, title, MessageBoxButton.YesNo, MessageBoxImage.Question)

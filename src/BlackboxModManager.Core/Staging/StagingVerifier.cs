@@ -124,6 +124,20 @@ namespace BlackboxModManager.Core.Staging
 					continue;
 				}
 
+				// A settings file that took the answers of the profile differs from the mod
+				// store on purpose. There is nothing to compare it against, so the check on it
+				// is existence and a length above zero.
+				if (file.Edited)
+				{
+					if (new FileInfo(target).Length == 0)
+					{
+						problems.Add($"The settings file {file.RelativePath} of the mod \"{file.ModId}\" " +
+							"is empty in the staging copy. The deploy applied answers to it.");
+					}
+
+					continue;
+				}
+
 				if (!FileHash.SameContent(source, target))
 				{
 					problems.Add($"The staging copy of {file.RelativePath} differs from the copy in the mod \"{file.ModId}\".");

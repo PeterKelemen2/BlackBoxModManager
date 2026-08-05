@@ -74,6 +74,10 @@ namespace BlackboxModManager.App
 
 		public string AskText(string question, string value = null) => Dialogs.AskText(this, question, value);
 
+		public string PickChoice(string question,
+			System.Collections.Generic.IReadOnlyList<Views.UserChoice> choices, string current = null) =>
+			Dialogs.PickChoice(this, question, choices, current);
+
 		public bool Confirm(string question) => Dialogs.Confirm(this, question);
 
 		public void ShowError(string message) => Dialogs.ShowError(this, message);

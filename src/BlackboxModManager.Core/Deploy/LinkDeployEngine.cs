@@ -73,6 +73,13 @@ namespace BlackboxModManager.Core.Deploy
 			var files = new List<DeployedFile>();
 			var overrides = new List<DeployOverride>();
 			var methods = new Dictionary<LinkKind, int>();
+			var settings = new List<SettingsWrite>();
+
+			// Which loader copy this engine must not place. An empty map means that no plan
+			// exists, and every copy then reaches the staging copy in load order.
+			IReadOnlyDictionary<string, IReadOnlySet<string>> skip = context.Proxies is null
+				? new Dictionary<string, IReadOnlySet<string>>()
+				: context.Proxies.SkipByMod();
 
 			// Which mod supplied a path so far. The last writer wins, and this map names
 			// the one that lost.
@@ -108,10 +115,25 @@ namespace BlackboxModManager.Core.Deploy
 				}
 
 				IReadOnlyList<string> content = FileTree.Files(mod.ContentRoot);
+
+				// The answers of the profile for the settings files of this mod. An empty map
+				// is the normal case, and it costs nothing.
+				IniPlan plan = IniPlan.Build(context.Profile, mod, context.Log);
+
+				skip.TryGetValue(mod.Id, out IReadOnlySet<string> skipped);
+
 				context.Log($"{mod.Name}: {content.Count} files by {best}.");
 
 				foreach (string relative in content)
 				{
+					if (skipped != null && skipped.Contains(Key(relative)))
+					{
+						// Another mod supplies this ASI loader. DeployService logged the choice
+						// and the mods that lost, so say only that this file stayed behind.
+						context.Log($"  {relative} stays in the mod store. Another mod supplies it.");
+						continue;
+					}
+
 					string source = FileTree.Combine(mod.ContentRoot, relative);
 					string target = FileTree.Combine(context.StagingDirectory, relative);
 
@@ -124,13 +146,19 @@ namespace BlackboxModManager.Core.Deploy
 
 					LinkKind used = Place(source, target, relative, mod, best);
 
+					// Apply the answers of the profile to the copy in the staging directory.
+					// The file in the mod store never changes.
+					SettingsWrite write = plan.Apply(relative, target, context.Log);
+
+					if (write != null) settings.Add(write);
+
 					writers[Key(relative)] = mod.Id;
-					files.Add(new DeployedFile(relative, mod.Id, used, replaced));
+					files.Add(new DeployedFile(relative, mod.Id, used, replaced, write != null));
 					methods[used] = methods.TryGetValue(used, out int count) ? count + 1 : 1;
 				}
 			}
 
-			return new DeployReport(files, overrides, methods, methodNote);
+			return new DeployReport(files, overrides, methods, methodNote, null, settings);
 		}
 
 		/// <summary>

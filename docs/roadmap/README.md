@@ -6,22 +6,22 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 
 ## Sequence
 
-| Step | File                                               | Gates                          |
-| ---- | -------------------------------------------------- | ------------------------------ |
-| 0    | Done. See "Completed" below.                       | —                              |
-| —    | [00-test-environment.md](00-test-environment.md)   | Reference. Read before step 1. |
-| 1    | Done. See "Completed" below.                       | —                              |
-| 2    | Done. See "Completed" below.                       | —                              |
-| 3    | Done. See "Completed" below.                       | —                              |
-| 4    | Done. See "Completed" below.                       | —                              |
-| 5    | Done. See "Completed" below.                       | —                              |
-| 6    | Done. See "Completed" below.                       | —                              |
-| 7    | [07-game-profiles.md](07-game-profiles.md)         | Part done. Three games wait.   |
-| 8    | Done. See "Completed" below.                       | —                              |
-| 9    | [09-asi-configuration.md](09-asi-configuration.md) | ASI mod settings and loaders.  |
-| 10   | [10-texmod.md](10-texmod.md)                       | Nothing. Explicitly last.      |
+| Step | File                                             | Gates                          |
+| ---- | ------------------------------------------------ | ------------------------------ |
+| 0    | Done. See "Completed" below.                     | —                              |
+| —    | [00-test-environment.md](00-test-environment.md) | Reference. Read before step 1. |
+| 1    | Done. See "Completed" below.                     | —                              |
+| 2    | Done. See "Completed" below.                     | —                              |
+| 3    | Done. See "Completed" below.                     | —                              |
+| 4    | Done. See "Completed" below.                     | —                              |
+| 5    | Done. See "Completed" below.                     | —                              |
+| 6    | Done. See "Completed" below.                     | —                              |
+| 7    | [07-game-profiles.md](07-game-profiles.md)       | Part done. Three games wait.   |
+| 8    | Done. See "Completed" below.                     | —                              |
+| 9    | Done. See "Completed" below.                     | Needs a real ASI mod sample.   |
+| 10   | [10-texmod.md](10-texmod.md)                     | Nothing. Explicitly last.      |
 
-Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, and 8 are done. **The success criterion of the project brief passes.**
+Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, 8, and 9 are done. **The success criterion of the project brief passes.**
 
 **Step 7 is part done.** The plumbing carries any number of games, and the application manages three of the six targets. Underground 1, Carbon, and Undercover wait for a listing of a real install. Read the Results section of [07-game-profiles.md](07-game-profiles.md).
 
@@ -157,6 +157,22 @@ Five facts carry forward.
 3. **`absolute` in a filesystem command means the game directory and not the root of the filesystem.** A well behaved script therefore stays inside staging on its own. Two forms escape. A `..` segment climbs out, and `Path.Combine` drops the anchor when the second path is rooted. `PathSandbox` tests for both, and it converts the separator first because the scripts write a backslash.
 4. **We refuse `stop_errors` and `speedreflect`.** `stop_errors true` makes the library drop every later error of that script, which defeats our deploy rule. `speedreflect` copies a GPL-3.0 file that we do not ship. See defect 11.
 5. **`unlock_memory` is disk modding after all.** It writes a short header over a memory file of the game directory. Staging covers it and the revert restores it, so it needs no special handling. The step 8 pitfall said the opposite and is corrected.
+
+### Step 9 — ASI configuration and the loader
+
+**Done.** The window shows the options of an ASI mod grouped by section, a question mark marker holds the comment of each key, and a deploy writes the answers into the staging copy. Two mods that both ship `dinput8.dll` produce one prompt, one deployed file, and a log line that names the winner and the losers. Read [09-asi-configuration.md](09-asi-configuration.md) for the format rules, the awkward cases, and the type list.
+
+The test count went from 241 to 293. `tools/run-deploy-test.sh` still passes, and the container bytes match step 6 exactly.
+
+**Every test mod of this step is synthetic.** This repository holds no real ASI mod. `tests/BlackboxModManager.Tests/AsiFixture.cs` reproduces the documented shape of the Widescreen Fix. Import a real ASI mod and walk the panel before you trust part A. Read the "What is open" section of the step file.
+
+Five facts carry forward.
+
+1. **The raw line is the truth for an `.ini` file.** The reader keeps every line with its terminator and records the character span of the value. The writer replaces those characters and nothing else, so the comment, the alignment, and the blank lines survive. A user sees one difference per changed value. Never rebuild a line from the model.
+2. **A comment is not a schema.** The editor comes from the value alone. A comment such as `(1 = Cropped | 2 = Stretched)` reads like a list of choices, and a drop-down built from one would lock the user out of a legal value. Every row also carries a `Text` toggle, because `FPSLimit = -1` and `ImproveGamepadSupport = 0` both defeat the guess.
+3. **The profile holds the differences and not the file.** An answer whose value matches the mod leaves the profile, so the deployed file matches the mod store again. `DeployPolicy.WritableExtensions` must keep `.ini`, or a write would reach the mod store through a hard link.
+4. **An edited file cannot be verified against the mod store.** `DeployedFile.Edited` says that the deploy changed the content on purpose, and `StagingVerifier` then checks existence and a length above zero. Any future engine that rewrites a placed file must set that flag.
+5. **Never pick an ASI loader automatically.** A proxy DLL forwards to the real system library, and a version that forwards wrongly breaks sound or input rather than a plugin. Version numbers on these files are often absent or wrong, so the dialog shows what the file holds, ranks nothing, and preselects nothing but the current answer. `LoaderPreflight` stops a deploy that has no answer, and the window asks.
 
 ## Reference files
 

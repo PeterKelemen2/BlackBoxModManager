@@ -27,12 +27,95 @@ namespace BlackboxModManager.Core.Profiles
 		/// </summary>
 		public ModSelections Selections { get; set; } = new ModSelections();
 
+		/// <summary>
+		/// What the user chose for each <c>.ini</c> option of this mod.
+		///
+		/// The outer key is the path of the file inside the game directory. The inner key is
+		/// <c>SECTION/Key</c>. This stays empty for a Binary mod and for a mod whose settings
+		/// the user never changed.
+		///
+		/// <b>The file in the mod store never changes.</b> The deploy applies these answers to
+		/// the copy in the staging directory. Step 9 owns this.
+		/// </summary>
+		public Dictionary<string, Dictionary<string, string>> IniSettings { get; set; } =
+			new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
 		public ProfileEntry() { }
 
 		public ProfileEntry(string modId, bool enabled)
 		{
 			this.ModId = modId;
 			this.Enabled = enabled;
+		}
+
+		/// <summary>
+		/// The answers for one settings file, or an empty map. The result is a live reference
+		/// only when the entry already holds one. Call <see cref="EnsureIni"/> to write.
+		/// </summary>
+		public IReadOnlyDictionary<string, string> IniFor(string relativePath)
+		{
+			if (relativePath is null) return new Dictionary<string, string>();
+
+			return this.IniSettings.TryGetValue(relativePath, out Dictionary<string, string> answers)
+				? answers
+				: new Dictionary<string, string>();
+		}
+
+		/// <summary>Returns the answer map of one settings file and makes one when it is absent.</summary>
+		public Dictionary<string, string> EnsureIni(string relativePath)
+		{
+			if (String.IsNullOrWhiteSpace(relativePath))
+			{
+				throw new ArgumentException("The settings file path is empty.", nameof(relativePath));
+			}
+
+			if (!this.IniSettings.TryGetValue(relativePath, out Dictionary<string, string> answers))
+			{
+				answers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+				this.IniSettings[relativePath] = answers;
+			}
+
+			return answers;
+		}
+
+		/// <summary>
+		/// Stores one answer, or removes it when the value matches the value of the file.
+		///
+		/// <b>An answer that matches the file is not an answer.</b> The profile holds the
+		/// differences from the mod, so a value that the user set back to the original leaves
+		/// the profile again. The deployed file then matches the mod store byte for byte.
+		/// </summary>
+		public void SetIni(string relativePath, string key, string value, string original)
+		{
+			Dictionary<string, string> answers = this.EnsureIni(relativePath);
+
+			if (String.Equals(value?.Trim(), original?.Trim(), StringComparison.Ordinal))
+			{
+				answers.Remove(key);
+
+				if (answers.Count == 0) this.IniSettings.Remove(relativePath);
+
+				return;
+			}
+
+			answers[key] = value ?? String.Empty;
+		}
+
+		/// <summary>How many options of this mod the profile changed.</summary>
+		[JsonIgnore]
+		public int IniAnswerCount
+		{
+			get
+			{
+				int count = 0;
+
+				foreach (KeyValuePair<string, Dictionary<string, string>> entry in this.IniSettings)
+				{
+					count += entry.Value?.Count ?? 0;
+				}
+
+				return count;
+			}
 		}
 	}
 
@@ -62,6 +145,19 @@ namespace BlackboxModManager.Core.Profiles
 		/// collision.
 		/// </summary>
 		public List<ProfileEntry> Entries { get; set; } = new List<ProfileEntry>();
+
+		/// <summary>
+		/// Which mod supplies each ASI loader file, keyed by the file name.
+		///
+		/// The game directory holds one file at each loader path, and several mods ship one
+		/// each. The value is the store identifier of the mod that the user chose.
+		///
+		/// <b>Never fill this in without asking the user.</b> A proxy DLL forwards to the real
+		/// system library, and a version that forwards wrongly breaks sound or input rather
+		/// than the plugin. Step 9 owns this.
+		/// </summary>
+		public Dictionary<string, string> LoaderChoices { get; set; } =
+			new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 		[JsonIgnore]
 		public int EnabledCount
@@ -195,6 +291,33 @@ namespace BlackboxModManager.Core.Profiles
 			}
 
 			return found;
+		}
+
+		/// <summary>
+		/// Stores the mod that supplies one loader file. Pass a null or empty mod identifier to
+		/// return to "ask me again".
+		/// </summary>
+		public void ChooseLoader(string proxyName, string modId)
+		{
+			if (String.IsNullOrWhiteSpace(proxyName))
+			{
+				throw new ArgumentException("The loader file name is empty.", nameof(proxyName));
+			}
+
+			if (String.IsNullOrWhiteSpace(modId))
+			{
+				this.LoaderChoices.Remove(proxyName);
+				return;
+			}
+
+			this.LoaderChoices[proxyName] = modId;
+		}
+
+		public string LoaderChoice(string proxyName)
+		{
+			if (String.IsNullOrWhiteSpace(proxyName)) return null;
+
+			return this.LoaderChoices.TryGetValue(proxyName, out string modId) ? modId : null;
 		}
 
 		public override string ToString() => $"{this.Name} ({this.EnabledCount} of {this.Entries.Count} enabled)";

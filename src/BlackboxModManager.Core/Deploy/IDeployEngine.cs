@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Games;
 using BlackboxModManager.Core.Profiles;
 using BlackboxModManager.Core.Store;
@@ -36,10 +37,21 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public Action<string> Log { get; }
 
+		/// <summary>
+		/// Which mod supplies each ASI loader file. This is null when the caller built no plan,
+		/// and the link engine then places every copy and the last mod of the load order wins.
+		///
+		/// <b>DeployService builds the plan and refuses an unanswered contest.</b> The engine
+		/// reads the plan and skips the copy of every mod that lost. See step 9.
+		/// </summary>
+		public ProxyPlan Proxies { get; }
+
 		public DeployContext(GameInstall game, string stagingDirectory, Profile profile,
-			ModStore store, BinaryInstall binary = null, Action<string> log = null)
+			ModStore store, BinaryInstall binary = null, Action<string> log = null,
+			ProxyPlan proxies = null)
 		{
 			this.Binary = binary;
+			this.Proxies = proxies;
 
 			this.Game = game ?? throw new ArgumentNullException(nameof(game));
 			this.Profile = profile ?? throw new ArgumentNullException(nameof(profile));
