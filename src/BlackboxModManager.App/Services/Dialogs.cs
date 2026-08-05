@@ -65,14 +65,21 @@ namespace BlackboxModManager.App.Services
 				== MessageBoxResult.Yes;
 		}
 
+		/// <summary>
+		/// Reports a failure and lets the user copy the text.
+		///
+		/// <b>Every error goes through this and never through MessageBox.</b> A message box
+		/// gives the user no way to copy the text, and an error of this application names a
+		/// path, a mod, a script line, or a message from one of the three libraries.
+		/// </summary>
 		public static void ShowError(Window owner, string message, string title = "The operation failed.")
 		{
-			MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+			MessageWindow.Show(owner, title, title, message, "Copy error");
 		}
 
 		public static void ShowMessage(Window owner, string message, string title = "Blackbox Mod Manager")
 		{
-			MessageBox.Show(owner, message, title, MessageBoxButton.OK, MessageBoxImage.Information);
+			MessageWindow.Show(owner, title, null, message, "Copy text");
 		}
 	}
 }

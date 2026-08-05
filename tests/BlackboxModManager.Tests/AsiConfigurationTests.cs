@@ -69,6 +69,55 @@ namespace BlackboxModManager.Tests
 		}
 
 		[Fact]
+		public void ASettingsSuffixMatchesThePluginAndSaysThatItIsAGuess()
+		{
+			// Extra Options ships NFSU2ExtraOptions.asi and NFSU2ExtraOptionsSettings.ini. An
+			// exact name match alone reports no owner for a file whose owner is obvious.
+			string root = Path.Combine(this._temp.Path, "source", "Suffix");
+			Directory.CreateDirectory(Path.Combine(root, "scripts"));
+			File.WriteAllText(Path.Combine(root, "scripts", "NFSU2ExtraOptions.asi"), "plugin");
+			File.WriteAllText(Path.Combine(root, "scripts", "NFSU2ExtraOptionsSettings.ini"),
+				AsiFixture.SlashSettingsText);
+
+			AsiSettingsFile file = Assert.Single(AsiLayoutReader.Read(root).Settings);
+
+			Assert.Equal(AsiMatchKind.NameWithSuffix, file.MatchKind);
+			Assert.Equal("scripts/NFSU2ExtraOptions.asi", file.PluginPath);
+			Assert.StartsWith("Probably", file.Owner(), StringComparison.Ordinal);
+		}
+
+		[Fact]
+		public void AnExactNameBeatsASuffixMatch()
+		{
+			string root = Path.Combine(this._temp.Path, "source", "Both");
+			Directory.CreateDirectory(Path.Combine(root, "scripts"));
+			File.WriteAllText(Path.Combine(root, "scripts", "Plugin.asi"), "plugin");
+			File.WriteAllText(Path.Combine(root, "scripts", "Plugin.ini"), "[A]\nx = 1\n");
+			File.WriteAllText(Path.Combine(root, "scripts", "PluginSettings.ini"), "[A]\ny = 2\n");
+
+			AsiLayout layout = AsiLayoutReader.Read(root);
+
+			Assert.Equal(AsiMatchKind.Exact, layout.Find("scripts/Plugin.ini").MatchKind);
+			Assert.Equal(AsiMatchKind.NameWithSuffix, layout.Find("scripts/PluginSettings.ini").MatchKind);
+		}
+
+		[Fact]
+		public void AnUnrelatedWordAfterThePluginNameIsNoMatch()
+		{
+			// Only one known word counts. A file named PluginNotes.ini belongs to nothing that
+			// this application knows.
+			string root = Path.Combine(this._temp.Path, "source", "Unrelated");
+			Directory.CreateDirectory(Path.Combine(root, "scripts"));
+			File.WriteAllText(Path.Combine(root, "scripts", "Plugin.asi"), "plugin");
+			File.WriteAllText(Path.Combine(root, "scripts", "PluginNotes.ini"), "[A]\nx = 1\n");
+
+			AsiSettingsFile file = Assert.Single(AsiLayoutReader.Read(root).Settings);
+
+			Assert.Equal(AsiMatchKind.None, file.MatchKind);
+			Assert.False(file.HasPlugin);
+		}
+
+		[Fact]
 		public void AnUnmatchedSettingsFileCarriesNoPlugin()
 		{
 			// Not every .ini beside a plugin is the settings of that plugin. The window shows an
@@ -214,6 +263,54 @@ namespace BlackboxModManager.Tests
 			this._service.Revert(this._game.Install(), this._log.Add);
 
 			Assert.False(File.Exists(this._game.FullPath(AsiFixture.SettingsPath)));
+		}
+
+		[Fact]
+		public void ADeployWritesIntoAFileThatUsesSlashComments()
+		{
+			// The Extra Options mod comments every line with "//". A reader built for the
+			// Widescreen Fix alone reads the comment as part of the value, and the deploy then
+			// writes a value that carries a sentence.
+			string root = Path.Combine(this._temp.Path, "source", "Extra Options");
+
+			AsiFixture.Write(root, null, AsiFixture.SlashSettingsText);
+
+			InstalledMod mod = this._importer.Import(root, GameINT.Underground2, "Extra Options").Mod;
+			Profile profile = this.ProfileWith(mod);
+
+			profile.Find(mod.Id).SetIni(AsiFixture.SettingsPath, "Hotkeys/Headlights", "72", "71");
+
+			DeployResult result = this.Deploy(profile);
+
+			Assert.True(result.Verification.IsClean, String.Join(" ", result.Verification.Problems));
+
+			IniDocument deployed = IniReader.Read(this._game.FullPath(AsiFixture.SettingsPath));
+			IniEntry entry = deployed.Find(new IniKey("Hotkeys", "Headlights"));
+
+			Assert.Equal("72", entry.Value);
+			Assert.Equal("Toggles Headlights on/off. (Default = 71 = G key)", entry.Comment);
+
+			// The header comment of the section changes nothing about the section name, and the
+			// value of every other key stays as the mod shipped it.
+			Assert.Equal(new[] { "Hotkeys", "Gameplay" },
+				deployed.Sections.Select(s => s.Name).ToArray());
+			Assert.Equal("36", deployed.Find(new IniKey("Hotkeys", "AnyTrackInAnyMode")).Value);
+			Assert.Equal("0.75", deployed.Find(new IniKey("Gameplay", "LowBeamBrightness")).Value);
+		}
+
+		[Fact]
+		public void EveryKeyOfASlashCommentedFileCarriesItsHelpText()
+		{
+			string root = Path.Combine(this._temp.Path, "source", "Extra Options");
+
+			AsiFixture.Write(root, null, AsiFixture.SlashSettingsText);
+
+			InstalledMod mod = this._importer.Import(root, GameINT.Underground2, "Extra Options").Mod;
+			AsiSettingsFile file = AsiLayoutReader.Read(mod.ContentRoot).Find(AsiFixture.SettingsPath);
+
+			Assert.Empty(file.Document.Warnings);
+			Assert.All(file.Document.Entries, e => Assert.NotEqual(String.Empty, e.Comment));
+			Assert.All(file.Document.Entries, e => Assert.DoesNotContain("//", e.Value, StringComparison.Ordinal));
 		}
 
 		[Fact]

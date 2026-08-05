@@ -186,12 +186,7 @@ namespace BlackboxModManager.App.ViewModels
 			if (file is null) throw new ArgumentNullException(nameof(file));
 			if (entry is null) throw new ArgumentNullException(nameof(entry));
 
-			string owner = file.HasPlugin
-				? $"The settings of {System.IO.Path.GetFileName(file.PluginPath)}."
-				: "This application found no plugin with a matching name. The file may belong to " +
-					"something else.";
-
-			var model = new SettingsFileViewModel(file.Name, owner);
+			var model = new SettingsFileViewModel(file.Name, file.Owner());
 
 			if (!file.IsReadable)
 			{

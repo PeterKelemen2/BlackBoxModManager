@@ -30,7 +30,7 @@ Four things matter.
 
 - A line in brackets starts a section. Every key below it belongs to that section until the next bracket line.
 - A `key = value` line holds one option.
-- A comment starts at `;` or at `#`. The sample uses `;` alone. Accept both, and remember which character the file used.
+- A comment starts at `;` or at `#`. The sample uses `;` alone. Accept both, and remember which character the file used. **The Extra Options mod uses `//`, so the reader accepts that too. Read the Results section.**
 - A comment on the same line as a key is the help text of that key. A comment on its own line belongs to the file or to the section.
 
 ### What the window shows
@@ -153,20 +153,25 @@ The writer also keeps the comment in its column. It grows or shrinks the whitesp
 
 Four rules of the format, each with a test.
 
-| Rule                                           | What the reader does                                             |
-| ---------------------------------------------- | ---------------------------------------------------------------- |
-| A line in brackets starts a section.           | Every key below it belongs to that section.                      |
-| A `key = value` line holds one option.         | The value is the text up to the comment, trimmed.                |
-| A comment starts at `;` or at `#`.             | Both work. The line remembers which character the file used.     |
-| A comment beside a key is the help text of it. | A comment on its own line belongs to the file or to the section. |
+| Rule                                            | What the reader does                                             |
+| ----------------------------------------------- | ---------------------------------------------------------------- |
+| A line in brackets starts a section.            | Every key below it belongs to that section.                      |
+| A `key = value` line holds one option.          | The value is the text up to the comment, trimmed.                |
+| A comment starts at `;`, at `#`, or at `//`.     | All three work. The line remembers which marker it used.         |
+| A comment beside a key is the help text of it.  | A comment on its own line belongs to the file or to the section. |
 
-Five awkward cases, each with a test.
+**Three comment markers are real, and one file uses one of them.** The Widescreen Fix writes `;` and Extra Options writes `//`. No plugin declares which marker it reads, so the reader accepts all three and it keeps the marker of each line. `IniLine.CommentMarker` is a string and not a character, because `//` is two characters wide and the writer needs that width to keep the comment in its column.
+
+The scan tests `//` before `;` and `#`. A scan that tested a single character first would report a comment one character short and leave a slash on the end of the value.
+
+Six awkward cases, each with a test.
 
 1. **A key outside every section is legal.** It lands in a section whose name is empty. The window shows it under "Keys above the first section".
 2. **A duplicate key is legal and it makes an edit ambiguous.** Both lines stay in the model. The writer edits the first one, the reader warns, and the panel shows one row.
 3. **A line with no equal sign passes through unchanged** and produces a warning.
 4. **A comment character inside quotes is part of the value.**
-5. **A value that the writer would break gets cleaned.** A line terminator would split one option into two lines, and a semicolon would turn the rest of the value into a comment. The writer removes both.
+5. **A value that the writer would break gets cleaned.** A line terminator would split one option into two lines, and a comment marker would turn the rest of the value into a comment. The writer removes them. One slash is legal and two are not, so a run of slashes collapses to one and a path such as `save/profile` survives.
+6. **A section header can carry a comment.** Extra Options writes `[Hotkeys] // Look at ... for key values`. The name ends at the closing bracket, so the comment changes nothing about it.
 
 ### The editor guess
 
@@ -214,6 +219,12 @@ Two tabs joined the right-hand panel.
 
 **Settings** shows one panel per settings file of the selected mod, one group per section, and one row per key. The row holds the key name, the editor, the question mark marker, the `Text` toggle, and the `Reset` button. A file that matches no plugin gets its own heading and a line that says so, because not every `.ini` beside a plugin is the settings of that plugin.
 
+**Every error dialog holds a `Copy error` button.** `Views/MessageWindow.xaml` replaced the message box. A message box gives the user no way to copy the text, and an error of this application names a path, a mod, a script line, or a message from one of the three libraries. The window shows the text in a read-only box that selects and scrolls, and the button copies the heading and the body together. A clipboard that another program holds makes the copy fail, and the window then says so and selects the text rather than closing.
+
+The dispatcher handler of `App.xaml.cs` uses the same window and it carries the whole exception, so a defect report holds the stack. **It falls back to a message box.** A render failure is one of the exceptions that reaches that handler, and a new WPF window can fail for the same reason. A message box is a native dialog and it needs no render path.
+
+Run `BlackboxModManager.exe --dialogtest` to open the error dialog on demand. A XAML error in a dialog surfaces when the dialog opens, and the error dialog opens when something already went wrong. That is the worst moment to find out.
+
 **Loader** shows one row per loader file with its current supplier, the version of that file, and a `Choose` button. The dialog lists every candidate with the mod name, the load order position, the size, and the version. It ranks nothing and it preselects only the current answer. The last row of the dialog is "Ask me again", which clears the stored answer.
 
 **A resupply needs a redeploy, and the window says so.** Every row of the Loader tab that holds a contest ends with "A change needs a new deploy", and the status bar says the same after a change. The Settings header says it too.
@@ -244,7 +255,16 @@ Two tabs joined the right-hand panel.
 
 `tools/run-deploy-test.sh` still passes end to end, and `GlobalB.lzc` grew from 5,145,778 to 8,263,472 bytes. That matches steps 1, 6, and 8 to the byte, so this step changed no container output.
 
-The window starts under Wine, and the two new tabs load. That proves the XAML parses. **Nobody has looked at the panels with a real ASI mod in the store.**
+The window starts under Wine, and the two new tabs load. `BlackboxModManager.exe --dialogtest` opens the error dialog, and it renders. That proves that every new piece of XAML parses on the run platform.
+
+**Two real ASI mods are now in the store of this machine.** The Widescreen Fix of Underground 2 and the Extra Options mod version 5.1.0.1340. The reader handles both.
+
+| Mod             | Comment marker | Sections | Keys | Warnings | Plugin match       |
+| --------------- | -------------- | -------- | ---- | -------- | ------------------ |
+| Widescreen Fix  | `;`            | 6        | 33   | 0        | The names are the same. |
+| Extra Options   | `//`           | 9        | 64   | 0        | The name plus `Settings`. |
+
+Both files round trip byte for byte, and a change to one value produces exactly one differing line with the comment still in its column. **Neither mod has been deployed to a real install and started yet.**
 
 ### Facts that carry forward
 
@@ -256,7 +276,9 @@ The window starts under Wine, and the two new tabs load. That proves the XAML pa
 
 ### What is open
 
-**No real ASI mod has been through this.** Every test builds its mod by hand from the format that this file documents. The parser handles the documented shape and five awkward cases, and a real Widescreen Fix release could hold a sixth. **Import a real ASI mod, open the Settings tab, change a value, deploy, and read the file** before you call part A proven.
+**No ASI mod has reached a running game yet.** The reader handles both real mods, and the deploy path is proven against synthetic mods only. **Deploy the Widescreen Fix to the scratch copy, start the game, and confirm that a changed option takes effect.** No automated check can answer that.
+
+**Nobody has clicked through the Settings panel of a real mod.** The Extra Options file holds 64 keys in 9 sections, and 43 of them read as a flag. The panel builds 64 rows, and no one has scrolled it.
 
 **The proxy name list holds one name.** `ProxyNames.Default` holds `dinput8.dll` alone, because that is the name that the samples use. `ProxyNames.Known` holds five more, and a mod that supplies one of those produces a note in the log that says that the last mod of the load order wins it. Move a name from `Known` to `Default` when a real mod uses it.
 

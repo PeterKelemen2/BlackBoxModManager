@@ -162,17 +162,19 @@ Five facts carry forward.
 
 **Done.** The window shows the options of an ASI mod grouped by section, a question mark marker holds the comment of each key, and a deploy writes the answers into the staging copy. Two mods that both ship `dinput8.dll` produce one prompt, one deployed file, and a log line that names the winner and the losers. Read [09-asi-configuration.md](09-asi-configuration.md) for the format rules, the awkward cases, and the type list.
 
-The test count went from 241 to 293. `tools/run-deploy-test.sh` still passes, and the container bytes match step 6 exactly.
+The test count went from 241 to 304. `tools/run-deploy-test.sh` still passes, and the container bytes match step 6 exactly.
 
-**Every test mod of this step is synthetic.** This repository holds no real ASI mod. `tests/BlackboxModManager.Tests/AsiFixture.cs` reproduces the documented shape of the Widescreen Fix. Import a real ASI mod and walk the panel before you trust part A. Read the "What is open" section of the step file.
+**The reader handles two real mods, and the deploy path is tested against synthetic ones.** The Widescreen Fix and the Extra Options mod both parse with no warning, they round trip byte for byte, and each resolves its plugin. Every deploy test builds its mod by hand, because this repository ships no ASI mod. **No ASI mod has reached a running game yet.** Read the "What is open" section of the step file.
 
-Five facts carry forward.
+Seven facts carry forward.
 
 1. **The raw line is the truth for an `.ini` file.** The reader keeps every line with its terminator and records the character span of the value. The writer replaces those characters and nothing else, so the comment, the alignment, and the blank lines survive. A user sees one difference per changed value. Never rebuild a line from the model.
-2. **A comment is not a schema.** The editor comes from the value alone. A comment such as `(1 = Cropped | 2 = Stretched)` reads like a list of choices, and a drop-down built from one would lock the user out of a legal value. Every row also carries a `Text` toggle, because `FPSLimit = -1` and `ImproveGamepadSupport = 0` both defeat the guess.
-3. **The profile holds the differences and not the file.** An answer whose value matches the mod leaves the profile, so the deployed file matches the mod store again. `DeployPolicy.WritableExtensions` must keep `.ini`, or a write would reach the mod store through a hard link.
-4. **An edited file cannot be verified against the mod store.** `DeployedFile.Edited` says that the deploy changed the content on purpose, and `StagingVerifier` then checks existence and a length above zero. Any future engine that rewrites a placed file must set that flag.
-5. **Never pick an ASI loader automatically.** A proxy DLL forwards to the real system library, and a version that forwards wrongly breaks sound or input rather than a plugin. Version numbers on these files are often absent or wrong, so the dialog shows what the file holds, ranks nothing, and preselects nothing but the current answer. `LoaderPreflight` stops a deploy that has no answer, and the window asks.
+2. **Three comment markers are real.** The Widescreen Fix writes `;` and Extra Options writes `//`. No plugin declares which one it reads, so the reader accepts `;`, `#`, and `//`, and it keeps the marker of each line. `IniLine.CommentMarker` is a string because `//` is two characters wide.
+3. **A comment is not a schema.** The editor comes from the value alone. A comment such as `(1 = Cropped | 2 = Stretched)` reads like a list of choices, and a drop-down built from one would lock the user out of a legal value. Every row also carries a `Text` toggle, because `FPSLimit = -1` and `ImproveGamepadSupport = 0` both defeat the guess.
+4. **The profile holds the differences and not the file.** An answer whose value matches the mod leaves the profile, so the deployed file matches the mod store again. `DeployPolicy.WritableExtensions` must keep `.ini`, or a write would reach the mod store through a hard link.
+5. **An edited file cannot be verified against the mod store.** `DeployedFile.Edited` says that the deploy changed the content on purpose, and `StagingVerifier` then checks existence and a length above zero. Any future engine that rewrites a placed file must set that flag.
+6. **Never pick an ASI loader automatically.** A proxy DLL forwards to the real system library, and a version that forwards wrongly breaks sound or input rather than a plugin. Version numbers on these files are often absent or wrong, so the dialog shows what the file holds, ranks nothing, and preselects nothing but the current answer. `LoaderPreflight` stops a deploy that has no answer, and the window asks.
+7. **Every error dialog holds a `Copy error` button.** `Views/MessageWindow.xaml` replaced the message box, because a message box gives the user no way to copy the text. The dispatcher handler uses the same window and falls back to a message box, because a render failure can break a new WPF window. Run `BlackboxModManager.exe --dialogtest` to open the dialog on the run platform.
 
 ## Reference files
 

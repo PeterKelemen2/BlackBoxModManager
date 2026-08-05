@@ -54,6 +54,24 @@ namespace BlackboxModManager.Tests
 			"FPSLimit = -1               ; Use '-1' for the refresh rate of the monitor.\r\n";
 
 		/// <summary>
+		/// The settings text of the second real sample, the Extra Options mod of Underground 2.
+		///
+		/// This file uses <c>//</c> for every comment, and it writes a comment after the
+		/// section header. A reader built for the Widescreen Fix alone reads the whole of it as
+		/// keys with no comment, and it reads the header comment as part of nothing.
+		/// </summary>
+		public const string SlashSettingsText =
+			"[Hotkeys] // Look at http://cherrytree.at/misc/vk.htm for key values (decimal)\r\n" +
+			"AnyTrackInAnyMode = 36              // Shows all race tracks in every game mode. (Default = 36 = Home Key)\r\n" +
+			"Headlights = 71                     // Toggles Headlights on/off. (Default = 71 = G key)\r\n" +
+			"EnableSaveLoadHotPos = 0            // Lets you save your position on the world. (0 = False (Default), 1 = True)\r\n" +
+			"\r\n" +
+			"[Gameplay]\r\n" +
+			"GameSpeed = 1                       // Speed modifier for races. (ONLY FOR EXPERTS) (Default = 1.0)\r\n" +
+			"LowBeamBrightness = 0.75            // Headlight brightness for Low Beam setting. (Default = 0.75)\r\n" +
+			"StartingCash = 0                    // Starts the game with specified amount of cash. (Default = 0)\r\n";
+
+		/// <summary>
 		/// Writes one ASI mod into a directory. Pass a loader body to make the mod supply
 		/// <c>dinput8.dll</c>, and pass null to leave it out.
 		/// </summary>

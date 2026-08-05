@@ -30,9 +30,10 @@ namespace BlackboxModManager.App
 		/// Reports an exception that reached the dispatcher, and keeps the application alive.
 		///
 		/// <b>Set Handled first.</b> An unhandled exception here ends the process, and the
-		/// message box does not stop that. It only delays it. Worse, the box pumps messages
-		/// while it waits, so the failing render runs again and raises the same exception
-		/// again. The user then gets a storm of dialogs and a crash.
+		/// dialog does not stop that. It only delays it. Worse, a dialog pumps messages while
+		/// it waits, so the failing render runs again and raises the same exception again. The
+		/// user then gets a storm of dialogs and a crash. The <c>_showingError</c> guard is what
+		/// stops the storm, and it holds for any kind of dialog.
 		///
 		/// Every disk operation of the application already reports its own failure through
 		/// MainViewModel.RunAsync. An exception that arrives here is a defect in the window,
@@ -49,14 +50,29 @@ namespace BlackboxModManager.App
 
 			this._showingError = true;
 
+			const string Title = "The window hit an error.";
+
+			// Carry the whole exception and not the message alone. This dialog reports a defect
+			// in the window, so the copy has to hold the stack that names the line.
+			string body =
+				$"{e.Exception.Message}{Environment.NewLine}{Environment.NewLine}" +
+				$"The application wrote the detail to:{Environment.NewLine}{file}{Environment.NewLine}{Environment.NewLine}" +
+				$"The application keeps running. Save your work and start it again." +
+				$"{Environment.NewLine}{Environment.NewLine}{e.Exception}";
+
 			try
 			{
-				MessageBox.Show(
-					$"{e.Exception.Message}\n\nThe application wrote the detail to:\n{file}\n\n" +
-					"The application keeps running. Save your work and start it again.",
-					"The window hit an error.",
-					MessageBoxButton.OK,
-					MessageBoxImage.Error);
+				try
+				{
+					Views.MessageWindow.Show(this.MainWindow, Title, Title, body, "Copy error");
+				}
+				catch (Exception)
+				{
+					// A render failure reached this handler, so a new WPF window can fail too.
+					// A message box is a native dialog and it does not need the render path.
+					// The user loses the copy button and still reads the message.
+					MessageBox.Show(body, Title, MessageBoxButton.OK, MessageBoxImage.Error);
+				}
 			}
 			finally
 			{

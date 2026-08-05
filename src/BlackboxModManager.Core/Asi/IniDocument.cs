@@ -105,13 +105,19 @@ namespace BlackboxModManager.Core.Asi
 		public string Value { get; }
 
 		/// <summary>
-		/// The comment that follows the value on this line, with no comment character and
+		/// The comment that follows the value on this line, with no comment marker and
 		/// trimmed. Empty when the line carries none.
 		/// </summary>
 		public string Comment { get; }
 
-		/// <summary>The character that opened the comment, or the null character for none.</summary>
-		public char CommentChar { get; }
+		/// <summary>
+		/// The marker that opened the comment, or an empty string for none.
+		///
+		/// Three markers exist and one file uses one of them. The Widescreen Fix uses
+		/// <c>;</c> and Extra Options uses <c>//</c>. The writer needs the marker of the line
+		/// to keep the comment in its column.
+		/// </summary>
+		public string CommentMarker { get; }
 
 		/// <summary>Where the value starts inside <see cref="Raw"/>.</summary>
 		public int ValueStart { get; }
@@ -120,13 +126,13 @@ namespace BlackboxModManager.Core.Asi
 		public int ValueLength { get; }
 
 		/// <summary>
-		/// The whitespace between the end of the value and the comment character. The writer
+		/// The whitespace between the end of the value and the comment marker. The writer
 		/// keeps the comment in its column by changing this run.
 		/// </summary>
 		public int PadLength { get; }
 
 		public IniLine(string raw, string terminator, IniLineKind kind, int number, string section,
-			string key = null, string value = null, string comment = null, char commentChar = '\0',
+			string key = null, string value = null, string comment = null, string commentMarker = null,
 			int valueStart = -1, int valueLength = 0, int padLength = 0)
 		{
 			this.Raw = raw ?? String.Empty;
@@ -137,13 +143,14 @@ namespace BlackboxModManager.Core.Asi
 			this.Key = key ?? String.Empty;
 			this.Value = value ?? String.Empty;
 			this.Comment = comment ?? String.Empty;
-			this.CommentChar = commentChar;
+			this.CommentMarker = commentMarker ?? String.Empty;
 			this.ValueStart = valueStart;
 			this.ValueLength = valueLength;
 			this.PadLength = padLength;
 		}
 
-		public bool HasComment => this.CommentChar != '\0' && this.Comment.Length > 0;
+		/// <summary>True when a comment marker follows the value on this line.</summary>
+		public bool HasComment => this.CommentMarker.Length > 0;
 
 		public override string ToString() => $"{this.Number}: {this.Raw}";
 	}
@@ -287,14 +294,23 @@ namespace BlackboxModManager.Core.Asi
 	///
 	/// 1. A line in brackets starts a section. Every key below it belongs to that section.
 	/// 2. A <c>key = value</c> line holds one option.
-	/// 3. A comment starts at <c>;</c> or at <c>#</c>. The reader accepts both and it
-	///    remembers which one the file used.
+	/// 3. A comment starts at <c>;</c>, at <c>#</c>, or at <c>//</c>. The reader accepts all
+	///    three and it remembers which one the line used.
 	/// 4. A comment on the same line as a key is the help text of that key.
 	/// </summary>
 	public static class IniReader
 	{
-		/// <summary>The two characters that open a comment.</summary>
-		public static IReadOnlyList<char> CommentChars { get; } = new[] { ';', '#' };
+		/// <summary>
+		/// The markers that open a comment.
+		///
+		/// <b>All three are real.</b> The Widescreen Fix of Underground 2 uses <c>;</c> and
+		/// Extra Options uses <c>//</c>. No plugin declares which one it reads, so this
+		/// application accepts every one of them and it keeps the marker of each line.
+		///
+		/// Order matters for the scan. Put a longer marker before a shorter one that starts
+		/// it, or the shorter one wins and the reader reports the wrong length.
+		/// </summary>
+		public static IReadOnlyList<string> CommentMarkers { get; } = new[] { "//", ";", "#" };
 
 		public static IniDocument Read(string path)
 		{
@@ -410,10 +426,12 @@ namespace BlackboxModManager.Core.Asi
 				return new IniLine(raw, terminator, IniLineKind.Blank, number, section);
 			}
 
-			if (IsCommentChar(trimmed[0]))
+			string opener = MarkerAt(trimmed, 0);
+
+			if (opener != null)
 			{
 				return new IniLine(raw, terminator, IniLineKind.Comment, number, section,
-					comment: trimmed.Substring(1).Trim(), commentChar: trimmed[0]);
+					comment: trimmed.Substring(opener.Length).Trim(), commentMarker: opener);
 			}
 
 			if (trimmed[0] == '[')
@@ -425,6 +443,9 @@ namespace BlackboxModManager.Core.Asi
 
 				string name = trimmed.Substring(1, close - 1).Trim();
 
+				// A section header can carry a comment of its own. Extra Options writes
+				// "[Hotkeys] // Look at ... for key values". The bracket name ends at the
+				// closing bracket, so the comment changes nothing about the name.
 				return new IniLine(raw, terminator, IniLineKind.Section, number, name, key: name);
 			}
 
@@ -437,7 +458,7 @@ namespace BlackboxModManager.Core.Asi
 			if (key.Length == 0) return new IniLine(raw, terminator, IniLineKind.Unknown, number, section);
 
 			// Everything after the equal sign is the value, up to the comment.
-			int comment = CommentStart(raw, equals + 1);
+			(int comment, string marker) = CommentStart(raw, equals + 1);
 			int end = comment < 0 ? raw.Length : comment;
 
 			int valueStart = equals + 1;
@@ -448,38 +469,65 @@ namespace BlackboxModManager.Core.Asi
 
 			while (valueEnd > valueStart && IsSpace(raw[valueEnd - 1])) --valueEnd;
 
-			string commentText = comment < 0 ? String.Empty : raw.Substring(comment + 1).Trim();
+			string commentText = comment < 0
+				? String.Empty
+				: raw.Substring(comment + marker.Length).Trim();
 
 			return new IniLine(raw, terminator, IniLineKind.Entry, number, section,
 				key: key,
 				value: raw.Substring(valueStart, valueEnd - valueStart),
 				comment: commentText,
-				commentChar: comment < 0 ? '\0' : raw[comment],
+				commentMarker: marker,
 				valueStart: valueStart,
 				valueLength: valueEnd - valueStart,
 				padLength: comment < 0 ? 0 : comment - valueEnd);
 		}
 
 		/// <summary>
-		/// Where the trailing comment starts, or -1 for none. A comment character inside
-		/// quotes is part of the value.
+		/// Where the trailing comment starts and which marker opened it. The index is -1 and
+		/// the marker is an empty string when the line carries no comment.
+		///
+		/// A comment marker inside quotes is part of the value.
 		/// </summary>
-		private static int CommentStart(string raw, int from)
+		private static (int Index, string Marker) CommentStart(string raw, int from)
 		{
 			bool quoted = false;
 
 			for (int i = from; i < raw.Length; ++i)
 			{
-				char c = raw[i];
+				if (raw[i] == '"')
+				{
+					quoted = !quoted;
+					continue;
+				}
 
-				if (c == '"') quoted = !quoted;
-				else if (!quoted && IsCommentChar(c)) return i;
+				if (quoted) continue;
+
+				string marker = MarkerAt(raw, i);
+
+				if (marker != null) return (i, marker);
 			}
 
-			return -1;
+			return (-1, String.Empty);
 		}
 
-		private static bool IsCommentChar(char c) => c == ';' || c == '#';
+		/// <summary>
+		/// The comment marker that starts at this position, or null. It tests the longer
+		/// markers first, so <c>//</c> never reads as a single character.
+		/// </summary>
+		private static string MarkerAt(string text, int index)
+		{
+			foreach (string marker in CommentMarkers)
+			{
+				if (String.CompareOrdinal(text, index, marker, 0, marker.Length) == 0
+					&& index + marker.Length <= text.Length)
+				{
+					return marker;
+				}
+			}
+
+			return null;
+		}
 
 		private static bool IsSpace(char c) => c == ' ' || c == '\t';
 	}
@@ -560,10 +608,10 @@ namespace BlackboxModManager.Core.Asi
 
 			int after = line.ValueStart + line.ValueLength;
 
-			if (line.HasComment || line.CommentChar != '\0')
+			if (line.HasComment)
 			{
 				// Keep the comment in its column. One space is the floor, because a value
-				// that touches the comment character reads as part of the value.
+				// that touches the comment marker reads as part of the value.
 				int pad = Math.Max(1, line.PadLength - (clean.Length - line.ValueLength));
 
 				rebuilt.Append(' ', pad);
@@ -579,8 +627,11 @@ namespace BlackboxModManager.Core.Asi
 
 		/// <summary>
 		/// Removes what a value must never hold. A line terminator would split one option
-		/// into two lines, and a comment character would turn the rest of the value into a
+		/// into two lines, and a comment marker would turn the rest of the value into a
 		/// comment.
+		///
+		/// One slash is legal in a value and two are not. So a run of slashes collapses to
+		/// one rather than disappearing, and a path such as <c>save/profile</c> survives.
 		/// </summary>
 		private static string Clean(string value)
 		{
@@ -591,6 +642,9 @@ namespace BlackboxModManager.Core.Asi
 			foreach (char c in value)
 			{
 				if (c == '\r' || c == '\n' || c == ';' || c == '#') continue;
+
+				// Two slashes open a comment. Keep the first one and drop the rest of the run.
+				if (c == '/' && text.Length > 0 && text[^1] == '/') continue;
 
 				text.Append(c);
 			}

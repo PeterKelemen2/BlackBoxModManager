@@ -58,14 +58,66 @@ namespace BlackboxModManager.Tests
 		}
 
 		[Fact]
-		public void TheReaderAcceptsBothCommentCharactersAndRemembersWhichOneTheFileUsed()
+		public void TheReaderAcceptsEveryCommentMarkerAndRemembersWhichOneTheLineUsed()
 		{
-			IniDocument document = IniReader.Parse("[A]\nx = 1 ; semicolon\ny = 2 # hash\n");
+			// All three markers are real. The Widescreen Fix uses ";" and Extra Options uses
+			// "//". No plugin declares which one it reads, so every one of them has to work.
+			IniDocument document = IniReader.Parse(
+				"[A]\nx = 1 ; semicolon\ny = 2 # hash\nz = 3 // slashes\n");
 
-			Assert.Equal(';', document.Lines[1].CommentChar);
+			Assert.Equal(";", document.Lines[1].CommentMarker);
 			Assert.Equal("semicolon", document.Lines[1].Comment);
-			Assert.Equal('#', document.Lines[2].CommentChar);
+			Assert.Equal("#", document.Lines[2].CommentMarker);
 			Assert.Equal("hash", document.Lines[2].Comment);
+			Assert.Equal("//", document.Lines[3].CommentMarker);
+			Assert.Equal("slashes", document.Lines[3].Comment);
+			Assert.Equal("3", document.Find(new IniKey("A", "z")).Value);
+		}
+
+		[Fact]
+		public void ADoubleSlashOpensAWholeLineComment()
+		{
+			IniDocument document = IniReader.Parse("// a note\n[A]\nx = 1\n");
+
+			Assert.Equal(IniLineKind.Comment, document.Lines[0].Kind);
+			Assert.Equal("//", document.Lines[0].CommentMarker);
+			Assert.Equal("a note", document.Lines[0].Comment);
+			Assert.Single(document.Sections);
+		}
+
+		[Fact]
+		public void ASectionHeaderCanCarryItsOwnComment()
+		{
+			// Extra Options writes "[Hotkeys] // Look at ... for key values (decimal)". The
+			// name ends at the closing bracket, so the comment changes nothing about it.
+			IniDocument document = IniReader.Parse(
+				"[Hotkeys] // Look at http://cherrytree.at/misc/vk.htm for key values (decimal)\n" +
+				"AnyTrackInAnyMode = 36              // Shows all race tracks in every game mode.\n");
+
+			Assert.Equal("Hotkeys", Assert.Single(document.Sections).Name);
+			Assert.Equal("36", document.Find(new IniKey("Hotkeys", "AnyTrackInAnyMode")).Value);
+		}
+
+		[Fact]
+		public void ASlashMarkerBeatsTheSingleCharacterMarkers()
+		{
+			// The scan reads the longer marker first. A scan that read "/" would report a
+			// comment one character short and leave a slash on the end of the value.
+			IniDocument document = IniReader.Parse("[A]\nx = 1 // a note\n");
+
+			Assert.Equal("//", document.Lines[1].CommentMarker);
+			Assert.Equal("a note", document.Lines[1].Comment);
+		}
+
+		[Fact]
+		public void OneSlashInAValueIsNotAComment()
+		{
+			IniDocument document = IniReader.Parse("[A]\nDirectory = save/profile // where it goes\n");
+
+			IniEntry entry = document.Find(new IniKey("A", "Directory"));
+
+			Assert.Equal("save/profile", entry.Value);
+			Assert.Equal("where it goes", entry.Comment);
 		}
 
 		[Fact]
@@ -275,6 +327,40 @@ namespace BlackboxModManager.Tests
 
 			Assert.Equal("AB", entry.Value);
 			Assert.Equal("Use '0' to disable.", entry.Comment);
+		}
+
+		[Fact]
+		public void TheWriterKeepsTheColumnOfASlashComment()
+		{
+			// The marker is two characters wide. A writer that assumed one would move the
+			// comment by one column on every change.
+			IniDocument document = IniReader.Parse(
+				"[Hotkeys]\nAnyTrackInAnyMode = 36              // Shows all race tracks.\n");
+
+			IniWriteResult result = Apply(document, ("Hotkeys", "AnyTrackInAnyMode", "116"));
+
+			IniEntry entry = IniReader.Parse(result.Text).Find(new IniKey("Hotkeys", "AnyTrackInAnyMode"));
+
+			Assert.Equal("116", entry.Value);
+			Assert.Equal("Shows all race tracks.", entry.Comment);
+			Assert.Equal(
+				document.Lines[1].Raw.IndexOf("//", StringComparison.Ordinal),
+				Lines(result.Text)[1].IndexOf("//", StringComparison.Ordinal));
+		}
+
+		[Fact]
+		public void TheWriterCollapsesASlashRunInAValueAndKeepsOneSlash()
+		{
+			// Two slashes would turn the rest of the value into a comment. One slash is legal,
+			// so a path survives.
+			IniDocument document = IniReader.Parse("[A]\nDirectory = save // where it goes\n");
+
+			IniWriteResult result = Apply(document, ("A", "Directory", "save//deep/one"));
+
+			IniEntry entry = IniReader.Parse(result.Text).Find(new IniKey("A", "Directory"));
+
+			Assert.Equal("save/deep/one", entry.Value);
+			Assert.Equal("where it goes", entry.Comment);
 		}
 
 		[Fact]

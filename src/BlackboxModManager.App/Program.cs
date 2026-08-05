@@ -45,7 +45,33 @@ namespace BlackboxModManager.App
 
 			var application = new App();
 			application.InitializeComponent();
+
+			// Shows the error dialog and exits.
+			//
+			// A XAML error in a dialog surfaces when the dialog opens, and the error dialog
+			// opens when something already went wrong. That is the worst moment to find out.
+			// This switch opens it on demand, so the run platform answers the question first.
+			if (args.Length == 1 && args[0] == DialogSwitch) return ShowDialogTest();
+
 			return application.Run();
+		}
+
+		/// <summary>The argument that opens the error dialog and exits.</summary>
+		private const string DialogSwitch = "--dialogtest";
+
+		private static int ShowDialogTest()
+		{
+			Views.MessageWindow.Show(null, "The operation failed.", "The operation failed.",
+				"This is a sample error. The Copy error button puts this whole text on the " +
+				"clipboard, including the heading above." + Environment.NewLine + Environment.NewLine +
+				"A real message names a path, a mod, a script line, or a message from one of the " +
+				"three libraries. Those are long, so the box scrolls and the text selects." +
+				Environment.NewLine + Environment.NewLine +
+				"Press Copy error, then paste somewhere to confirm that the clipboard of the " +
+				"platform accepts it.",
+				"Copy error");
+
+			return 0;
 		}
 	}
 }
