@@ -1,0 +1,27 @@
+<ResourceDictionary
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+  <CornerRadius x:Key="RadiusSmall">4</CornerRadius>
+  <CornerRadius x:Key="RadiusDefault">6</CornerRadius>
+  <CornerRadius x:Key="RadiusCard">10</CornerRadius>
+
+  <sys:Double x:Key="FontSizeSmall">11</sys:Double>
+  <sys:Double x:Key="FontSizeBody">13</sys:Double>
+  <sys:Double x:Key="FontSizeHeading">15</sys:Double>
+
+  <sys:Double x:Key="ControlHeight">28</sys:Double>
+  <sys:Double x:Key="ModRowHeight">52</sys:Double>
+
+  <Thickness x:Key="SpaceTight">4</Thickness>
+  <Thickness x:Key="SpaceDefault">8</Thickness>
+  <Thickness x:Key="SpaceLoose">16</Thickness>
+
+  <!--  Kept from the old Theme.xaml. Several row templates still use it as a bottom margin.  -->
+  <Thickness x:Key="RowSpacing">0,0,0,6</Thickness>
+
+  <!--  Kept from the old Theme.xaml. This key appears across five XAML files.  -->
+  <BooleanToVisibilityConverter x:Key="BoolToVisible" />
+
+</ResourceDictionary>

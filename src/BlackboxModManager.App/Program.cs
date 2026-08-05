@@ -52,12 +52,34 @@ namespace BlackboxModManager.App
 			// opens when something already went wrong. That is the worst moment to find out.
 			// This switch opens it on demand, so the run platform answers the question first.
 			if (args.Length == 1 && args[0] == DialogSwitch) return ShowDialogTest();
+			if (args.Length == 1 && args[0] == FontTestSwitch) return ShowFontTest();
+			if (args.Length == 1 && args[0] == ThemeTestSwitch) return ShowThemeTest();
 
 			return application.Run();
 		}
 
 		/// <summary>The argument that opens the error dialog and exits.</summary>
 		private const string DialogSwitch = "--dialogtest";
+
+		/// <summary>The argument that opens the font probe of Part B and exits.</summary>
+		private const string FontTestSwitch = "--fonttest";
+
+		/// <summary>The argument that opens the control probe of Part C and exits.</summary>
+		private const string ThemeTestSwitch = "--themetest";
+
+		private static int ShowFontTest()
+		{
+			new Views.FontTestWindow().ShowDialog();
+
+			return 0;
+		}
+
+		private static int ShowThemeTest()
+		{
+			new Views.ThemeTestWindow().ShowDialog();
+
+			return 0;
+		}
 
 		private static int ShowDialogTest()
 		{

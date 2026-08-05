@@ -55,6 +55,76 @@ namespace BlackboxModManager.Tests
 		}
 
 		[Fact]
+		public void MoveToPutsTheEntryBeforeTheRowAtTheGivenIndex()
+		{
+			var profile = new Profile("Test", "Underground2");
+			profile.Ensure("a").Enabled = true;
+			profile.Ensure("b").Enabled = true;
+			profile.Ensure("c").Enabled = true;
+
+			Assert.True(profile.MoveTo("a", 2));
+			Assert.Equal(new[] { "b", "a", "c" }, profile.EnabledInOrder());
+		}
+
+		[Fact]
+		public void MoveToTheEndAppendsTheEntry()
+		{
+			var profile = new Profile("Test", "Underground2");
+			profile.Ensure("a").Enabled = true;
+			profile.Ensure("b").Enabled = true;
+			profile.Ensure("c").Enabled = true;
+
+			Assert.True(profile.MoveTo("a", 3));
+			Assert.Equal(new[] { "b", "c", "a" }, profile.EnabledInOrder());
+		}
+
+		[Fact]
+		public void MoveToTheFrontMovesAnEntryFromTheEnd()
+		{
+			var profile = new Profile("Test", "Underground2");
+			profile.Ensure("a").Enabled = true;
+			profile.Ensure("b").Enabled = true;
+			profile.Ensure("c").Enabled = true;
+
+			Assert.True(profile.MoveTo("c", 0));
+			Assert.Equal(new[] { "c", "a", "b" }, profile.EnabledInOrder());
+		}
+
+		[Fact]
+		public void MoveToClampsAnIndexPastTheEnd()
+		{
+			var profile = new Profile("Test", "Underground2");
+			profile.Ensure("a").Enabled = true;
+			profile.Ensure("b").Enabled = true;
+
+			Assert.True(profile.MoveTo("a", 50));
+			Assert.Equal(new[] { "b", "a" }, profile.EnabledInOrder());
+		}
+
+		[Fact]
+		public void MoveToANegativeIndexClampsToTheFront()
+		{
+			var profile = new Profile("Test", "Underground2");
+			profile.Ensure("a").Enabled = true;
+			profile.Ensure("b").Enabled = true;
+
+			Assert.True(profile.MoveTo("b", -5));
+			Assert.Equal(new[] { "b", "a" }, profile.EnabledInOrder());
+		}
+
+		[Fact]
+		public void MoveToTheSameSpotDoesNothing()
+		{
+			var profile = new Profile("Test", "Underground2");
+			profile.Ensure("a").Enabled = true;
+			profile.Ensure("b").Enabled = true;
+
+			Assert.False(profile.MoveTo("a", 0));
+			Assert.False(profile.MoveTo("a", 1));
+			Assert.False(profile.MoveTo("missing", 1));
+		}
+
+		[Fact]
 		public void ReconcileDropsAModThatLeftTheStoreAndAddsANewOne()
 		{
 			var profile = new Profile("Test", "Underground2");

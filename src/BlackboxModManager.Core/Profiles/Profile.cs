@@ -243,6 +243,32 @@ namespace BlackboxModManager.Core.Profiles
 		}
 
 		/// <summary>
+		/// Moves one mod to an index in the load order, for a drop of the drag reorder.
+		///
+		/// The index clamps to the range of the list. <b>After the entry leaves the list,
+		/// every index above it shifts down by one.</b> Pass the target index as it reads
+		/// before the entry leaves, the way a drop computes it against the row under the
+		/// pointer.
+		/// </summary>
+		public bool MoveTo(string modId, int index)
+		{
+			ProfileEntry entry = this.Find(modId);
+
+			if (entry is null) return false;
+
+			int from = this.Entries.IndexOf(entry);
+			int to = Math.Max(0, Math.Min(index, this.Entries.Count));
+
+			if (to > from) --to;
+			if (to == from) return false;
+
+			this.Entries.RemoveAt(from);
+			this.Entries.Insert(to, entry);
+
+			return true;
+		}
+
+		/// <summary>
 		/// Drops every entry whose mod left the store, and adds an entry for every mod that
 		/// the store holds and the profile does not. It returns true when it changed
 		/// something.

@@ -211,7 +211,12 @@ namespace BlackboxModManager.App.ViewModels
 			get => this._selectedMod;
 			set
 			{
+				ModRowViewModel previous = this._selectedMod;
+
 				if (!this.SetProperty(ref this._selectedMod, value)) return;
+
+				if (previous != null) previous.IsSelected = false;
+				if (value != null) value.IsSelected = true;
 
 				this.LoadVariants(value);
 				this.LoadSettings(value);
@@ -594,6 +599,29 @@ namespace BlackboxModManager.App.ViewModels
 			foreach (ModRowViewModel candidate in this.Mods)
 			{
 				if (candidate.Id != row.Id) continue;
+
+				this.SelectedMod = candidate;
+				break;
+			}
+		}
+
+		/// <summary>
+		/// Moves one mod to an index in the load order, for a drop of the drag reorder. See
+		/// <see cref="Profile.MoveTo"/>. Two reasons that this stays a plain method and not a
+		/// command: it takes an index that only the drop handler computes, and the
+		/// <c>Move up</c> and <c>Move down</c> buttons already cover the keyboard path.
+		/// </summary>
+		public void MoveModTo(string modId, int index)
+		{
+			if (this._profile is null) return;
+			if (!this._profile.MoveTo(modId, index)) return;
+
+			this.SaveProfile();
+			this.RefreshMods();
+
+			foreach (ModRowViewModel candidate in this.Mods)
+			{
+				if (candidate.Id != modId) continue;
 
 				this.SelectedMod = candidate;
 				break;

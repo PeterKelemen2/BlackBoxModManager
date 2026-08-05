@@ -1,0 +1,87 @@
+<Window
+  x:Class="BlackboxModManager.App.Views.FontTestWindow"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  Title="Font test"
+  Width="720"
+  Height="640"
+  Background="{StaticResource SurfaceBase}"
+  TextOptions.TextFormattingMode="Ideal"
+  TextOptions.TextRenderingMode="Grayscale"
+  UseLayoutRounding="True">
+  <!--
+    Confirms Part B of docs/roadmap/10-dark-theme.md before the rest of the theme
+    builds on it: both families at every size, both weight-matching forms, and both
+    text formatting modes. Run under Wine and look at it.
+  -->
+  <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+    <StackPanel>
+      <TextBlock
+        FontFamily="{StaticResource UiFontFamily}"
+        FontWeight="Normal"
+        Style="{StaticResource Heading}"
+        Text="Inter 18pt, Regular" />
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource UiFontFamily}"
+        FontSize="{StaticResource FontSizeSmall}"
+        Text="11 pt sample" />
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource UiFontFamily}"
+        FontSize="{StaticResource FontSizeBody}"
+        Text="13 pt sample" />
+      <TextBlock
+        Margin="0,0,0,16"
+        FontFamily="{StaticResource UiFontFamily}"
+        FontSize="{StaticResource FontSizeHeading}"
+        Text="15 pt sample" />
+
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource UiFontFamily}"
+        FontSize="{StaticResource FontSizeHeading}"
+        FontWeight="SemiBold"
+        Text="Inter 18pt, FontWeight=SemiBold on the plain family" />
+      <TextBlock
+        Margin="0,0,0,16"
+        FontFamily="{StaticResource UiFontFamilyStrong}"
+        FontSize="{StaticResource FontSizeHeading}"
+        FontWeight="SemiBold"
+        Text="UiFontFamilyStrong + FontWeight=SemiBold (the real heavy face)" />
+
+      <TextBlock
+        FontFamily="{StaticResource LogFontFamily}"
+        FontWeight="Normal"
+        Style="{StaticResource Heading}"
+        Text="IBM Plex Sans, Regular" />
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource LogFontFamily}"
+        FontSize="{StaticResource FontSizeSmall}"
+        Text="11 pt sample" />
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource LogFontFamily}"
+        FontSize="{StaticResource FontSizeBody}"
+        Text="13 pt sample" />
+      <TextBlock
+        Margin="0,0,0,16"
+        FontFamily="{StaticResource LogFontFamily}"
+        FontSize="{StaticResource FontSizeHeading}"
+        Text="15 pt sample" />
+
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource UiFontFamily}"
+        FontSize="{StaticResource FontSizeBody}"
+        Text="TextFormattingMode=Ideal (this window)" />
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource UiFontFamily}"
+        FontSize="{StaticResource FontSizeBody}"
+        Text="TextFormattingMode=Display, for comparison"
+        TextOptions.TextFormattingMode="Display" />
+    </StackPanel>
+  </ScrollViewer>
+</Window>

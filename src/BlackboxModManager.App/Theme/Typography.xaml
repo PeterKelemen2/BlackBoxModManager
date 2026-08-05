@@ -1,0 +1,49 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Read docs/roadmap/10-dark-theme.md, Part B, before you touch this file. The text
+    after # is the family name inside the font file, not the file name. Every family
+    string of the window lives here and nowhere else.
+  -->
+
+  <FontFamily x:Key="UiFontFamily">
+    /BlackboxModManager;component/Fonts/#Inter 18pt
+  </FontFamily>
+
+  <!--
+    The first name wins if WPF reads nameID 1. The second name wins if WPF groups the
+    two files through nameID 16, and FontWeight then picks SemiBold out of the group.
+    Both roads reach Inter_18pt-SemiBold.ttf.
+  -->
+  <FontFamily x:Key="UiFontFamilyStrong">
+    /BlackboxModManager;component/Fonts/#Inter 18pt SemiBold,
+    /BlackboxModManager;component/Fonts/#Inter 18pt
+  </FontFamily>
+
+  <FontFamily x:Key="LogFontFamily">
+    /BlackboxModManager;component/Fonts/#IBM Plex Sans
+  </FontFamily>
+
+  <!--  The default text of the window. Every other TextBlock style builds on this one.  -->
+  <Style TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+    <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+  </Style>
+
+  <!--  Kept from the old Theme.xaml. Both keys appear across five XAML files.  -->
+  <Style x:Key="Heading" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource UiFontFamilyStrong}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="{StaticResource FontSizeHeading}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+
+  <Style x:Key="Hint" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+</ResourceDictionary>

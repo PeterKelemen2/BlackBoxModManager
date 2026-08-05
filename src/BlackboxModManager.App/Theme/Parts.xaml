@@ -1,0 +1,163 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    The application parts. Read docs/roadmap/10-dark-theme.md, Part E, before you touch
+    this file.
+  -->
+
+  <!--
+    The variant list, the loader list, and the folder list all used the same
+    "#40808080" bottom border. This one style replaces every one of them.
+  -->
+  <Style x:Key="ListRow" TargetType="Border">
+    <Setter Property="BorderBrush" Value="{StaticResource BorderDefault}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="Padding" Value="0,0,0,6" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+  </Style>
+
+  <!--
+    The ? marker of the settings panel. A round Quiet glyph with a hover fill, never a
+    glyph font.
+  -->
+  <Style x:Key="HelpMarker" TargetType="Border">
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="Help" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{StaticResource SurfaceHover}" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <Style x:Key="HelpMarkerGlyph" TargetType="TextBlock">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <!--  The log. IBM Plex Sans, because a log line and a conflict line carry no heading.  -->
+  <Style x:Key="LogLine" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource LogFontFamily}" />
+    <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <!--  A conflict line reads in WarningDefault.  -->
+  <Style
+    x:Key="ConflictLine"
+    BasedOn="{StaticResource LogLine}"
+    TargetType="TextBlock">
+    <Setter Property="Foreground" Value="{StaticResource WarningDefault}" />
+  </Style>
+
+  <!--  The drag handle of the mod row. Three short dashes, drawn with Path geometry.  -->
+  <Style x:Key="DragHandle" TargetType="Path">
+    <Setter Property="Data" Value="M 0,0 L 10,0 M 0,4 L 10,4 M 0,8 L 10,8" />
+    <Setter Property="Stroke" Value="{StaticResource TextSecondary}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeStartLineCap" Value="Round" />
+    <Setter Property="StrokeEndLineCap" Value="Round" />
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="Cursor" Value="SizeAll" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!--
+    The row of the mod list. A SurfaceRaised fill, RadiusDefault corners, a BorderDefault
+    edge. The two 2 pixel borders draw the insertion line of the drag reorder directly
+    from the row, never from an adorner.
+  -->
+  <DataTemplate x:Key="ModRowTemplate">
+    <Border
+      x:Name="RowBorder"
+      Margin="0,0,0,6"
+      Padding="8,6"
+      Background="{StaticResource SurfaceRaised}"
+      BorderBrush="{StaticResource BorderDefault}"
+      BorderThickness="1"
+      CornerRadius="{StaticResource RadiusDefault}">
+      <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="2" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="2" />
+        </Grid.RowDefinitions>
+
+        <Border
+          Grid.Row="0"
+          Height="2"
+          Background="{StaticResource AccentDefault}"
+          Visibility="{Binding DropBefore, Converter={StaticResource BoolToVisible}}" />
+
+        <Grid Grid.Row="1">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+
+          <Path
+            Grid.Column="0"
+            Margin="0,0,8,0"
+            Style="{StaticResource DragHandle}" />
+
+          <CheckBox
+            Grid.Column="1"
+            Margin="0,0,8,0"
+            VerticalAlignment="Center"
+            IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+          <TextBlock
+            Grid.Column="2"
+            MinWidth="18"
+            Margin="0,0,8,0"
+            VerticalAlignment="Center"
+            Style="{StaticResource Hint}"
+            Text="{Binding Order}" />
+
+          <StackPanel Grid.Column="3" VerticalAlignment="Center">
+            <TextBlock
+              FontFamily="{StaticResource UiFontFamilyStrong}"
+              FontWeight="SemiBold"
+              Foreground="{StaticResource TextPrimary}"
+              Text="{Binding Name}"
+              TextWrapping="Wrap" />
+            <TextBlock Style="{StaticResource Hint}">
+              <Run Text="{Binding Kind, Mode=OneWay}" />
+              <Run Text=" · " />
+              <Run Text="{Binding GameName, Mode=OneWay}" />
+              <Run Text=" · " />
+              <Run Text="{Binding FileCount, Mode=OneWay}" />
+              <Run Text=" files · " />
+              <Run Text="{Binding Size, Mode=OneWay}" />
+            </TextBlock>
+          </StackPanel>
+        </Grid>
+
+        <Border
+          Grid.Row="2"
+          Height="2"
+          Background="{StaticResource AccentDefault}"
+          Visibility="{Binding DropAfter, Converter={StaticResource BoolToVisible}}" />
+      </Grid>
+    </Border>
+    <DataTemplate.Triggers>
+      <DataTrigger Binding="{Binding IsSelected}" Value="True">
+        <Setter TargetName="RowBorder" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding IsDragSource}" Value="True">
+        <Setter TargetName="RowBorder" Property="Opacity" Value="0.5" />
+      </DataTrigger>
+    </DataTemplate.Triggers>
+  </DataTemplate>
+
+</ResourceDictionary>

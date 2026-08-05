@@ -25,6 +25,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- A pack URI reads a Resource. It does not read Content or Embedded Resource. Name
+         the three files, and never glob Fonts/*.ttf. See docs/roadmap/10-dark-theme.md,
+         Part B. -->
+    <Resource Include="Fonts\Inter_18pt-Regular.ttf" />
+    <Resource Include="Fonts\Inter_18pt-SemiBold.ttf" />
+    <Resource Include="Fonts\IBMPlexSans-Regular.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\BlackboxModManager.Core\BlackboxModManager.Core.csproj" />
   </ItemGroup>
 

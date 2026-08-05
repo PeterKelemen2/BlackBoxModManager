@@ -55,6 +55,42 @@ namespace BlackboxModManager.App.ViewModels
 
 		private int _order;
 
+		/// <summary>The selection, so the row template can draw it.</summary>
+		public bool IsSelected
+		{
+			get => this._isSelected;
+			set => this.SetProperty(ref this._isSelected, value);
+		}
+
+		private bool _isSelected;
+
+		/// <summary>True while the user drags this row. The row dims.</summary>
+		public bool IsDragSource
+		{
+			get => this._isDragSource;
+			set => this.SetProperty(ref this._isDragSource, value);
+		}
+
+		private bool _isDragSource;
+
+		/// <summary>True when the drop lands above this row.</summary>
+		public bool DropBefore
+		{
+			get => this._dropBefore;
+			set => this.SetProperty(ref this._dropBefore, value);
+		}
+
+		private bool _dropBefore;
+
+		/// <summary>True when the drop lands below this row.</summary>
+		public bool DropAfter
+		{
+			get => this._dropAfter;
+			set => this.SetProperty(ref this._dropAfter, value);
+		}
+
+		private bool _dropAfter;
+
 		public bool Enabled
 		{
 			get => this._entry.Enabled;
