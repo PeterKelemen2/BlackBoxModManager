@@ -27,6 +27,9 @@ namespace BlackboxModManager.App.Services
 		/// </summary>
 		string PickChoice(string question, IReadOnlyList<UserChoice> choices, string current = null);
 
+		/// <summary>Lists every directory of this application and lets the user open one.</summary>
+		void ShowFolders(IReadOnlyList<FolderRow> folders);
+
 		bool Confirm(string question);
 
 		void ShowError(string message);

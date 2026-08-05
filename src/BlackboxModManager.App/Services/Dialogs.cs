@@ -59,6 +59,13 @@ namespace BlackboxModManager.App.Services
 			return ChoiceWindow.Ask(owner, question, choices, current);
 		}
 
+		/// <summary>Lists every directory of this application and lets the user open one.</summary>
+		public static void ShowFolders(Window owner,
+			System.Collections.Generic.IReadOnlyList<FolderRow> folders)
+		{
+			FoldersWindow.Show(owner, folders);
+		}
+
 		public static bool Confirm(Window owner, string question, string title = "Blackbox Mod Manager")
 		{
 			return MessageBox.Show(owner, question, title, MessageBoxButton.YesNo, MessageBoxImage.Question)

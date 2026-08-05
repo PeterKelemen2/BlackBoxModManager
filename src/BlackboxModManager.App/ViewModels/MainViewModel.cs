@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading.Tasks;
 using BlackboxModManager.App.Services;
+using BlackboxModManager.App.Views;
 using BlackboxModManager.Core;
 using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Deploy;
@@ -1012,6 +1013,51 @@ namespace BlackboxModManager.App.ViewModels
 		}
 
 		private bool CanDeploy() => this.IsIdle && this.IsGameReady && this._profile != null;
+
+		/// <summary>
+		/// Lists every directory of this application, so that the user can look at one.
+		///
+		/// The staging directory is the one that a user asks for. A deploy that the verify
+		/// stopped leaves it in place, and the failure is only readable from inside it.
+		/// </summary>
+		[RelayCommand]
+		private void ShowFolders()
+		{
+			var rows = new List<FolderRow>
+			{
+				new FolderRow("Application data", "Settings, profiles, the mod store, and the logs.",
+					AppPaths.Root),
+				new FolderRow("Mod store", "One directory per imported mod. A deploy reads from here.",
+					AppPaths.ModsDirectory),
+				new FolderRow("Logs", "The deploy report and the error log.", AppPaths.LogDirectory),
+			};
+
+			if (this._install is null)
+			{
+				rows.Add(new FolderRow("Game install", "No game install is set, so there is no workspace.", null));
+
+				this._ask.ShowFolders(rows);
+
+				return;
+			}
+
+			GameWorkspace workspace = this.Service().WorkspaceOf(this._install);
+
+			rows.Insert(0, new FolderRow("Game install",
+				"The live directory. Only the swap of a deploy changes this.", this._install.Root));
+
+			rows.Insert(1, new FolderRow("Workspace",
+				"The vanilla copy, the staging copy, and the state of this game.", workspace.Root));
+
+			rows.Insert(2, new FolderRow("Staging copy",
+				"What the next swap puts into the game directory. A deploy that the verify stopped " +
+				"leaves the result here, and nothing reached the game.", workspace.StagingDirectory));
+
+			rows.Insert(3, new FolderRow("Vanilla copy",
+				"The pristine state of the install. A revert restores this.", workspace.VanillaDirectory));
+
+			this._ask.ShowFolders(rows);
+		}
 
 		/// <summary>
 		/// Builds the service for one operation. It carries the Binary install, because the

@@ -13,7 +13,13 @@ namespace BlackboxModManager.Core
 		/// <summary>Cheapest. One file, two names, same filesystem only.</summary>
 		HardLink = 0,
 
-		/// <summary>Cheap. Windows needs a privilege for this, and Wine builds differ.</summary>
+		/// <summary>
+		/// Cheap. Windows needs a privilege for this, and Wine builds differ.
+		///
+		/// <b>The probe rejects this under Wine.</b> Wine writes a Windows symbolic link as a
+		/// zero-byte file and keeps the link in its own metadata, so the length of the target
+		/// never matches the length of the source. See <c>Try</c>.
+		/// </summary>
 		SymbolicLink,
 
 		/// <summary>Always works. Costs disk space and time.</summary>
@@ -218,6 +224,31 @@ namespace BlackboxModManager.Core
 				if (File.ReadAllText(target) != Content)
 				{
 					return new LinkProbe(kind, false, "The target does not hold the content of the source.");
+				}
+
+				// Content is not proof either.
+				//
+				// <b>Wine writes a Windows symbolic link as a zero-byte file.</b> The Linux
+				// name gets a question mark appended, and Wine keeps the link itself in its own
+				// metadata. A Wine process that opens the Windows name reads the source, so the
+				// content test above passes. FileInfo.Length still reports zero.
+				//
+				// That breaks this application in two ways. FileHash.SameContent compares the
+				// length first, so the verify reports every linked file as changed and no
+				// deploy ever reaches the swap. Nothing outside Wine can read the file either,
+				// and the name is illegal on real Windows.
+				//
+				// A deployed file must look the same as the file that it came from. Reject any
+				// method that does not manage that, and let the chain fall through to Copy.
+				long expected = new FileInfo(source).Length;
+				long actual = new FileInfo(target).Length;
+
+				if (actual != expected)
+				{
+					return new LinkProbe(kind, false,
+						$"The source holds {expected} bytes and the target reports {actual}. " +
+						"The content reads back and the length does not, so a verify cannot trust it. " +
+						"Wine writes a symbolic link this way.");
 				}
 
 				return new LinkProbe(kind, true, null);

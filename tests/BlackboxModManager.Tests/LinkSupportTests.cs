@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using BlackboxModManager.Core;
+using BlackboxModManager.Core.Files;
 using Xunit;
 
 namespace BlackboxModManager.Tests
@@ -23,6 +24,59 @@ namespace BlackboxModManager.Tests
 		public void Dispose()
 		{
 			if (Directory.Exists(this._root)) Directory.Delete(this._root, true);
+		}
+
+		/// <summary>
+		/// A method whose target reports the wrong length must fail the probe.
+		///
+		/// <b>Wine writes a Windows symbolic link as a zero-byte file.</b> The content reads
+		/// back through the Windows name and <c>FileInfo.Length</c> reports zero.
+		/// <c>FileHash.SameContent</c> compares the length first, so every deploy under Wine
+		/// failed the verify with "the staging copy differs from the copy in the mod", and no
+		/// deploy ever reached the swap.
+		///
+		/// This test builds the same shape by hand, because a native Linux run makes a real
+		/// symbolic link and cannot reproduce the Wine one.
+		/// </summary>
+		[Fact]
+		public void AProbeRejectsATargetThatReportsTheWrongLength()
+		{
+			string source = Path.Combine(this._root, "source.bin");
+			string target = Path.Combine(this._root, "target.bin");
+
+			File.WriteAllText(source, "blackbox link probe");
+			File.WriteAllText(target, String.Empty);
+
+			// The state that Wine leaves: the target exists, it reads as the source through the
+			// platform, and its length is zero.
+			Assert.NotEqual(new FileInfo(source).Length, new FileInfo(target).Length);
+
+			// SameContent is the method that the verify calls, and the length is what it reads
+			// first. A deployed file that fails this can never pass the verify.
+			Assert.False(FileHash.SameContent(source, target));
+		}
+
+		[Fact]
+		public void EveryMethodThatTheProbeAcceptsProducesAMatchingLength()
+		{
+			// The rule that the probe now enforces. A method that the probe accepts has to give
+			// a file that the verify can compare against the mod store.
+			string source = Path.Combine(this._root, "probe-source.bin");
+			File.WriteAllText(source, "blackbox link probe");
+
+			LinkProbeResult result = LinkSupport.Probe(this._root);
+
+			foreach (LinkProbe probe in result.Probes)
+			{
+				if (!probe.Works) continue;
+
+				string target = Path.Combine(this._root, $"accepted-{probe.Kind}.bin");
+
+				LinkSupport.Create(probe.Kind, source, target);
+
+				Assert.True(FileHash.SameContent(source, target),
+					$"The probe accepted {probe.Kind} and the verify cannot compare its result.");
+			}
 		}
 
 		[Fact]

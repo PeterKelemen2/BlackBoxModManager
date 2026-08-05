@@ -78,6 +78,9 @@ namespace BlackboxModManager.App
 			System.Collections.Generic.IReadOnlyList<Views.UserChoice> choices, string current = null) =>
 			Dialogs.PickChoice(this, question, choices, current);
 
+		public void ShowFolders(System.Collections.Generic.IReadOnlyList<Views.FolderRow> folders) =>
+			Dialogs.ShowFolders(this, folders);
+
 		public bool Confirm(string question) => Dialogs.Confirm(this, question);
 
 		public void ShowError(string message) => Dialogs.ShowError(this, message);

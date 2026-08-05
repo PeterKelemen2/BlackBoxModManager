@@ -450,6 +450,11 @@
             Command="{Binding MoveUpCommand}"/>
         <Button Content="Move down"
             Command="{Binding MoveDownCommand}"/>
+        <!-- A deploy that the verify stopped leaves its result in the staging copy, and the
+             failure is only readable from inside that directory. -->
+        <Button Content="Folders"
+            Command="{Binding ShowFoldersCommand}"
+            ToolTip="Open the staging copy, the vanilla copy, the mod store, or the logs."/>
       </StackPanel>
       <StackPanel Grid.Column="1"
           Orientation="Horizontal">

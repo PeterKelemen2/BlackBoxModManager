@@ -231,6 +231,30 @@ Run `BlackboxModManager.exe --dialogtest` to open the error dialog on demand. A 
 
 `ChoiceWindow` is a list and not a drop-down. Each row carries three facts about a file, and a drop-down would hide two of them until the user opens it. A dropdown also paints black under Wine on the hardware path. See fact 8 of step 5.
 
+### A defect that the real mods found
+
+**Every deploy of an ASI mod failed the verify before this fix.** The message named the plugin: "The staging copy of `scripts/NFSUnderground2.WidescreenFix.asi` differs from the copy in the mod". The verify was right, and it refused the swap, so the game directory never changed.
+
+**Wine writes a Windows symbolic link as a zero-byte file.** It appends a question mark to the Linux name and keeps the link in its own metadata. A Wine process that opens the Windows name reads the source, so the content test of the probe passed. `FileInfo.Length` still reports zero.
+
+Three facts had to line up for this to bite.
+
+1. The mod store sits under the Wine prefix on one filesystem, and the game sits on another. `CreateHardLinkW` then fails with error 17, and the probe falls to the symbolic link.
+2. `.asi` is not in `DeployPolicy.WritableExtensions`, so the link engine links it. An `.ini` and a `.dat` get a copy, and those two files always verified.
+3. `FileHash.SameContent` compares the length before it hashes. A zero length answers the question with no read, and the answer is "different".
+
+**The probe now compares the length as well as the content.** A deployed file must look the same as the file that it came from, because the verify and the snapshot both read the length. The symbolic link fails that test under Wine, and the chain falls through to Copy. A same-volume install still gets hard links.
+
+The cost is disk space for a mod that sits on another volume than the game. That is the right trade. `DeployReport.MethodNote` already says which method the deploy used and why.
+
+**This closes two open items of this step.** The version reader read a real resource: the loader of the Widescreen Fix reports `9.7.1.0-2155f21`, `Ultimate-ASI-Loader-Win32`, `ThirteenAG`. Both real mods also deployed together into a scratch copy of the game, with one settings option changed and one loader contest resolved. The verify checked 1568 files and found no problem.
+
+### Folders
+
+The window holds a `Folders` button. It lists the game install, the workspace, the staging copy, the vanilla copy, the mod store, the application data, and the logs. Each row carries the path in a selectable box, an `Open` button, and a `Copy path` button.
+
+**A deploy that the verify stopped leaves its result in the staging copy**, and the failure above was only readable from inside that directory. `Open` asks the shell of the platform first and `explorer.exe` second. **`Copy path` always works**, because a Wine prefix has no guaranteed file manager.
+
 ### The types
 
 | Type                                     | Holds                                                                  |
@@ -276,13 +300,11 @@ Both files round trip byte for byte, and a change to one value produces exactly 
 
 ### What is open
 
-**No ASI mod has reached a running game yet.** The reader handles both real mods, and the deploy path is proven against synthetic mods only. **Deploy the Widescreen Fix to the scratch copy, start the game, and confirm that a changed option takes effect.** No automated check can answer that.
+**No ASI mod has reached a running game yet.** Both real mods now deploy into a scratch copy of the game, and the verify passes. **Start the game from that copy and confirm that a changed option takes effect.** No automated check can answer that.
 
 **Nobody has clicked through the Settings panel of a real mod.** The Extra Options file holds 64 keys in 9 sections, and 43 of them read as a flag. The panel builds 64 rows, and no one has scrolled it.
 
 **The proxy name list holds one name.** `ProxyNames.Default` holds `dinput8.dll` alone, because that is the name that the samples use. `ProxyNames.Known` holds five more, and a mod that supplies one of those produces a note in the log that says that the last mod of the load order wins it. Move a name from `Known` to `Default` when a real mod uses it.
-
-**No version resource has been read from a real loader.** The three-source read is tested against synthetic bytes. Source 1 needs a real DLL with a resource, and this machine holds none.
 
 **A `scripts/ASILoader.asi` loader is not handled.** The pitfall names it. It is an `.asi` file and not a proxy DLL, so the name list does not reach it. No sample exists, so no code exists.
 
