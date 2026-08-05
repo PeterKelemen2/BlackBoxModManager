@@ -6,22 +6,22 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 
 ## Sequence
 
-| Step | File                                                         | Gates                          |
-| ---- | ------------------------------------------------------------ | ------------------------------ |
-| 0    | Done. See "Completed" below.                                 | —                              |
-| —    | [00-test-environment.md](00-test-environment.md)             | Reference. Read before step 1. |
-| 1    | Done. See "Completed" below.                                 | —                              |
-| 2    | Done. See "Completed" below.                                 | —                              |
-| 3    | Done. See "Completed" below.                                 | —                              |
-| 4    | Done. See "Completed" below.                                 | —                              |
-| 5    | Done. See "Completed" below.                                 | —                              |
-| 6    | Done. See "Completed" below.                                 | —                              |
-| 7    | [07-game-profiles.md](07-game-profiles.md)                   | Part done. Three games wait.   |
-| 8    | [08-command-classification.md](08-command-classification.md) | Mods outside the two examples. |
-| 9    | [09-asi-configuration.md](09-asi-configuration.md)           | ASI mod settings and loaders.  |
-| 10   | [10-texmod.md](10-texmod.md)                                 | Nothing. Explicitly last.      |
+| Step | File                                               | Gates                          |
+| ---- | -------------------------------------------------- | ------------------------------ |
+| 0    | Done. See "Completed" below.                       | —                              |
+| —    | [00-test-environment.md](00-test-environment.md)   | Reference. Read before step 1. |
+| 1    | Done. See "Completed" below.                       | —                              |
+| 2    | Done. See "Completed" below.                       | —                              |
+| 3    | Done. See "Completed" below.                       | —                              |
+| 4    | Done. See "Completed" below.                       | —                              |
+| 5    | Done. See "Completed" below.                       | —                              |
+| 6    | Done. See "Completed" below.                       | —                              |
+| 7    | [07-game-profiles.md](07-game-profiles.md)         | Part done. Three games wait.   |
+| 8    | Done. See "Completed" below.                       | —                              |
+| 9    | [09-asi-configuration.md](09-asi-configuration.md) | ASI mod settings and loaders.  |
+| 10   | [10-texmod.md](10-texmod.md)                       | Nothing. Explicitly last.      |
 
-Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, and 6 are done. **The success criterion of the project brief passes.**
+Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, and 8 are done. **The success criterion of the project brief passes.**
 
 **Step 7 is part done.** The plumbing carries any number of games, and the application manages three of the six targets. Underground 1, Carbon, and Undercover wait for a listing of a real install. Read the Results section of [07-game-profiles.md](07-game-profiles.md).
 
@@ -143,6 +143,20 @@ Four facts carry forward.
 2. **The manifest decides the game of a Binary mod.** The window decides the game of a drop-in mod. An import that disagrees with the manifest follows the manifest and writes a note.
 3. **A drop-in deploy is game-independent, and a container deploy is not proven so.** The link engine reads a descriptor and nothing else, and a test deploys and reverts on all three games. Only Underground 2 has a container proof, because we hold no Binary mod sample for another game.
 4. **The `Links` boilerplate is confirmed for Underground 2 alone.** `ManifestLinkAudit` reports the differences, and a game with an empty expected set produces no report. **Silence there means "not checked" and never "clean".**
+
+### Step 8 — command classification
+
+**Done.** All 48 verbs of `eCommandType` carry a classification. Conflict detection covers every category that has a key. An unclassified verb warns and names the file and the line, and the deploy stops before it writes for a verb that this application refuses. Read [08-command-classification.md](08-command-classification.md) for the table, the conflict rules, and three corrected pitfalls.
+
+The test count went from 203 to 241. `tools/run-deploy-test.sh` still passes, and the container bytes match step 6 exactly.
+
+Five facts carry forward.
+
+1. **`CommandCatalog` is the one place that names a verb.** It holds the category, the token numbers, and the support level of all 48. `EditKeyExtractor` reads the token numbers out of it and keeps no verb list. A test compares the catalog count against the enum, so a library update that adds a verb fails at once.
+2. **The preflight reports and the gate blocks.** `ConflictPreflight` never stops a deploy. `CommandGate` runs inside `ContainerDeployEngine` before it loads anything, so a caller that skips the preflight cannot skip the rule. Keep both.
+3. **`absolute` in a filesystem command means the game directory and not the root of the filesystem.** A well behaved script therefore stays inside staging on its own. Two forms escape. A `..` segment climbs out, and `Path.Combine` drops the anchor when the second path is rooted. `PathSandbox` tests for both, and it converts the separator first because the scripts write a backslash.
+4. **We refuse `stop_errors` and `speedreflect`.** `stop_errors true` makes the library drop every later error of that script, which defeats our deploy rule. `speedreflect` copies a GPL-3.0 file that we do not ship. See defect 11.
+5. **`unlock_memory` is disk modding after all.** It writes a short header over a memory file of the game directory. Staging covers it and the revert restores it, so it needs no special handling. The step 8 pitfall said the opposite and is corrected.
 
 ## Reference files
 

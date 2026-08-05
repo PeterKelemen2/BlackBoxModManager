@@ -73,6 +73,10 @@ namespace BlackboxModManager.Core.Deploy
 				return new DeployReport(null, null, null, null);
 			}
 
+			// Classify every command before anything writes. A refused command and a path
+			// outside the staging copy both stop the deploy here. See step 8.
+			CommandGate.Check(variants, context.StagingDirectory, context.Log);
+
 			MergedLoad merged = MergedLaunch.Build(variants, context.StagingDirectory);
 
 			foreach (string note in merged.Notes) context.Log(note);

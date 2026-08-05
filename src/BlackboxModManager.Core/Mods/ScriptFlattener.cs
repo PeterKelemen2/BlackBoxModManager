@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Endscript.Commands;
+using Endscript.Enums;
+using Endscript.Helpers;
 using Endscript.Interfaces;
 
 namespace BlackboxModManager.Core.Mods
@@ -21,24 +23,82 @@ namespace BlackboxModManager.Core.Mods
 		/// <summary>Assumptions that the resolver made. A missing answer produces one.</summary>
 		public IReadOnlyList<ResolverNote> Notes { get; }
 
+		/// <summary>
+		/// The commands that the conflict check cannot compare against another mod. An
+		/// unclassified verb produces one. So does a command that reads a directory listing
+		/// at deploy time.
+		/// </summary>
+		public IReadOnlyList<ScriptWarning> Warnings { get; }
+
+		/// <summary>
+		/// True when an <c>if</c> command made this walk cover both branches. The edit list
+		/// then holds more edits than the deploy applies, and every extra edit carries
+		/// <c>Conditional</c>. A conflict against one of those is possible and not certain.
+		/// </summary>
+		public bool IsApproximate { get; }
+
 		public ResolvedScript(string variant, IReadOnlyList<ResolvedEdit> edits,
-			IReadOnlyList<string> answers, IReadOnlyList<ResolverNote> notes)
+			IReadOnlyList<string> answers, IReadOnlyList<ResolverNote> notes,
+			IReadOnlyList<ScriptWarning> warnings = null, bool isApproximate = false)
 		{
 			this.Variant = variant;
-			this.Edits = edits;
-			this.Answers = answers;
-			this.Notes = notes;
+			this.Edits = edits ?? Array.Empty<ResolvedEdit>();
+			this.Answers = answers ?? Array.Empty<string>();
+			this.Notes = notes ?? Array.Empty<ResolverNote>();
+			this.Warnings = warnings ?? Array.Empty<ScriptWarning>();
+			this.IsApproximate = isApproximate;
 		}
 
-		/// <summary>Only the commands that carry a conflict key.</summary>
-		public IEnumerable<ResolvedEdit> KeyedEdits
+		/// <summary>Only the commands that write one value into one field.</summary>
+		public IEnumerable<ResolvedEdit> KeyedEdits => this.Category(CommandCategory.ScalarFieldWrite);
+
+		/// <summary>Every command that carries a key on a container.</summary>
+		public IEnumerable<ResolvedEdit> ContainerEdits
 		{
 			get
 			{
 				foreach (ResolvedEdit edit in this.Edits)
 				{
-					if (edit.Kind == EditKind.KeyedEdit) yield return edit;
+					if (edit.Key != null) yield return edit;
 				}
+			}
+		}
+
+		/// <summary>Every command that reads a path or writes one.</summary>
+		public IEnumerable<ResolvedEdit> FilesystemEdits => this.Category(CommandCategory.FilesystemEffect);
+
+		/// <summary>
+		/// Every command that this application refuses to run. The deploy has to stop before
+		/// it writes anything.
+		/// </summary>
+		public IEnumerable<ResolvedEdit> Rejected
+		{
+			get
+			{
+				foreach (ResolvedEdit edit in this.Edits)
+				{
+					if (edit.Support == CommandSupport.Reject) yield return edit;
+				}
+			}
+		}
+
+		/// <summary>Every path that leaves the staging copy or the mod directory.</summary>
+		public IEnumerable<(ResolvedEdit Edit, PathEffect Path)> Escapes()
+		{
+			foreach (ResolvedEdit edit in this.Edits)
+			{
+				foreach (PathEffect path in edit.Paths)
+				{
+					if (!path.IsSafe) yield return (edit, path);
+				}
+			}
+		}
+
+		private IEnumerable<ResolvedEdit> Category(CommandCategory category)
+		{
+			foreach (ResolvedEdit edit in this.Edits)
+			{
+				if (edit.Category == category) yield return edit;
 			}
 		}
 	}
@@ -106,11 +166,17 @@ namespace BlackboxModManager.Core.Mods
 	}
 
 	/// <summary>
-	/// Walks a parsed script and emits the commands of the selected branches only.
+	/// Walks a parsed script and emits the commands that a deploy would apply.
 	///
 	/// The walk repeats the control flow of EndScriptManager.ProcessScript and executes
 	/// nothing. The result is what a deploy would apply, which is what conflict detection
 	/// needs before anything touches a container.
+	///
+	/// <b>An if command is the one case that the walk cannot resolve.</b> ProcessScript reads
+	/// the loaded containers and picks the branch. This layer holds no containers, so it walks
+	/// both branches and marks every edit inside as conditional. The result then covers more
+	/// than the deploy applies, and it covers no less. A walk that skipped the whole variant
+	/// would report no conflict at all, and silence is the failure that step 8 prevents.
 	/// </summary>
 	public static class ScriptFlattener
 	{
@@ -122,8 +188,12 @@ namespace BlackboxModManager.Core.Mods
 		/// <summary>
 		/// Reads the script of a variant and resolves it in one call. This is the entry
 		/// point for step 5 and step 6.
+		///
+		/// Pass the sandbox roots when the staging copy exists. Every filesystem command then
+		/// carries a resolved path and a sandbox verdict. Pass null to read the script alone.
 		/// </summary>
-		public static ResolvedScript Resolve(ModVariant variant, VariantSelection selection)
+		public static ResolvedScript Resolve(ModVariant variant, VariantSelection selection,
+			SandboxRoots roots = null)
 		{
 			if (variant is null) throw new ArgumentNullException(nameof(variant));
 
@@ -137,127 +207,243 @@ namespace BlackboxModManager.Core.Mods
 
 			ScriptAppendGraph.Walk(scriptPath);
 
-			return Flatten(variant, ScriptReader.Parse(scriptPath), selection);
+			return Flatten(variant, ScriptReader.Parse(scriptPath), selection, roots);
 		}
 
-		public static ResolvedScript Resolve(ModVariant variant, ModSelections selections)
+		public static ResolvedScript Resolve(ModVariant variant, ModSelections selections,
+			SandboxRoots roots = null)
 		{
-			return Resolve(variant, selections?.For(variant?.Name));
+			return Resolve(variant, selections?.For(variant?.Name), roots);
 		}
 
-		public static ResolvedScript Flatten(ModVariant variant, BaseCommand[] commands, VariantSelection selection)
+		public static ResolvedScript Flatten(ModVariant variant, BaseCommand[] commands,
+			VariantSelection selection, SandboxRoots roots = null)
 		{
 			if (variant is null) throw new ArgumentNullException(nameof(variant));
 			if (commands is null) throw new ArgumentNullException(nameof(commands));
 
-			var resolver = new SelectionResolver(variant, selection);
-
 			ScriptChaser.Chase(commands);
 
-			var edits = new List<ResolvedEdit>();
-			var answers = new List<string>();
-			var stack = new Stack<ISelectable>();
+			var walker = new Walker(variant, commands, new SelectionResolver(variant, selection), roots);
 
-			int index = 0;
-			int ordinal = 0;
-			int steps = 0;
+			walker.Walk(0, commands.Length, false);
 
-			while (index < commands.Length)
+			return walker.Result();
+		}
+
+		/// <summary>
+		/// One block of a selectable statement. The range holds the commands of the block and
+		/// it holds neither the header nor the closing 'end'.
+		/// </summary>
+		private readonly struct Block
+		{
+			public Block(string name, int from, int to)
 			{
-				if (++steps > MaxSteps)
-				{
-					throw new ScriptParseException(
-						"The script jumps in a loop and never ends.", variant.Name, String.Empty, 0, null);
-				}
+				this.Name = name;
+				this.From = from;
+				this.To = to;
+			}
 
-				BaseCommand command = commands[index];
+			public string Name { get; }
 
-				if (command is EndCommand)
+			/// <summary>The first command of the block.</summary>
+			public int From { get; }
+
+			/// <summary>One past the last command of the block.</summary>
+			public int To { get; }
+		}
+
+		private sealed class Walker
+		{
+			private readonly ModVariant _variant;
+			private readonly BaseCommand[] _commands;
+			private readonly SelectionResolver _resolver;
+			private readonly SandboxRoots _roots;
+			private readonly List<ResolvedEdit> _edits = new List<ResolvedEdit>();
+			private readonly List<string> _answers = new List<string>();
+			private readonly List<ScriptWarning> _warnings = new List<ScriptWarning>();
+
+			private int _ordinal;
+			private int _steps;
+			private bool _approximate;
+
+			public Walker(ModVariant variant, BaseCommand[] commands, SelectionResolver resolver,
+				SandboxRoots roots)
+			{
+				this._variant = variant;
+				this._commands = commands;
+				this._resolver = resolver;
+				this._roots = roots;
+			}
+
+			public ResolvedScript Result()
+			{
+				return new ResolvedScript(this._variant.Name, this._edits, this._answers,
+					this._resolver.Notes, this._warnings, this._approximate);
+			}
+
+			/// <summary>
+			/// Walks the commands of one range. Set conditional to true for the branches of an
+			/// if command.
+			/// </summary>
+			public void Walk(int from, int to, bool conditional)
+			{
+				for (int i = from; i < to; ++i)
 				{
-					if (stack.Count == 0)
+					if (++this._steps > MaxSteps)
 					{
+						throw new ScriptParseException(
+							"The script jumps in a loop and never ends.", this._variant.Name, String.Empty, 0, null);
+					}
+
+					BaseCommand command = this._commands[i];
+
+					if (command is EndCommand)
+					{
+						// Chase pairs every 'end' with a statement, and this walk enters a
+						// block below its own 'end'. A reachable 'end' therefore closes
+						// nothing.
 						throw new ScriptParseException(
 							"This 'end' command closes nothing.",
 							command.Filename, command.Line, command.Index, null);
 					}
 
-					stack.Pop();
-				}
-				else if (command is ISelectable selectable)
-				{
-					int choice = Choose(selectable, resolver, ref ordinal, answers, variant);
-
-					selectable.Choice = choice;
-					stack.Push(selectable);
-
-					Endscript.Helpers.OptionState option = selectable.Options[choice];
-
-					if (option.Start == -1)
+					if (command is ISelectable selectable)
 					{
+						this.Enter(selectable, i, conditional);
+
+						// Continue after the closing 'end' of the statement.
+						i = selectable.LastCommand;
+
+						continue;
+					}
+
+					if (command is OptionalCommand unknown)
+					{
+						// A block header never reaches this point, because Blocks bounds every
+						// range at the next header. So this is a verb that we do not know. A
+						// skipped edit produces an install that is wrong in a way the user
+						// cannot see. Name the file and the line and stop.
 						throw new ScriptParseException(
-							$"The script has no block named \"{option.Name}\" for this question.",
+							$"The command \"{unknown.Option}\" is not a known verb.",
 							command.Filename, command.Line, command.Index, null);
 					}
 
-					// Continue at the command after the block header.
-					index = option.Start;
+					this.Emit(command, conditional);
 				}
-				else if (stack.Count > 0 && command is OptionalCommand optional && stack.Peek().Contains(optional.Option))
-				{
-					// The next block of the same question starts here, so the chosen block
-					// ended. Jump past the closing 'end'.
-					ISelectable peek = stack.Peek();
+			}
 
-					if (peek.LastCommand == -1)
+			private void Emit(BaseCommand command, bool conditional)
+			{
+				ResolvedEdit edit = EditKeyExtractor.Extract(command, this._roots, conditional);
+
+				this._edits.Add(edit);
+
+				ScriptWarning warning = EditKeyExtractor.Warn(edit);
+
+				if (warning != null) this._warnings.Add(warning);
+			}
+
+			/// <summary>
+			/// Handles one selectable statement. An if statement walks every branch. A
+			/// question walks the branch that the stored answer names.
+			/// </summary>
+			private void Enter(ISelectable selectable, int index, bool conditional)
+			{
+				var command = (BaseCommand)selectable;
+				IReadOnlyList<Block> blocks = Blocks(selectable, command);
+
+				if (selectable is IfStatementCommand)
+				{
+					// ProcessScript reads the loaded containers here. This layer holds none.
+					this._approximate = true;
+
+					if (blocks.Count < selectable.Options.Length)
 					{
-						throw new ScriptParseException(
-							"This selectable statement has no closing 'end' command.",
-							command.Filename, command.Line, command.Index, null);
+						// ProcessScript jumps to Options[Choice].Start with no fallback, so a
+						// missing branch ends the deploy when the check picks that branch.
+						this._warnings.Add(new ScriptWarning(eCommandType.@if,
+							"has no block for every branch. The deploy stops when the check " +
+							"picks the branch that the script does not hold.",
+							command.Filename, command.Index, command.Line));
 					}
 
-					index = peek.LastCommand;
-					stack.Pop();
+					foreach (Block block in blocks) this.Walk(block.From, block.To, true);
+
+					return;
 				}
-				else if (command is OptionalCommand unknown)
+
+				int choice = this._resolver.Resolve(selectable, this._ordinal);
+				string name = selectable.Options[choice].Name;
+
+				if (conditional)
 				{
-					// Not a block header of the enclosing question, so it is a verb that we
-					// do not know. A skipped edit produces an install that is wrong in a way
-					// the user cannot see. Name the file and the line and stop.
+					// ProcessScript counts only the questions that it reaches. An if command
+					// encloses this question, so the deploy may never ask it. The ordinal of
+					// every later question then differs from the ordinal here.
+					this._warnings.Add(new ScriptWarning(command.Type,
+						$"asks the question \"{selectable.Description}\" inside an 'if' block. " +
+						"The stored answers cannot line up with the deploy.",
+						command.Filename, command.Index, command.Line));
+				}
+
+				this._answers.Add(name);
+				++this._ordinal;
+
+				foreach (Block block in blocks)
+				{
+					if (block.Name != name) continue;
+
+					this.Walk(block.From, block.To, conditional);
+
+					return;
+				}
+
+				throw new ScriptParseException(
+					$"The script has no block named \"{name}\" for this question.",
+					command.Filename, command.Line, command.Index, null);
+			}
+
+			/// <summary>
+			/// Reads the block of every option out of the jump targets that Chase wrote.
+			///
+			/// Never read the block order out of the option order. A checkbox always reports
+			/// 'disabled' first and 'enabled' second, and a script can write the two blocks
+			/// the other way round.
+			/// </summary>
+			private static IReadOnlyList<Block> Blocks(ISelectable selectable, BaseCommand command)
+			{
+				int last = selectable.LastCommand;
+
+				if (last < 0)
+				{
 					throw new ScriptParseException(
-						$"The command \"{unknown.Option}\" is not a known verb.",
+						"This selectable statement has no closing 'end' command.",
 						command.Filename, command.Line, command.Index, null);
 				}
-				else
+
+				var found = new List<Block>(selectable.Options.Length);
+
+				foreach (OptionState option in selectable.Options)
 				{
-					edits.Add(EditKeyExtractor.Extract(command));
+					// Start holds the index of the block header. The block starts after it.
+					if (option.Start >= 0) found.Add(new Block(option.Name, option.Start + 1, last));
 				}
 
-				++index;
+				found.Sort((left, right) => left.From.CompareTo(right.From));
+
+				// A block ends where the next block starts. The last block ends at the 'end'.
+				var blocks = new List<Block>(found.Count);
+
+				for (int i = 0; i < found.Count; ++i)
+				{
+					int to = i + 1 < found.Count ? found[i + 1].From - 1 : last;
+
+					blocks.Add(new Block(found[i].Name, found[i].From, to));
+				}
+
+				return blocks;
 			}
-
-			return new ResolvedScript(variant.Name, edits, answers, resolver.Notes);
-		}
-
-		private static int Choose(ISelectable selectable, SelectionResolver resolver, ref int ordinal,
-			List<string> answers, ModVariant variant)
-		{
-			if (selectable is IfStatementCommand)
-			{
-				// An if statement asks the user nothing. ProcessScript evaluates it against
-				// the loaded containers, which this layer does not have. A static walk
-				// cannot know the answer.
-				throw new ScriptParseException(
-					$"The mod \"{variant.Name}\" uses an 'if' command. This layer cannot resolve one " +
-					"without the loaded containers. See step 8.",
-					((BaseCommand)selectable).Filename, ((BaseCommand)selectable).Line,
-					((BaseCommand)selectable).Index, null);
-			}
-
-			int choice = resolver.Resolve(selectable, ordinal);
-			answers.Add(selectable.Options[choice].Name);
-			++ordinal;
-
-			return choice;
 		}
 	}
 }

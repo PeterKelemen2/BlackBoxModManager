@@ -174,7 +174,8 @@ namespace BlackboxModManager.Tests
 		[Fact]
 		public void AValueReadsAsANumberWithTheInvariantCulture()
 		{
-			var edit = new ResolvedEdit(eCommandType.update_collection, EditKind.KeyedEdit,
+			var edit = new ResolvedEdit(eCommandType.update_collection,
+				CommandCatalog.Lookup(eCommandType.update_collection),
 				new EditKey("A", new[] { "B" }), "-0.19500002", "f", 1, "line");
 
 			Assert.True(edit.TryReadNumber(out double number));

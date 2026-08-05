@@ -140,6 +140,11 @@ namespace BlackboxModManager.App
 				$"The check read every variant. It could not read {conflicts.Unchecked.Count}.");
 			Expect(conflicts.CheckedVariants == 2,
 				$"The check read 2 variants. It read {conflicts.CheckedVariants}.");
+			Expect(conflicts.CanDeploy,
+				$"The check refuses no command. It refuses {conflicts.Rejections.Count} commands and " +
+				$"it found {conflicts.Escapes.Count} paths outside staging.");
+			Expect(conflicts.Warnings.Count == 0,
+				$"Both mods use classified commands only. The check warns {conflicts.Warnings.Count} times.");
 
 			// ------------------------------------------------------------ the deploy
 

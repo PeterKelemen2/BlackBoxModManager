@@ -364,5 +364,62 @@ namespace BlackboxModManager.Tests
 			Assert.Single(report.Unchecked);
 			Assert.True(report.IsClean);
 		}
+
+		// ---------------------------------------------------------------- the command gate
+
+		/// <summary>
+		/// The gate sits inside the deploy engine and not only in the preflight. A caller that
+		/// skips the preflight must not be able to skip the rule.
+		/// </summary>
+		[Fact]
+		public void TheGateStopsAModThatUsesARefusedCommand()
+		{
+			InstalledMod lap = this.Import(ExampleMods.OneLap);
+			IReadOnlyList<EnabledVariant> variants = this.Read(ProfileWith(lap, "1 Lap URL Races"));
+
+			this.AppendLine(lap, Path.Combine("MOD", "URL.end"), "stop_errors true");
+
+			DeployServiceException error = Assert.Throws<DeployServiceException>(
+				() => CommandGate.Check(variants, this.Staging()));
+
+			Assert.Contains("stop_errors", error.Message, StringComparison.Ordinal);
+		}
+
+		[Fact]
+		public void TheGateStopsAModThatWritesOutsideStaging()
+		{
+			InstalledMod lap = this.Import(ExampleMods.OneLap);
+			IReadOnlyList<EnabledVariant> variants = this.Read(ProfileWith(lap, "1 Lap URL Races"));
+
+			this.AppendLine(lap, Path.Combine("MOD", "URL.end"), "erase_file absolute ..\\..\\important.txt");
+
+			DeployServiceException error = Assert.Throws<DeployServiceException>(
+				() => CommandGate.Check(variants, this.Staging()));
+
+			Assert.Contains("outside the staging copy", error.Message, StringComparison.Ordinal);
+		}
+
+		[Fact]
+		public void TheGateLetsTheExampleModsThrough()
+		{
+			InstalledMod lap = this.Import(ExampleMods.OneLap);
+			InstalledMod camera = this.Import(ExampleMods.Camera);
+
+			var profile = new Profile("Test", nameof(GameINT.Underground2));
+			profile.Ensure(lap.Id).Enabled = true;
+			profile.Find(lap.Id).Selections.Ensure("1 Lap URL Races").Enabled = true;
+			profile.Ensure(camera.Id).Enabled = true;
+			profile.Find(camera.Id).Selections.Ensure("Install").Enabled = true;
+
+			CommandGate.Check(this.Read(profile), this.Staging());
+		}
+
+		/// <summary>Adds one line to the end of a script of an imported mod.</summary>
+		private void AppendLine(InstalledMod mod, string relative, string line)
+		{
+			string path = Path.Combine(mod.ContentRoot, relative);
+
+			File.AppendAllText(path, line + Environment.NewLine);
+		}
 	}
 }

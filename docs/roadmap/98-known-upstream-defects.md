@@ -100,3 +100,33 @@ Review this list when a symptom does not match the code you wrote.
 **What happens:** the method takes the directory from `Process.GetCurrentProcess().MainModule.FileName` and writes the new container there, then moves it over the target. `Invoke` selects this path for a container that is not compressed and is larger than 64 MB. An installation directory that we cannot write to therefore fails the save.
 
 **Act on this only if** we hit a container over 64 MB. `GLOBALB.LZC` is compressed, so Underground 2 takes the buffer path instead. Later games may not.
+
+## 11. `stop_errors true` drops every later failure of a script
+
+**Where:** `Endscript/Core/EndScriptManager.cs`, `ExecuteSingle`, and `Endscript/Commands/StopErrorsCommand.cs`.
+
+**What happens:** `ExecuteSingle` catches every exception of a command. It adds an `EndError` only when `_stop_errors` is false. So one `stop_errors true` line makes the manager drop every later failure of that script with no trace. `manager.Errors` then reports nothing and the script looks like a script that worked.
+
+**Why it matters to us:** our whole deploy rule is that one entry in `manager.Errors` fails the deploy. This command defeats that rule. A broken mod that looks installed is the worst result this project can produce.
+
+**Work around it:** refuse the command. `CommandCatalog` marks it `Reject`, and `CommandGate` stops the deploy before it writes. See step 8.
+
+**The scope is one variant.** `ContainerDeployEngine.Apply` builds one `EndScriptManager` per variant, so the flag never reaches the next mod.
+
+## 12. `CheckboxCommand` and `ComboboxCommand` default `LastCommand` to zero
+
+**Where:** `Endscript/Commands/CheckboxCommand.cs` and `ComboboxCommand.cs`.
+
+**What happens:** both declare `public int LastCommand { get; set; }` with no initializer, so the value starts at 0. `IfStatementCommand` declares the same property with `= -1`. `ProcessScript` and our own walk both test for -1 to find a statement with no closing `end`.
+
+**Why it does not bite today:** `CommandChase` sets `LastCommand` for every statement that has an `end`, and it throws for a statement that does not. So the default never survives a successful chase.
+
+**Act on this only if** you write code that reads `LastCommand` without a chase first. Test for a value that is not greater than the index of the statement, and never for -1 alone.
+
+## 13. `ProcessScript` throws when an `if` branch has no block
+
+**Where:** `Endscript/Core/EndScriptManager.cs`, `ProcessScript`.
+
+**What happens:** the method reads `Options[Choice].Start` and throws `Missing optional command '<name>'` when that value is -1. An `if` command always offers `do` and `else`. A script that writes a `do` block and no `else` block therefore ends the deploy whenever the condition is false.
+
+**Work around it:** the flattener of step 8 walks every branch that exists and warns when a branch has no block. The warning names the file and the line before the deploy starts.

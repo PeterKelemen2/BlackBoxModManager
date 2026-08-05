@@ -713,11 +713,27 @@ namespace BlackboxModManager.App.ViewModels
 
 				foreach (ConflictEntry entry in report.Conflicts) this.Conflicts.Add(entry.ToString());
 
+				// A refused command and a path outside staging both stop the deploy. Put
+				// them above the warnings, because the user has to act on them.
+				foreach (string line in report.Rejections) this.Conflicts.Add($"The deploy stops. {line}");
+
+				foreach (string line in report.Escapes) this.Conflicts.Add($"The deploy stops. {line}");
+
+				foreach (string line in report.Warnings) this.Conflicts.Add($"Warning. {line}");
+
 				foreach (string line in report.Unchecked) this.Conflicts.Add($"Not checked. {line}");
+
+				foreach (string line in report.Approximate)
+				{
+					this.Conflicts.Add($"The mod \"{line}\" uses an 'if' command. The check walked both " +
+						"branches, so a conflict against it is possible and not certain.");
+				}
 
 				if (report.Conflicts.Count > 0)
 				{
-					this.Conflicts.Add("The last mod in the load order wins. Move a mod to change the winner.");
+					this.Conflicts.Add("The last mod in the load order wins a field conflict. " +
+						"Move a mod to change the winner. An existence conflict makes a command fail, " +
+						"and load order does not settle it.");
 				}
 			}
 			catch (Exception ex)

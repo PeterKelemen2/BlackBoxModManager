@@ -169,6 +169,35 @@ Three command types implement `ISelectable`.
 - `CheckboxCommand` — `Options` is always two fixed entries. Index 0 is named `disabled`. Index 1 is named `enabled`. `Prepare` needs exactly 2 tokens. The script block headers must use those two names.
 - `IfStatementCommand` — this one does **not** pause. `ProcessScript` calls `Execute` on it and continues.
 
+## Command argument shapes
+
+`CommandCatalog` in `src/BlackboxModManager.Core/Mods/CommandCatalog.cs` holds the token number of every argument of all 48 verbs. Read the catalog before you read this section. This section holds the three rules that the catalog cannot state.
+
+**The token count is fixed for every verb except four.** `Prepare` throws `InvalidArgsNumberException` for a wrong count. `update_collection` accepts 6 or 8. `update_incareer` accepts 8 or 10. `combobox` accepts 4 or more. `if` accepts 2 or more.
+
+**A scalar write puts the value last and the name path in the middle.** The five verbs `update_collection`, `update_incareer`, `update_string`, `update_texture`, and `static` all follow it. Read the tokens between the container and the last token as the name path. Never read a fixed count for them.
+
+**A `copy_` verb names the source before the target.** `copy_collection [file] [manager] [from] [to]`. The same order holds for `copy_texture` and `copy_incareer`. The thing that appears is the last token, not the first.
+
+## `ePathType` and the two anchors
+
+```csharp
+public enum ePathType : int { Invalid = 0, Relative = 1, Absolute = 2 }
+```
+
+`EnumConverter.StringToPathType` reads the word `relative` or the word `absolute`. Every other word gives `Invalid`, and the command then throws in `Prepare`.
+
+**`absolute` does not mean the root of the filesystem.** The two anchors are:
+
+| Word       | Anchor                    | What it is in a deploy        |
+| ---------- | ------------------------- | ----------------------------- |
+| `relative` | `CollectionMap.Directory` | The mod directory.            |
+| `absolute` | `map.Profile.Directory`   | The staging copy of the game. |
+
+Nine commands take a path. `create_file`, `create_folder`, `erase_file`, `erase_folder`, and `move_file` read the anchor out of a token. `unlock_memory`, `speedreflect`, `pack_stream`, and `unpack_stream` always use the game directory.
+
+**Every one of them calls `Path.Combine(anchor, path)` and nothing else.** So a path that names its own root reaches that place and not the anchor, and a `..` segment climbs out. See `PathSandbox`.
+
 ## `EndError`
 
 ```csharp

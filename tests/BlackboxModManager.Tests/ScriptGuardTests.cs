@@ -159,10 +159,11 @@ namespace BlackboxModManager.Tests
 		}
 
 		[Fact]
-		public void AnIfCommandIsReportedAsUnresolvableAndNotGuessed()
+		public void AnIfCommandMakesTheWalkCoverBothBranches()
 		{
-			// ProcessScript evaluates an if against the loaded containers. A static walk
-			// has none, so it must say so rather than pick a branch.
+			// ProcessScript evaluates an if against the loaded containers. A static walk has
+			// none, so it walks both branches and marks every edit inside as conditional. A
+			// walk that skipped the variant would report no conflict at all.
 			using var temp = new TempDirectory();
 			temp.WriteManifest("Mod.end", "Underground2", "Script.end");
 			temp.WriteScript("Script.end",
@@ -174,11 +175,12 @@ namespace BlackboxModManager.Tests
 				"end");
 
 			ModVariant variant = ModPackageReader.Read(temp.Path).Variants[0];
+			ResolvedScript resolved = ScriptFlattener.Resolve(variant, (VariantSelection)null);
 
-			ScriptParseException error = Assert.Throws<ScriptParseException>(
-				() => ScriptFlattener.Resolve(variant, (VariantSelection)null));
-
-			Assert.Contains("'if' command", error.Message, StringComparison.Ordinal);
+			Assert.True(resolved.IsApproximate);
+			Assert.Equal(2, resolved.Edits.Count);
+			Assert.All(resolved.Edits, edit => Assert.True(edit.Conditional));
+			Assert.Equal(new[] { "1", "2" }, resolved.Edits.Select(e => e.Value).ToArray());
 		}
 
 		// ------------------------------------------------------------------ tokenizer

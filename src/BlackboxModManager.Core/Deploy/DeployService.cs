@@ -157,7 +157,9 @@ namespace BlackboxModManager.Core.Deploy
 			IReadOnlyList<EnabledVariant> variants = VariantReader.Read(
 				profile, this._store, install.Game, null);
 
-			return ConflictPreflight.Run(variants, log);
+			// The staging directory need not exist yet. The sandbox test compares paths and
+			// it reads no file.
+			return ConflictPreflight.Run(variants, this.WorkspaceOf(install).StagingDirectory, log);
 		}
 
 		/// <summary>
