@@ -1,4 +1,4 @@
-# Step 10 — Texmod support
+# Step 90 — Texmod support
 
 Add `.tpf` texture packages.
 
