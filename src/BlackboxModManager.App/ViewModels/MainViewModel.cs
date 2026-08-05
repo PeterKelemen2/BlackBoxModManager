@@ -8,6 +8,7 @@ using BlackboxModManager.App.Views;
 using BlackboxModManager.Core;
 using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Deploy;
+using BlackboxModManager.Core.Files;
 using BlackboxModManager.Core.Games;
 using BlackboxModManager.Core.Mods;
 using BlackboxModManager.Core.Profiles;
@@ -33,8 +34,11 @@ namespace BlackboxModManager.App.ViewModels
 		private readonly GameInstallService _games = new GameInstallService();
 		private readonly BinaryInstallService _binary = new BinaryInstallService();
 		private readonly ProfileStore _profiles = new ProfileStore();
-		private readonly ModStore _store = new ModStore();
-		private readonly ModImporter _importer;
+
+		// The store and the importer follow the setting, so a move of the store takes effect
+		// with no restart. Every command reads these fields and never a captured copy.
+		private ModStore _store;
+		private ModImporter _importer;
 
 		private Settings _settings;
 		private Profile _profile;
@@ -83,16 +87,18 @@ namespace BlackboxModManager.App.ViewModels
 		public MainViewModel(IUserInteraction ask)
 		{
 			this._ask = ask ?? throw new ArgumentNullException(nameof(ask));
-			this._importer = new ModImporter(this._store, AppPaths.ImportDirectory);
 
 			AppPaths.CreateRoot();
 			this._settings = SettingsStore.Load();
 			this._game = StoredGame(this._settings);
 			this._selectedGame = this._game;
 
+			this.OpenStore();
+
 			this.Write(Rendering.Report);
 			this.Write($"The application data directory is {AppPaths.Root}.");
-			this.Write($"The mod store is {AppPaths.ModsDirectory}.");
+			this.Write($"The mod store is {this._store.Root}." +
+				(this._settings.ModStoreIsDefault ? String.Empty : " The settings name that place."));
 			this.Write($"This build manages {this.Games.Count} games: {String.Join(", ", this.Games)}.");
 
 			if (GameCatalog.Absent.Count > 0)
@@ -150,6 +156,9 @@ namespace BlackboxModManager.App.ViewModels
 
 		[ObservableProperty]
 		private string _loaderHeader = String.Empty;
+
+		[ObservableProperty]
+		private string _modStoreStatus = String.Empty;
 
 		private GameDefinition _selectedGame;
 
@@ -1014,6 +1023,176 @@ namespace BlackboxModManager.App.ViewModels
 
 		private bool CanDeploy() => this.IsIdle && this.IsGameReady && this._profile != null;
 
+		// ---------------------------------------------------------------- the mod store
+
+		/// <summary>
+		/// Points the store and the importer at the directory that the settings name.
+		///
+		/// Call this at start and after every change of the setting. The two objects hold a
+		/// path and nothing else, so a rebuild costs nothing.
+		/// </summary>
+		private void OpenStore()
+		{
+			this._store = new ModStore(this._settings.ResolveModStore());
+			this._importer = new ModImporter(this._store, AppPaths.ImportDirectory);
+
+			this.ModStoreStatus = this._settings.ModStoreIsDefault
+				? $"The mod store is at the default place: {this._store.Root}"
+				: $"The mod store is at {this._store.Root}";
+		}
+
+		/// <summary>
+		/// Moves the mod store, or points this application at a store that already exists.
+		///
+		/// <b>The volume of the store decides the cost of every deploy.</b> A hard link cannot
+		/// cross a volume, so a store on the volume of the game gets hard links and a store
+		/// anywhere else falls through to Copy. A user who keeps a large library on another
+		/// volume than the game pays that on every deploy.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(IsIdle))]
+		private void SetModStore()
+		{
+			var choices = new List<UserChoice>
+			{
+				new UserChoice("pick", "Choose another directory",
+					"Pick a directory. This application then offers to move the mods that the store " +
+					"holds today."),
+			};
+
+			if (!this._settings.ModStoreIsDefault)
+			{
+				choices.Add(new UserChoice("default", "Use the default place",
+					$"Go back to {AppPaths.ModsDirectory}."));
+			}
+
+			string answer = this._ask.PickChoice(
+				$"The mod store is at {this._store.Root}.\n\n" +
+				"A hard link cannot cross a volume. A store on the volume of the game makes every " +
+				"deploy cost almost no disk space. A store anywhere else makes every deploy copy " +
+				"every byte of every mod.",
+				choices);
+
+			if (answer is null) return;
+
+			string target = answer == "default"
+				? AppPaths.ModsDirectory
+				: this._ask.PickDirectory("Choose the directory for the mod store.", this._store.Root);
+
+			if (String.IsNullOrWhiteSpace(target)) return;
+
+			this.MoveStore(target);
+		}
+
+		private void MoveStore(string target)
+		{
+			ModStore current = this._store;
+
+			if (FileTree.IsSameOrInside(target, current.Root) && FileTree.IsSameOrInside(current.Root, target))
+			{
+				this._ask.ShowMessage($"The mod store already sits at {current.Root}.");
+				return;
+			}
+
+			string problem = ModStoreRelocator.Problem(target, this._install?.Root);
+
+			if (problem.Length > 0)
+			{
+				this._ask.ShowError(problem);
+				return;
+			}
+
+			int count = current.List().Count;
+
+			// A user who already moved the directory by hand points at it instead of moving it.
+			// Both cases are legitimate, so ask which one this is.
+			if (count > 0)
+			{
+				bool move = this._ask.Confirm(
+					$"The store at {current.Root} holds {count} mods.\n\n" +
+					$"Move them to {target}?\n\n" +
+					"Choose No to leave them where they are and read the new directory instead. " +
+					"The profiles name a mod by its identifier, so they survive either answer.");
+
+				if (move)
+				{
+					try
+					{
+						ModStoreMoveReport report = ModStoreRelocator.Move(
+							current, target, this._install?.Root, this.Write);
+
+						foreach (string kept in report.Kept) this.Write($"  stayed behind: {kept}");
+
+						if (report.Kept.Count > 0)
+						{
+							this._ask.ShowError(
+								$"{report.Kept.Count} of {count} mods stayed at {current.Root}. " +
+								$"{String.Join(" ", report.Kept)} Import them again, or move the " +
+								"directories by hand.");
+						}
+					}
+					catch (Exception ex)
+					{
+						this._ask.ShowError($"The mod store did not move. {ex.Message}");
+						return;
+					}
+				}
+			}
+
+			// Store the new place only after the move, so a failed move leaves the setting on
+			// the directory that still holds the mods.
+			this._settings.ModStoreOverride =
+				FileTree.IsSameOrInside(target, AppPaths.ModsDirectory)
+					&& FileTree.IsSameOrInside(AppPaths.ModsDirectory, target)
+				? null
+				: target;
+
+			SettingsStore.Save(this._settings);
+
+			this.OpenStore();
+			this.Write($"The mod store is now {this._store.Root}.");
+
+			this.RefreshMods();
+			this.ReportStoreVolume();
+		}
+
+		/// <summary>
+		/// Says which method the next deploy will use for the files of a mod. A user who moved
+		/// the store to save time has to be able to see whether it worked.
+		/// </summary>
+		private void ReportStoreVolume()
+		{
+			if (this._install is null) return;
+
+			try
+			{
+				string staging = this.Service().WorkspaceOf(this._install).StagingDirectory;
+
+				Directory.CreateDirectory(this._store.Root);
+				Directory.CreateDirectory(staging);
+
+				LinkProbeResult probe = LinkSupport.ProbeBetween(this._store.Root, staging);
+
+				this.Write($"A deploy from this store uses {probe.Best}.");
+
+				if (probe.Best == LinkKind.HardLink)
+				{
+					this.Status = "The mod store shares the volume of the game. A deploy uses hard links.";
+					return;
+				}
+
+				foreach (LinkProbe entry in probe.Probes)
+				{
+					if (entry.Kind == LinkKind.HardLink && !entry.Works) this.Write($"  {entry}");
+				}
+
+				this.Status = $"A deploy from this store uses {probe.Best}, so it writes every byte.";
+			}
+			catch (Exception ex)
+			{
+				this.Write($"The link probe of the new store failed. {ex.Message}");
+			}
+		}
+
 		/// <summary>
 		/// Lists every directory of this application, so that the user can look at one.
 		///
@@ -1027,8 +1206,10 @@ namespace BlackboxModManager.App.ViewModels
 			{
 				new FolderRow("Application data", "Settings, profiles, the mod store, and the logs.",
 					AppPaths.Root),
-				new FolderRow("Mod store", "One directory per imported mod. A deploy reads from here.",
-					AppPaths.ModsDirectory),
+				new FolderRow("Mod store",
+					"One directory per imported mod. A deploy reads from here. The volume of this " +
+					"directory decides whether a deploy can use hard links.",
+					this._store.Root),
 				new FolderRow("Logs", "The deploy report and the error log.", AppPaths.LogDirectory),
 			};
 

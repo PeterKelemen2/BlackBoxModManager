@@ -57,6 +57,33 @@ namespace BlackboxModManager.Core
 		public string WorkRootOverride { get; set; }
 
 		/// <summary>
+		/// Where the mod store goes. Null puts it under our own application data.
+		///
+		/// The volume of this directory decides the cost of every deploy. <b>A hard link
+		/// cannot cross a volume.</b> A store on the volume of the game gets hard links, and
+		/// a deploy then costs almost no disk space and almost no time. A store on another
+		/// volume falls through to Copy, and every deploy writes every byte of every mod.
+		///
+		/// Keep the store outside every game directory whatever you set. A game reinstall
+		/// deletes its own directory, and that would take the library of the user with it.
+		/// </summary>
+		public string ModStoreOverride { get; set; }
+
+		/// <summary>
+		/// The mod store directory that this application uses. It falls back to the default
+		/// when the setting holds nothing.
+		/// </summary>
+		public string ResolveModStore()
+		{
+			return String.IsNullOrWhiteSpace(this.ModStoreOverride)
+				? AppPaths.ModsDirectory
+				: Path.TrimEndingDirectorySeparator(Path.GetFullPath(this.ModStoreOverride));
+		}
+
+		/// <summary>True when the mod store sits at the default place.</summary>
+		public bool ModStoreIsDefault => String.IsNullOrWhiteSpace(this.ModStoreOverride);
+
+		/// <summary>
 		/// Rebuilds both dictionaries so that they ignore letter case.
 		///
 		/// A deserialized dictionary carries the default comparer, which compares letter

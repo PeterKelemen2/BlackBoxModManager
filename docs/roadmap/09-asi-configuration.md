@@ -255,6 +255,35 @@ The window holds a `Folders` button. It lists the game install, the workspace, t
 
 **A deploy that the verify stopped leaves its result in the staging copy**, and the failure above was only readable from inside that directory. `Open` asks the shell of the platform first and `explorer.exe` second. **`Copy path` always works**, because a Wine prefix has no guaranteed file manager.
 
+### The mod store location
+
+**The volume of the mod store decides the cost of every deploy.** A hard link cannot cross a volume, and the fix above removed the symbolic link as a fallback under Wine. So a store on the volume of the game gets hard links, and a store anywhere else copies every byte of every mod on every deploy.
+
+The default store sits under the application data of this application, which is inside the Wine prefix. A game on another volume therefore gets Copy by default. `Settings.ModStoreOverride` moves the store, and the `Mod store` button of the window drives it.
+
+The button asks two questions.
+
+1. **Where.** It offers a directory picker and, when the store already sits somewhere else, a way back to the default place.
+2. **Whether to move the mods.** A store that holds mods gets one confirmation. `Yes` moves them. `No` leaves them where they are and reads the new directory instead, which is the right answer for a user who already moved the directory by hand. A profile names a mod by its identifier, so it survives either answer.
+
+`ModStoreRelocator` does the move, and it refuses three targets.
+
+| Target                          | Why it is refused                                                        |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| Inside the game install         | A game reinstall deletes its own directory and would take the library.    |
+| Inside a workspace              | A deploy deletes the staging directory and rebuilds it.                   |
+| Overlapping the current store   | A move of a directory into itself.                                        |
+
+It also writes a probe file into the target, because a read-only volume answers there and nowhere else.
+
+**It moves one mod at a time, and it deletes nothing before the copy exists.** Each mod of the store is a self-contained directory, so a failure halfway through leaves every mod readable at one of the two places. A mod whose directory name the target already holds stays where it is, and the report names it. **The setting changes only after the move**, so a failed move leaves the setting on the directory that still holds the mods.
+
+A move within one volume renames each directory and costs nothing. A move across volumes copies and then deletes, and the report says which of the two happened.
+
+After a move the window probes the two real directories again and writes the method that the next deploy will use. A user who moved the store to save time has to be able to see whether it worked.
+
+**Measured with the two real mods.** The default store under the Wine prefix on one volume and the game on another gives `Best = Copy`, and the deploy writes 7 files by Copy. The same store on the volume of the game gives `Best = HardLink`, and the deploy writes 3 files by hard link and 4 by copy. The four copies are the `.ini`, the `.dat`, and the `.txt` files, which `DeployPolicy.WritableExtensions` forces to a private copy on purpose.
+
 ### The types
 
 | Type                                     | Holds                                                                  |
