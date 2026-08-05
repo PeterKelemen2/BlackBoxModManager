@@ -5,7 +5,8 @@
   xmlns:ui="clr-namespace:BlackboxModManager.App.Theme"
   Title="Theme test"
   Width="900"
-  Height="700">
+  Height="700"
+  Background="{StaticResource SurfaceBase}">
   <!--
     Every control, in every mode, in every state: resting, hover, pressed, disabled,
     focused, and selected. One Wine run checks the whole theme. Hover and pressed do
