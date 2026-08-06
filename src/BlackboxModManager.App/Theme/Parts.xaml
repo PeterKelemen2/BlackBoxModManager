@@ -57,7 +57,13 @@
     <Setter Property="Foreground" Value="{StaticResource WarningDefault}" />
   </Style>
 
-  <!--  The drag handle of the mod row. Three short dashes, drawn with Path geometry.  -->
+  <!--
+    The drag handle of the mod row. Three short dashes, drawn with Path geometry.
+
+    The style sets no cursor. A path answers a hit test only where it paints, so the cursor
+    over these three 1.5 pixel lines changed on every 2.5 pixel gap between them. The row
+    carries the cursor now, and DragHandleArea below carries the hit area.
+  -->
   <Style x:Key="DragHandle" TargetType="Path">
     <Setter Property="Data" Value="M 0,0 L 10,0 M 0,4 L 10,4 M 0,8 L 10,8" />
     <Setter Property="Stroke" Value="{StaticResource TextSecondary}" />
@@ -66,8 +72,19 @@
     <Setter Property="StrokeEndLineCap" Value="Round" />
     <Setter Property="Width" Value="10" />
     <Setter Property="Height" Value="8" />
-    <Setter Property="Cursor" Value="SizeAll" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
     <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!--
+    The hit area around the handle. A transparent fill answers a hit test and a null fill
+    does not, so this border makes the whole block of the icon one target. The icon is 10 by
+    8 pixels and the target is 26 wide and the full height of the row.
+  -->
+  <Style x:Key="DragHandleArea" TargetType="Border">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
   </Style>
 
   <!--
@@ -90,6 +107,7 @@
       Margin="0,0,0,6"
       Padding="8,6"
       Background="{StaticResource SurfaceRaised}"
+      Cursor="SizeAll"
       BorderBrush="{StaticResource BorderDefault}"
       BorderThickness="1"
       CornerRadius="{StaticResource RadiusDefault}">
@@ -117,10 +135,9 @@
             <ColumnDefinition Width="*" />
           </Grid.ColumnDefinitions>
 
-          <Path
-            Grid.Column="0"
-            Margin="0,0,8,0"
-            Style="{StaticResource DragHandle}" />
+          <Border Grid.Column="0" Style="{StaticResource DragHandleArea}">
+            <Path Style="{StaticResource DragHandle}" />
+          </Border>
 
           <ToggleButton
             Grid.Column="1"

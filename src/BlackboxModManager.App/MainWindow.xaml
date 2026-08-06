@@ -9,7 +9,11 @@
   MinWidth="820"
   MinHeight="520"
   Background="{StaticResource SurfaceBase}">
-  <Grid Margin="12">
+  <!--
+    DragLayer is the host of the floating copy of a drag. It has a name because the adorner
+    needs a host outside the mod list. See docs/roadmap/11-ui-polish.md, Part B.
+  -->
+  <Grid x:Name="DragLayer" Margin="12">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />

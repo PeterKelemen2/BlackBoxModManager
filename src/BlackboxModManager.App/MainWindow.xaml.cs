@@ -85,7 +85,10 @@ namespace BlackboxModManager.App
 
 		private Point? _dragStartPoint;
 		private ModRowViewModel _dragCandidate;
+		private FrameworkElement _dragElement;
+		private Point _dragGrabPoint;
 		private int _dragOriginalIndex = -1;
+		private DragGhost _dragGhost;
 
 		/// <summary>The row whose template root, named "RowBorder", contains the source of the event.</summary>
 		private static FrameworkElement FindRowElement(DependencyObject source)
@@ -128,6 +131,11 @@ namespace BlackboxModManager.App
 
 			this._dragStartPoint = e.GetPosition(null);
 			this._dragCandidate = row;
+			this._dragElement = element;
+
+			// Where inside the row the user took hold of it. The floating copy keeps that point
+			// under the pointer, so the row does not jump when the drag starts.
+			this._dragGrabPoint = e.GetPosition(element);
 
 			this._model.SelectedMod = row;
 		}
@@ -143,13 +151,28 @@ namespace BlackboxModManager.App
 			if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
 				Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
 
+			FrameworkElement element = this._dragElement;
+
 			this._dragStartPoint = null;
 			this._dragCandidate = null;
+			this._dragElement = null;
 			this._dragOriginalIndex = this._model.Mods.IndexOf(row);
 
 			if (this._dragOriginalIndex < 0) return;
 
+			// Capture first, then dim. The floating copy has to hold the resting look of the row.
+			//
+			// The host is DragLayer and never the mod list. AdornerLayer.GetAdornerLayer returns
+			// the nearest layer above the element, and a ScrollContentPresenter carries one of its
+			// own. The mod list sits inside a ScrollViewer, so a copy hosted there clips to the
+			// viewport of the list. DragLayer is the root content of the window, whose layer comes
+			// from the AdornerDecorator of the window template and clips to nothing inside it.
+			this._dragGhost = DragGhost.Attach(this.DragLayer, element,
+				(Brush)this.FindResource("BorderStrong"));
+
 			row.IsDragSource = true;
+
+			this.MoveGhost(e.GetPosition(this.DragLayer));
 
 			try
 			{
@@ -164,7 +187,21 @@ namespace BlackboxModManager.App
 			{
 				row.IsDragSource = false;
 				this._dragOriginalIndex = -1;
+
+				this._dragGhost?.Detach();
+				this._dragGhost = null;
 			}
+		}
+
+		/// <summary>
+		/// Puts the floating copy under the pointer. The point comes in the coordinates of
+		/// DragLayer, which is the element that the adorner adorns.
+		/// </summary>
+		private void MoveGhost(Point inList)
+		{
+			this._dragGhost?.MoveTo(new Point(
+				inList.X - this._dragGrabPoint.X,
+				inList.Y - this._dragGrabPoint.Y));
 		}
 
 		/// <summary>
@@ -178,6 +215,10 @@ namespace BlackboxModManager.App
 		{
 			e.Effects = DragDropEffects.Move;
 			e.Handled = true;
+
+			// The floating copy follows the pointer whatever it sits over. Only the landing slot
+			// waits for a hit on a row.
+			this.MoveGhost(e.GetPosition(this.DragLayer));
 
 			FrameworkElement element = FindRowElement(e.OriginalSource as DependencyObject);
 

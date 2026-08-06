@@ -67,6 +67,39 @@ Three causes of the flicker disappear together.
 
 **The rule that replaces them: act on a hit, and never clear on a miss.** A pointer in a gap, over the padding, or over the scroll bar leaves the preview where it is.
 
+### The floating copy
+
+A copy of the row floats under the pointer for the whole drag, the way a window follows the pointer. The recessed slot in the list shows where the row lands. The floating copy shows what travels.
+
+`DragGhost` holds it. It is an `Adorner` that draws one bitmap and one 1 pixel `BorderStrong` outline.
+
+**Host it on `DragLayer` and never on the mod list.** `DragLayer` is the name of the root `Grid` of the window. `AdornerLayer.GetAdornerLayer` returns the nearest layer above the element it gets, and **a `ScrollContentPresenter` carries a layer of its own**. The mod list sits inside a `ScrollViewer`, so a copy hosted there reaches that layer and clips to the viewport of the list. The layer above `DragLayer` comes from the `AdornerDecorator` of the window template, and nothing inside the window clips it.
+
+Every point that positions the copy therefore comes in the coordinates of `DragLayer`. `MoveGhost` takes one of those.
+
+**Capture the row once, at the start of the drag.** `DragGhost.Attach` renders the row into a `RenderTargetBitmap`, and a move then costs one blit of a small rectangle. A `VisualBrush` of the live row would draw the whole row again on every frame, and the software rasterizer pays that on the CPU.
+
+**Capture before the row becomes the ghost slot.** The row recesses as soon as `IsDragSource` turns true, and the floating copy has to hold the resting look.
+
+**Render through a `DrawingVisual`, not through `RenderTargetBitmap.Render(row)`.** `Render` reads a visual at the offset that its parent arranged it at, so a row that carries a margin comes out shifted inside the bitmap. A `VisualBrush` in a rectangle of its own has no offset.
+
+**The copy draws at 0.8 alpha, so the user reads the list under it.** `DragGhost.Solidity` holds the value, and `OnRender` applies it with `PushOpacity`. Step 10 banned opacity as a color tool, and this does not break that rule. The ban covers a resting element, where the rasterizer composites the value on every repaint for as long as the window is open. This is one rectangle, for the length of one drag, and the alpha is the point of it.
+
+**The copy travels the whole window and no further.** The adorner layer of the window spans every panel, so the copy crosses the right panel and the button bar. It stops at the window edge. A copy that reaches the desktop needs a top-level surface with `AllowsTransparency`, which is the layered-surface path that paints a hardware dropdown black under Wine. **Do not take that path for a drag visual.**
+
+**The floating copy is cosmetic.** `Attach` returns null when the window holds no adorner layer or when the capture throws, and the drag then works with the slot alone.
+
+This is the one adorner of the window. Step 10 kept the insertion line out of the adorner layer, because a marker on every row needs a render pass for each row. One floating visual is what an adorner is for, and it has to draw outside the list, which nothing inside the list can do.
+
+### The cursor and the handle
+
+**A `Path` answers a hit test only where it paints.** The handle draws three lines of 1.5 pixels with 2.5 pixel gaps, and the handle style carried the `SizeAll` cursor. The cursor therefore changed on every gap, which read as a flicker, and the target was three thin lines rather than the block that the icon suggests.
+
+Two changes fix it.
+
+1. `RowBorder` carries `Cursor="SizeAll"`. A drag starts anywhere on the row, so the whole row says so. The toggle pill sets `Hand` in its own style, which marks it as a control and not a drag zone.
+2. `DragHandleArea` wraps the icon in a `Border` of 26 pixels, the full height of the row, with a transparent fill. **A transparent fill answers a hit test and a null fill does not.** The `DragHandle` style sets no cursor now.
+
 ### The view model
 
 `ModRowViewModel` loses `DropBefore` and `DropAfter` with their fields. `IsSelected` and `IsDragSource` stay.
@@ -154,6 +187,8 @@ The check box of the mod row becomes the pill. The binding to `Enabled` does not
 
 **`RowBorder` is a name that code reads.** `FindRowElement` walks the visual tree and matches that exact string. A rename in `Parts.xaml` kills the drag, the drop, and the row selection with no build error.
 
+**An adorner clips to the layer that hosts it, and a `ScrollViewer` brings a layer of its own.** The floating copy looked correct inside the list and vanished at the edge of it. The host, not the adorner, decides how far a drag visual travels.
+
 **The preview must not save.** A drag that the user cancels writes nothing to the profile. Only `Drop` reaches `MoveModTo`.
 
 **No test covers this step.** `BlackboxModManager.Tests` targets `net10.0` and references `Core` alone, so it cannot load a WPF dictionary. No type of `Core` changes here, so the test count stays at 327. `Profile.Move` and `Profile.MoveTo` already carry the reorder rules with their tests.
@@ -167,9 +202,10 @@ The check box of the mod row becomes the pill. The binding to `Enabled` does not
 5. Add the `TogglePill` style and the `--themetest` section. Run `--themetest` under Wine.
 6. Add `PreviewMove`, `CancelPreview`, and `ResyncOrder` to `MainViewModel`. Point `MoveModTo` and `MoveSelected` at `ResyncOrder`.
 7. Rewrite the row template and the drag handlers. Put the pill in the row.
-8. Run the window under Wine. Drag over four rows, cancel one drag with `Escape`, and drop one.
-9. Run `tools/run-deploy-test.sh` and the full test suite. Neither may change.
+8. Add `DragGhost` and the handle hit area. Point the cursor of the row at `SizeAll`.
+9. Run the window under Wine. Drag over four rows, cancel one drag with `Escape`, and drop one.
+10. Run `tools/run-deploy-test.sh` and the full test suite. Neither may change.
 
 ## Done when
 
-Every dialog of the application is a themed window. A drag shows the landing slot as a recessed ghost that follows the pointer with no flicker under Wine, and `Escape` cancels the drag. The check mark sits centered in its box. The mod row carries a toggle pill. The load order, the profile on disk, and the deployed bytes all match the state before this step.
+Every dialog of the application is a themed window. A drag lifts a copy of the row under the pointer and marks the landing slot with a recessed ghost, and neither one flickers under Wine. `Escape` cancels the drag. The cursor over a row reads `SizeAll` everywhere except the toggle. The check mark sits centered in its box. The mod row carries a toggle pill. The load order, the profile on disk, and the deployed bytes all match the state before this step.
