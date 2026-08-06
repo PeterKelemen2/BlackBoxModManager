@@ -72,12 +72,21 @@
 
   <!--
     The row of the mod list. A SurfaceRaised fill, RadiusDefault corners, a BorderDefault
-    edge. The two 2 pixel borders draw the insertion line of the drag reorder directly
-    from the row, never from an adorner.
+    edge.
+
+    Step 10 drew an insertion line from two 2 pixel borders of this template, and step 11
+    removed both. The dragged row now travels inside the collection to the place where the
+    drop lands, and it draws as the ghost of that slot. See docs/roadmap/11-ui-polish.md,
+    Part B. MinHeight holds every row at one height, so the ghost reads as a slot.
+
+    RowBorder is a name that code reads. FindRowElement in MainWindow.xaml.cs matches that
+    exact string to find the row under the pointer. A rename here kills the drag, the drop,
+    and the row selection, and the build reports nothing.
   -->
   <DataTemplate x:Key="ModRowTemplate">
     <Border
       x:Name="RowBorder"
+      MinHeight="{StaticResource ModRowHeight}"
       Margin="0,0,0,6"
       Padding="8,6"
       Background="{StaticResource SurfaceRaised}"
@@ -85,19 +94,22 @@
       BorderThickness="1"
       CornerRadius="{StaticResource RadiusDefault}">
       <Grid>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="2" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="2" />
-        </Grid.RowDefinitions>
+        <!--
+          The dashed outline of the ghost. A Border cannot draw a dash, so this is a
+          Rectangle over the content. It stays collapsed while nothing drags, and a
+          collapsed element costs nothing.
+        -->
+        <Rectangle
+          x:Name="GhostOutline"
+          Margin="-5,-3"
+          RadiusX="{StaticResource RadiusDefaultPixels}"
+          RadiusY="{StaticResource RadiusDefaultPixels}"
+          Stroke="{StaticResource AccentDefault}"
+          StrokeDashArray="3 3"
+          StrokeThickness="1"
+          Visibility="Collapsed" />
 
-        <Border
-          Grid.Row="0"
-          Height="2"
-          Background="{StaticResource AccentDefault}"
-          Visibility="{Binding DropBefore, Converter={StaticResource BoolToVisible}}" />
-
-        <Grid Grid.Row="1">
+        <Grid>
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="Auto" />
@@ -110,11 +122,12 @@
             Margin="0,0,8,0"
             Style="{StaticResource DragHandle}" />
 
-          <CheckBox
+          <ToggleButton
             Grid.Column="1"
             Margin="0,0,8,0"
             VerticalAlignment="Center"
-            IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+            Style="{StaticResource TogglePill}" />
 
           <TextBlock
             Grid.Column="2"
@@ -126,6 +139,7 @@
 
           <StackPanel Grid.Column="3" VerticalAlignment="Center">
             <TextBlock
+              x:Name="RowName"
               FontFamily="{StaticResource UiFontFamilyStrong}"
               FontWeight="SemiBold"
               Foreground="{StaticResource TextPrimary}"
@@ -142,20 +156,22 @@
             </TextBlock>
           </StackPanel>
         </Grid>
-
-        <Border
-          Grid.Row="2"
-          Height="2"
-          Background="{StaticResource AccentDefault}"
-          Visibility="{Binding DropAfter, Converter={StaticResource BoolToVisible}}" />
       </Grid>
     </Border>
     <DataTemplate.Triggers>
       <DataTrigger Binding="{Binding IsSelected}" Value="True">
         <Setter TargetName="RowBorder" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
       </DataTrigger>
+      <!--
+        The ghost recesses to the window fill and shows the dashed outline. It sets no
+        Opacity. Step 10 banned opacity as a color tool, because the software rasterizer
+        composites it on every repaint, and a drag repaints often.
+      -->
       <DataTrigger Binding="{Binding IsDragSource}" Value="True">
-        <Setter TargetName="RowBorder" Property="Opacity" Value="0.5" />
+        <Setter TargetName="RowBorder" Property="Background" Value="{StaticResource SurfaceBase}" />
+        <Setter TargetName="RowBorder" Property="BorderBrush" Value="{StaticResource BorderDefault}" />
+        <Setter TargetName="RowName" Property="Foreground" Value="{StaticResource TextSecondary}" />
+        <Setter TargetName="GhostOutline" Property="Visibility" Value="Visible" />
       </DataTrigger>
     </DataTemplate.Triggers>
   </DataTemplate>

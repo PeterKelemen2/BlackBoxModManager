@@ -64,7 +64,11 @@ namespace BlackboxModManager.App.ViewModels
 
 		private bool _isSelected;
 
-		/// <summary>True while the user drags this row. The row dims.</summary>
+		/// <summary>
+		/// True while the user drags this row. The row draws as the ghost of the slot that the
+		/// drop lands in. Step 11 replaced the insertion line with it, and the window moves this
+		/// row inside the collection while the drag runs. See docs/roadmap/11-ui-polish.md.
+		/// </summary>
 		public bool IsDragSource
 		{
 			get => this._isDragSource;
@@ -72,24 +76,6 @@ namespace BlackboxModManager.App.ViewModels
 		}
 
 		private bool _isDragSource;
-
-		/// <summary>True when the drop lands above this row.</summary>
-		public bool DropBefore
-		{
-			get => this._dropBefore;
-			set => this.SetProperty(ref this._dropBefore, value);
-		}
-
-		private bool _dropBefore;
-
-		/// <summary>True when the drop lands below this row.</summary>
-		public bool DropAfter
-		{
-			get => this._dropAfter;
-			set => this.SetProperty(ref this._dropAfter, value);
-		}
-
-		private bool _dropAfter;
 
 		public bool Enabled
 		{

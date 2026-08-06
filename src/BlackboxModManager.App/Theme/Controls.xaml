@@ -224,9 +224,19 @@
               BorderBrush="{StaticResource BorderDefault}"
               BorderThickness="1"
               CornerRadius="{StaticResource RadiusSmall}">
+              <!--
+                The geometry starts at the origin, and the path centers itself. The default
+                Stretch is None, so the layout box of a path runs from the origin to the far
+                end of its geometry. A geometry that starts at 3,8 therefore pushes the mark
+                down and to the right, and the right tip then touches the border. Do not use
+                Stretch="Uniform" here. It scales a stroked geometry by rules that are hard
+                to predict at 14 pixels. See docs/roadmap/11-ui-polish.md, Part C.
+              -->
               <Path
                 x:Name="Check"
-                Data="M 3,8 L 7,12 L 13,4"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Data="M 0,3.5 L 3.5,7 L 9.5,0"
                 Stroke="{StaticResource OnAccent}"
                 StrokeEndLineCap="Round"
                 StrokeLineJoin="Round"
@@ -249,6 +259,139 @@
               <Setter Property="Foreground" Value="{StaticResource TextDisabled}" />
               <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BorderDefault}" />
             </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
+    The toggle pill. It carries a key on purpose, because ComboBoxToggleButtonStyle is a
+    ToggleButton too and the combo box template names it. An implicit style for
+    ToggleButton would reach the arrow of every combo box. See
+    docs/roadmap/11-ui-polish.md, Part D.
+
+    The knob moves with a TranslateTransform and never with a margin. A render transform
+    marks one small rectangle dirty and runs no layout pass, so it costs almost nothing on
+    the software rasterizer of Wine. A Thickness animation would lay the row out again on
+    every frame.
+  -->
+  <Style x:Key="TogglePill" TargetType="ToggleButton">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Width" Value="36" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToggleButton">
+          <Border
+            x:Name="Track"
+            Background="{StaticResource SurfaceRaised}"
+            BorderBrush="{StaticResource BorderDefault}"
+            BorderThickness="1"
+            CornerRadius="10">
+            <Border
+              x:Name="Knob"
+              Width="14"
+              Height="14"
+              Margin="3,0,0,0"
+              HorizontalAlignment="Left"
+              VerticalAlignment="Center"
+              Background="{StaticResource TextSecondary}"
+              CornerRadius="7">
+              <Border.RenderTransform>
+                <TranslateTransform x:Name="KnobShift" X="0" />
+              </Border.RenderTransform>
+            </Border>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentDefault}" />
+              <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
+              <Setter TargetName="Knob" Property="Background" Value="{StaticResource OnAccent}" />
+              <Trigger.EnterActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation
+                      Storyboard.TargetName="KnobShift"
+                      Storyboard.TargetProperty="X"
+                      To="14"
+                      Duration="0:0:0.12" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <BeginStoryboard>
+                  <Storyboard>
+                    <DoubleAnimation
+                      Storyboard.TargetName="KnobShift"
+                      Storyboard.TargetProperty="X"
+                      To="0"
+                      Duration="0:0:0.12" />
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.ExitActions>
+            </Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsMouseOver" Value="True" />
+                <Condition Property="IsChecked" Value="False" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Track" Property="Background" Value="{StaticResource SurfaceHover}" />
+              <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsMouseOver" Value="True" />
+                <Condition Property="IsChecked" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentHover}" />
+              <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource AccentHover}" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsPressed" Value="True" />
+                <Condition Property="IsChecked" Value="False" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Track" Property="Background" Value="{StaticResource SurfacePressed}" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsPressed" Value="True" />
+                <Condition Property="IsChecked" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentPressed}" />
+              <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource AccentPressed}" />
+            </MultiTrigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+            </Trigger>
+            <!--
+              A disabled pill still has to read as on or as off. The two states therefore
+              need two triggers. One IsEnabled trigger would set one fill over both, and a
+              locked pill would then look off whatever it holds. There is no muted accent
+              token, so the on state borrows BorderStrong.
+            -->
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsEnabled" Value="False" />
+                <Condition Property="IsChecked" Value="False" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Track" Property="Background" Value="{StaticResource SurfaceRaised}" />
+              <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BorderDefault}" />
+              <Setter TargetName="Knob" Property="Background" Value="{StaticResource TextDisabled}" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsEnabled" Value="False" />
+                <Condition Property="IsChecked" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Track" Property="Background" Value="{StaticResource BorderStrong}" />
+              <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+              <Setter TargetName="Knob" Property="Background" Value="{StaticResource TextDisabled}" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </MultiTrigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>

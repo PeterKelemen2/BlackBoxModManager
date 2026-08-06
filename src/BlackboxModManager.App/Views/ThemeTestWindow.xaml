@@ -67,6 +67,23 @@
           IsEnabled="False" />
       </WrapPanel>
 
+      <TextBlock Style="{StaticResource Heading}" Text="Toggle pills" />
+      <WrapPanel Margin="0,0,0,16">
+        <ToggleButton Margin="0,0,16,0" Style="{StaticResource TogglePill}" />
+        <ToggleButton
+          Margin="0,0,16,0"
+          IsChecked="True"
+          Style="{StaticResource TogglePill}" />
+        <ToggleButton
+          Margin="0,0,16,0"
+          IsEnabled="False"
+          Style="{StaticResource TogglePill}" />
+        <ToggleButton
+          IsChecked="True"
+          IsEnabled="False"
+          Style="{StaticResource TogglePill}" />
+      </WrapPanel>
+
       <TextBlock Style="{StaticResource Heading}" Text="Combo box" />
       <ComboBox
         Width="200"

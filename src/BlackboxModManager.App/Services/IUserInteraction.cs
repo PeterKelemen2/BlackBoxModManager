@@ -30,7 +30,13 @@ namespace BlackboxModManager.App.Services
 		/// <summary>Lists every directory of this application and lets the user open one.</summary>
 		void ShowFolders(IReadOnlyList<FolderRow> folders);
 
-		bool Confirm(string question);
+		/// <summary>
+		/// Asks one question that has two answers. <paramref name="confirmLabel"/> names the
+		/// action that the first button takes, because a question such as "move the mods or
+		/// read them where they are" has two legitimate answers and no cancel. Set
+		/// <paramref name="destructive"/> when the answer deletes something.
+		/// </summary>
+		bool Confirm(string question, string confirmLabel = "Yes", bool destructive = false);
 
 		void ShowError(string message);
 

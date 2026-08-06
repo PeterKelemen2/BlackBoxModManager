@@ -83,6 +83,21 @@ namespace BlackboxModManager.App
 
 		private static int ShowDialogTest()
 		{
+			// The confirm dialog comes first, because it is the newest of the four. It shows in
+			// both modes. A destructive question carries a Danger button, and No holds the
+			// focus in both. See docs/roadmap/11-ui-polish.md, Part A.
+			Views.ConfirmWindow.Ask(null,
+				"Delete the profile \"Career\"? The mods stay in the store.",
+				"Delete", destructive: true);
+
+			Views.ConfirmWindow.Ask(null,
+				"The store at C:\\Games\\mods holds 4 mods." + Environment.NewLine + Environment.NewLine +
+				"Move them to D:\\mods?" + Environment.NewLine + Environment.NewLine +
+				"Choose No to leave them where they are and read the new directory instead.",
+				"Move them");
+
+			Views.TextPromptWindow.Ask(null, "Name the profile.", "Career");
+
 			Views.MessageWindow.Show(null, "The operation failed.", "The operation failed.",
 				"This is a sample error. The Copy error button puts this whole text on the " +
 				"clipboard, including the heading above." + Environment.NewLine + Environment.NewLine +

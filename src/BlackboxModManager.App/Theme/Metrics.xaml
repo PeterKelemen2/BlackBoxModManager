@@ -7,6 +7,13 @@
   <CornerRadius x:Key="RadiusDefault">6</CornerRadius>
   <CornerRadius x:Key="RadiusCard">10</CornerRadius>
 
+  <!--
+    The same 6 pixels as RadiusDefault, as a Double. Rectangle.RadiusX takes a Double and
+    Border.CornerRadius takes a CornerRadius, and XAML converts neither into the other. The
+    ghost outline of the mod row needs the Double form. Change both lines together.
+  -->
+  <sys:Double x:Key="RadiusDefaultPixels">6</sys:Double>
+
   <sys:Double x:Key="FontSizeSmall">11</sys:Double>
   <sys:Double x:Key="FontSizeBody">13</sys:Double>
   <sys:Double x:Key="FontSizeHeading">15</sys:Double>

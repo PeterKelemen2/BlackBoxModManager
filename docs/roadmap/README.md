@@ -20,11 +20,14 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 8    | Done. See "Completed" below.                     | —                              |
 | 9    | Done. See "Completed" below.                     | Needs a real ASI mod sample.   |
 | 10   | [10-dark-theme.md](10-dark-theme.md)             | Nothing. Look and input only.  |
+| 11   | [11-ui-polish.md](11-ui-polish.md)               | Nothing. Look and input only.  |
 | 90   | [90-texmod.md](90-texmod.md)                     | Nothing. Explicitly last.      |
 
 Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, 8, and 9 are done. **The success criterion of the project brief passes.**
 
 **Step 10 changes the look and the input, and no behavior.** It gives the window a dark theme, one style per element, an embedded font, and a mod list that the user can drag into order. It gates nothing, so it can run beside step 7. Read [10-dark-theme.md](10-dark-theme.md).
+
+**Step 11 polishes what step 10 left.** It puts the last message box into a themed window, it replaces the insertion line of the drag with a ghost slot, it centers the check mark, and it adds a toggle pill. It changes no behavior either. Read [11-ui-polish.md](11-ui-polish.md).
 
 **Step 7 is part done.** The plumbing carries any number of games, and the application manages three of the six targets. Underground 1, Carbon, and Undercover wait for a listing of a real install. Read the Results section of [07-game-profiles.md](07-game-profiles.md).
 

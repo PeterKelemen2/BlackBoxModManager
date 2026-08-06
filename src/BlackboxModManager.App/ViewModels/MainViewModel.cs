@@ -449,7 +449,9 @@ namespace BlackboxModManager.App.ViewModels
 				return;
 			}
 
-			if (!this._ask.Confirm($"Delete the profile \"{this._profile.Name}\"? The mods stay in the store.")) return;
+			if (!this._ask.Confirm(
+				$"Delete the profile \"{this._profile.Name}\"? The mods stay in the store.",
+				"Delete", destructive: true)) return;
 
 			this._profiles.Delete(this.Game, this._profile.Name);
 			this.RefreshProfiles();
@@ -544,7 +546,9 @@ namespace BlackboxModManager.App.ViewModels
 
 			if (row is null) return;
 
-			if (!this._ask.Confirm($"Remove \"{row.Name}\" from the mod store? This deletes its files.")) return;
+			if (!this._ask.Confirm(
+				$"Remove \"{row.Name}\" from the mod store? This deletes its files.",
+				"Remove", destructive: true)) return;
 
 			this._store.Remove(row.Id);
 			this._profile?.Remove(row.Id);
@@ -594,15 +598,7 @@ namespace BlackboxModManager.App.ViewModels
 			if (!this._profile.Move(row.Id, offset)) return;
 
 			this.SaveProfile();
-			this.RefreshMods();
-
-			foreach (ModRowViewModel candidate in this.Mods)
-			{
-				if (candidate.Id != row.Id) continue;
-
-				this.SelectedMod = candidate;
-				break;
-			}
+			this.ResyncOrder();
 		}
 
 		/// <summary>
@@ -617,16 +613,110 @@ namespace BlackboxModManager.App.ViewModels
 			if (!this._profile.MoveTo(modId, index)) return;
 
 			this.SaveProfile();
-			this.RefreshMods();
-
-			foreach (ModRowViewModel candidate in this.Mods)
-			{
-				if (candidate.Id != modId) continue;
-
-				this.SelectedMod = candidate;
-				break;
-			}
+			this.ResyncOrder();
 		}
+
+		/// <summary>
+		/// Moves one row inside the visible list, for the ghost of the drag reorder. It touches
+		/// no profile and it saves nothing. Only a drop reaches <see cref="MoveModTo"/>.
+		/// </summary>
+		public void PreviewMove(int from, int to)
+		{
+			if (from < 0 || to < 0 || from >= this.Mods.Count || to >= this.Mods.Count) return;
+			if (from == to) return;
+
+			this.Mods.Move(from, to);
+			this.Renumber();
+		}
+
+		/// <summary>
+		/// Puts the row back where the drag started. The user pressed Escape, or the drop landed
+		/// outside the list.
+		/// </summary>
+		public void CancelPreview(ModRowViewModel row, int index)
+		{
+			if (row is null) return;
+
+			int current = this.Mods.IndexOf(row);
+
+			if (current < 0 || index < 0 || index >= this.Mods.Count) return;
+
+			this.PreviewMove(current, index);
+		}
+
+		/// <summary>
+		/// Brings the visible list back in step with the load order of the profile.
+		///
+		/// This replaced the <see cref="RefreshMods"/> call of the two reorder paths. Refresh
+		/// clears the collection and builds every row again, which destroys and recreates the
+		/// container of every row. The software rasterizer draws that as a flash, and the scroll
+		/// position goes with it. A reorder changes no mod, so the rows themselves can stay.
+		///
+		/// <b>Conflict detection reads the load order</b>, so the two refresh calls below are
+		/// not optional. A different set of mods, rather than a different order, falls back to
+		/// the full refresh.
+		/// </summary>
+		private void ResyncOrder()
+		{
+			if (this._profile is null) return;
+
+			var wanted = new List<string>();
+
+			foreach (ProfileEntry entry in this._profile.Entries) wanted.Add(entry.ModId);
+
+			if (!this.HoldsSameMods(wanted))
+			{
+				this.RefreshMods();
+				return;
+			}
+
+			for (int index = 0; index < wanted.Count; index++)
+			{
+				if (Same(this.Mods[index].Id, wanted[index])) continue;
+
+				for (int scan = index + 1; scan < this.Mods.Count; scan++)
+				{
+					if (!Same(this.Mods[scan].Id, wanted[index])) continue;
+
+					this.Mods.Move(scan, index);
+					break;
+				}
+			}
+
+			this.Renumber();
+
+			this.Status = $"{this.Mods.Count} mods, {this._profile.EnabledCount} enabled.";
+			this.RefreshConflicts();
+			this.RefreshLoaders();
+		}
+
+		/// <summary>True when the visible list and the given order name the same mods.</summary>
+		private bool HoldsSameMods(List<string> wanted)
+		{
+			if (wanted.Count != this.Mods.Count) return false;
+
+			var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (ModRowViewModel row in this.Mods) present.Add(row.Id);
+
+			foreach (string id in wanted)
+			{
+				if (!present.Contains(id)) return false;
+			}
+
+			return true;
+		}
+
+		/// <summary>Numbers the visible rows from one. The row template shows this.</summary>
+		private void Renumber()
+		{
+			int order = 1;
+
+			foreach (ModRowViewModel row in this.Mods) row.Order = order++;
+		}
+
+		private static bool Same(string left, string right) =>
+			String.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
 		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private void RefreshMods()
@@ -1042,7 +1132,8 @@ namespace BlackboxModManager.App.ViewModels
 		{
 			GameInstall install = this._install;
 
-			if (!this._ask.Confirm("Put the vanilla state back into the game directory?")) return;
+			if (!this._ask.Confirm("Put the vanilla state back into the game directory?",
+				"Revert", destructive: true)) return;
 
 			await this.RunAsync("Revert to vanilla.", report => this.Service().Revert(install, report));
 
@@ -1139,7 +1230,8 @@ namespace BlackboxModManager.App.ViewModels
 					$"The store at {current.Root} holds {count} mods.\n\n" +
 					$"Move them to {target}?\n\n" +
 					"Choose No to leave them where they are and read the new directory instead. " +
-					"The profiles name a mod by its identifier, so they survive either answer.");
+					"The profiles name a mod by its identifier, so they survive either answer.",
+					"Move them");
 
 				if (move)
 				{

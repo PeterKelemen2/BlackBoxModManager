@@ -124,9 +124,10 @@
         Header="Mods, in load order. A later mod overrides an earlier one.">
         <!--
           The DataGrid of step 9 became a row list in step 10, so that a row can carry a
-          drag handle and a drop can reorder it. See docs/roadmap/10-dark-theme.md, Part
-          D. The event handlers live in MainWindow.xaml.cs, on this ItemsControl, because
-          the row template of Theme/Parts.xaml has no code-behind of its own.
+          drag handle and a drop can reorder it. Step 11 replaced the insertion line with a
+          ghost slot. See docs/roadmap/11-ui-polish.md, Part B. The event handlers live in
+          MainWindow.xaml.cs, on this ItemsControl, because the row template of
+          Theme/Parts.xaml has no code-behind of its own.
         -->
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <ItemsControl
@@ -135,10 +136,12 @@
             DragLeave="ModList_DragLeave"
             DragOver="ModList_DragOver"
             Drop="ModList_Drop"
+            GiveFeedback="ModList_GiveFeedback"
             ItemTemplate="{StaticResource ModRowTemplate}"
             ItemsSource="{Binding Mods}"
             PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
-            PreviewMouseMove="ModList_PreviewMouseMove" />
+            PreviewMouseMove="ModList_PreviewMouseMove"
+            QueryContinueDrag="ModList_QueryContinueDrag" />
         </ScrollViewer>
       </GroupBox>
 

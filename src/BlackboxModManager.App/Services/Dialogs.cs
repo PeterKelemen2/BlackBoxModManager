@@ -66,10 +66,14 @@ namespace BlackboxModManager.App.Services
 			FoldersWindow.Show(owner, folders);
 		}
 
-		public static bool Confirm(Window owner, string question, string title = "Blackbox Mod Manager")
+		/// <summary>
+		/// Asks one question that has two answers. <paramref name="confirmLabel"/> names the
+		/// action, and <paramref name="destructive"/> makes the button read as destructive.
+		/// </summary>
+		public static bool Confirm(Window owner, string question, string confirmLabel = "Yes",
+			bool destructive = false)
 		{
-			return MessageBox.Show(owner, question, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
-				== MessageBoxResult.Yes;
+			return ConfirmWindow.Ask(owner, question, confirmLabel, destructive);
 		}
 
 		/// <summary>
