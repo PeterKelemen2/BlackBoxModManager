@@ -162,6 +162,33 @@ namespace BlackboxModManager.Tests
 			Assert.Equal(@"C:\Games\Binary", SettingsStore.Load(file).BinaryInstallDirectory);
 		}
 
+		/// <summary>
+		/// FullVerify is the one deploy option that the config window of step 12 holds. The
+		/// window writes it on every change, so the file has to carry it back.
+		/// </summary>
+		[Fact]
+		public void TheStoreReadsBackTheFullVerifyAnswer()
+		{
+			string file = Path.Combine(this._root, "verify.json");
+
+			SettingsStore.Save(file, new Settings { FullVerify = true });
+
+			Assert.True(SettingsStore.Load(file).FullVerify);
+		}
+
+		/// <summary>
+		/// A settings file that step 9 wrote holds no FullVerify key. It must read as false,
+		/// which is the value that the window used before step 12 moved the check box.
+		/// </summary>
+		[Fact]
+		public void ASettingsFileWithNoFullVerifyKeyReadsAsFalse()
+		{
+			string file = Path.Combine(this._root, "older.json");
+			File.WriteAllText(file, "{ \"Version\": 2 }");
+
+			Assert.False(SettingsStore.Load(file).FullVerify);
+		}
+
 		[Fact]
 		public void AMissingSettingsFileGivesFreshSettings()
 		{

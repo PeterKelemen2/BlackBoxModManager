@@ -11,6 +11,7 @@
         -->
         <ResourceDictionary Source="Theme/Colors.xaml" />
         <ResourceDictionary Source="Theme/Metrics.xaml" />
+        <ResourceDictionary Source="Theme/Icons.xaml" />
         <ResourceDictionary Source="Theme/Typography.xaml" />
         <ResourceDictionary Source="Theme/Controls.xaml" />
         <ResourceDictionary Source="Theme/Parts.xaml" />

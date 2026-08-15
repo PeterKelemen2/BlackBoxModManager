@@ -93,6 +93,10 @@ namespace BlackboxModManager.App.ViewModels
 			this._game = StoredGame(this._settings);
 			this._selectedGame = this._game;
 
+			// The field and not the property. The setter saves the settings file, and the
+			// settings file is where this value just came from.
+			this._fullVerify = this._settings.FullVerify;
+
 			this.OpenStore();
 
 			this.Write(Rendering.Report);
@@ -147,6 +151,34 @@ namespace BlackboxModManager.App.ViewModels
 
 		[ObservableProperty]
 		private bool _fullVerify;
+
+		/// <summary>
+		/// Keeps the answer of the config window. The check box moved off the action bar in
+		/// step 12, and a setting that only a separate window shows has to survive a restart.
+		/// </summary>
+		partial void OnFullVerifyChanged(bool value)
+		{
+			this._settings.FullVerify = value;
+			SettingsStore.Save(this._settings);
+		}
+
+		/// <summary>
+		/// The one line of state that the status bar shows. It joins the game and the deployed
+		/// state, because step 12 took the five status lines off the main window.
+		///
+		/// The full detail lives in the config window and in the tooltip of that line.
+		/// </summary>
+		[ObservableProperty]
+		private string _stateSummary = String.Empty;
+
+		private void RefreshStateSummary()
+		{
+			string game = this.GameStatus ?? String.Empty;
+			string deployed = this.DeployedState ?? String.Empty;
+
+			this.StateSummary = String.Join(" ", new[] { game, deployed })
+				.Trim();
+		}
 
 		[ObservableProperty]
 		private string _detailsHeader = "Select a mod to see what it offers.";
@@ -218,9 +250,28 @@ namespace BlackboxModManager.App.ViewModels
 				if (previous != null) previous.IsSelected = false;
 				if (value != null) value.IsSelected = true;
 
+				// The four commands that act on one mod. Their buttons carry an icon and no
+				// label now, so a button that does nothing tells the user nothing. See
+				// docs/roadmap/12-minimal-ui.md, Part F.
+				this.NotifySelectionCommands();
+
 				this.LoadVariants(value);
 				this.LoadSettings(value);
 			}
+		}
+
+		/// <summary>
+		/// True when one command can act on the selected mod. <c>Remove</c>, <c>Move up</c>,
+		/// <c>Move down</c>, and <c>Set game</c> all read this.
+		/// </summary>
+		private bool CanActOnMod() => this.IsIdle && this._selectedMod != null;
+
+		private void NotifySelectionCommands()
+		{
+			this.RemoveModCommand.NotifyCanExecuteChanged();
+			this.MoveUpCommand.NotifyCanExecuteChanged();
+			this.MoveDownCommand.NotifyCanExecuteChanged();
+			this.SetModGameCommand.NotifyCanExecuteChanged();
 		}
 
 		private bool _busy;
@@ -360,6 +411,7 @@ namespace BlackboxModManager.App.ViewModels
 			}
 
 			this.OnPropertyChanged(nameof(this.IsGameReady));
+			this.RefreshWorkspace();
 			this.RefreshDeployedState();
 			this.NotifyCommands();
 		}
@@ -375,11 +427,19 @@ namespace BlackboxModManager.App.ViewModels
 				: resolution.Status.Message + " A Binary mod needs it. A drop-in mod does not.";
 		}
 
+		/// <summary>
+		/// Reads what the game directory holds now.
+		///
+		/// Every path out of this method ends at <see cref="RefreshStateSummary"/>, and
+		/// <see cref="RefreshGame"/> sets the game line before it calls this. So the status bar
+		/// never shows one half of the state.
+		/// </summary>
 		private void RefreshDeployedState()
 		{
 			if (this._install is null)
 			{
 				this.DeployedState = String.Empty;
+				this.RefreshStateSummary();
 				return;
 			}
 
@@ -397,6 +457,8 @@ namespace BlackboxModManager.App.ViewModels
 			{
 				this.DeployedState = ex.Message;
 			}
+
+			this.RefreshStateSummary();
 		}
 
 		// ---------------------------------------------------------------- profiles
@@ -522,6 +584,33 @@ namespace BlackboxModManager.App.ViewModels
 			if (path != null) await this.ImportAsync(path);
 		}
 
+		/// <summary>
+		/// Imports what the user dropped on the mod list.
+		///
+		/// <c>ModImporter.Import</c> reads an archive or a directory, so the drop needs no test
+		/// of its own. This method returns at once during a long operation, because a drop
+		/// carries no CanExecute and the window cannot gray a drop target out.
+		///
+		/// <b>It imports the first path and no more.</b> One import runs at a time, and the
+		/// library statics of Nikki make a second one on a second thread unsafe. See defect 8.
+		/// </summary>
+		public async Task ImportDropAsync(IReadOnlyList<string> paths)
+		{
+			if (this.IsBusy || paths is null || paths.Count == 0) return;
+
+			string source = paths[0];
+
+			if (String.IsNullOrWhiteSpace(source)) return;
+
+			if (paths.Count > 1)
+			{
+				this.Write($"The drop carried {paths.Count} paths. This application imports " +
+					$"\"{source}\" and leaves the rest.");
+			}
+
+			await this.ImportAsync(source);
+		}
+
 		private async Task ImportAsync(string source)
 		{
 			GameINT game = this.Game;
@@ -539,7 +628,7 @@ namespace BlackboxModManager.App.ViewModels
 			this.RefreshMods();
 		}
 
-		[RelayCommand(CanExecute = nameof(IsIdle))]
+		[RelayCommand(CanExecute = nameof(CanActOnMod))]
 		private void RemoveMod()
 		{
 			ModRowViewModel row = this.SelectedMod;
@@ -565,7 +654,7 @@ namespace BlackboxModManager.App.ViewModels
 		/// under every game. This command ends that. It refuses a Binary mod, because the
 		/// manifest of that mod names the game.
 		/// </summary>
-		[RelayCommand(CanExecute = nameof(IsIdle))]
+		[RelayCommand(CanExecute = nameof(CanActOnMod))]
 		private void SetModGame()
 		{
 			ModRowViewModel row = this.SelectedMod;
@@ -584,10 +673,10 @@ namespace BlackboxModManager.App.ViewModels
 			}
 		}
 
-		[RelayCommand(CanExecute = nameof(IsIdle))]
+		[RelayCommand(CanExecute = nameof(CanActOnMod))]
 		private void MoveUp() => this.MoveSelected(-1);
 
-		[RelayCommand(CanExecute = nameof(IsIdle))]
+		[RelayCommand(CanExecute = nameof(CanActOnMod))]
 		private void MoveDown() => this.MoveSelected(1);
 
 		private void MoveSelected(int offset)
@@ -1313,6 +1402,139 @@ namespace BlackboxModManager.App.ViewModels
 			}
 		}
 
+		// ---------------------------------------------------------------- the workspace
+
+		/// <summary>The directory that holds the vanilla copy and the staging copy.</summary>
+		[ObservableProperty]
+		private string _workspacePath = String.Empty;
+
+		/// <summary>One line that says where the workspace sits and why the place matters.</summary>
+		[ObservableProperty]
+		private string _workspaceStatus = String.Empty;
+
+		private void RefreshWorkspace()
+		{
+			bool isDefault = String.IsNullOrWhiteSpace(this._settings.WorkRootOverride);
+
+			if (this._install is null)
+			{
+				this.WorkspacePath = isDefault ? String.Empty : this._settings.WorkRootOverride;
+				this.WorkspaceStatus = isDefault
+					? "The workspace goes beside the game install. Set the game install to see the path."
+					: "The settings name this place. Set the game install to see the full path.";
+
+				return;
+			}
+
+			try
+			{
+				this.WorkspacePath = this.Service().WorkspaceOf(this._install).Root;
+				this.WorkspaceStatus = isDefault
+					? "The workspace sits beside the game install. This is the default, and it is " +
+						"the fast place."
+					: "The settings name this place. A workspace off the volume of the game makes " +
+						"every deploy copy every byte.";
+			}
+			catch (Exception ex)
+			{
+				this.WorkspacePath = String.Empty;
+				this.WorkspaceStatus = ex.Message;
+			}
+		}
+
+		/// <summary>
+		/// Moves the workspace of every game.
+		///
+		/// <b>The workspace holds the only vanilla copy of an install.</b> A move while the game
+		/// directory holds a deployed profile points this application at an empty workspace, and
+		/// <c>Revert</c> then throws because no vanilla copy exists. So this command refuses that
+		/// case and asks the user to revert first.
+		///
+		/// The old directory stays on disk. This application deletes nothing that it did not
+		/// write in the same operation, and the vanilla copy is the last way back.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(IsIdle))]
+		private void SetWorkRoot()
+		{
+			if (!this.WorkspaceIsSafeToMove()) return;
+
+			var choices = new List<UserChoice>
+			{
+				new UserChoice("pick", "Choose another directory",
+					"Pick a directory. The next deploy builds a new workspace there."),
+			};
+
+			if (!String.IsNullOrWhiteSpace(this._settings.WorkRootOverride))
+			{
+				choices.Add(new UserChoice("default", "Use the default place",
+					"Put the workspace beside the game install again."));
+			}
+
+			string answer = this._ask.PickChoice(
+				(this.WorkspacePath.Length > 0
+					? $"The workspace is at {this.WorkspacePath}.\n\n"
+					: String.Empty) +
+				"A deploy builds the staging copy here and then swaps it with the game directory. " +
+				"Both steps are cheap only on the volume of the game. Move this only when that " +
+				"volume has no free space.",
+				choices);
+
+			if (answer is null) return;
+
+			string target = answer == "default"
+				? null
+				: this._ask.PickDirectory("Choose the directory for the workspace.", this.WorkspacePath);
+
+			if (answer != "default" && String.IsNullOrWhiteSpace(target)) return;
+
+			string previous = this.WorkspacePath;
+
+			this._settings.WorkRootOverride = target;
+			SettingsStore.Save(this._settings);
+
+			this.RefreshWorkspace();
+
+			this.Write(this.WorkspacePath.Length > 0
+				? $"The workspace is now {this.WorkspacePath}."
+				: "The workspace goes beside the game install again.");
+
+			if (previous.Length > 0 && previous != this.WorkspacePath)
+			{
+				this.Write($"The old workspace stays at {previous}. Delete it by hand when you " +
+					"no longer need it.");
+			}
+		}
+
+		/// <summary>
+		/// True when the game directory holds the vanilla state, so a move of the workspace
+		/// loses no way back. It reports the reason and returns false in every other case.
+		/// </summary>
+		private bool WorkspaceIsSafeToMove()
+		{
+			if (this._install is null) return true;
+
+			WorkspaceState state;
+
+			try
+			{
+				state = this.Service().WorkspaceOf(this._install).ReadState();
+			}
+			catch (Exception ex)
+			{
+				this._ask.ShowError($"This application could not read the workspace. {ex.Message}");
+				return false;
+			}
+
+			if (state.IsVanilla) return true;
+
+			this._ask.ShowError(
+				$"The game directory holds the profile \"{state.DeployedProfile}\". " +
+				"The workspace holds the only vanilla copy of this install. " +
+				"Revert to vanilla first, then move the workspace.");
+
+			return false;
+		}
+
 		/// <summary>
 		/// Lists every directory of this application, so that the user can look at one.
 		///
@@ -1434,6 +1656,12 @@ namespace BlackboxModManager.App.ViewModels
 			this.RefreshConflictsCommand.NotifyCanExecuteChanged();
 			this.DeployCommand.NotifyCanExecuteChanged();
 			this.RevertCommand.NotifyCanExecuteChanged();
+
+			// The config window of step 12 shows these three, so their buttons have to gray out
+			// during a long operation like every other button does.
+			this.SetModStoreCommand.NotifyCanExecuteChanged();
+			this.SetWorkRootCommand.NotifyCanExecuteChanged();
+			this.ChooseLoaderCommand.NotifyCanExecuteChanged();
 		}
 	}
 }

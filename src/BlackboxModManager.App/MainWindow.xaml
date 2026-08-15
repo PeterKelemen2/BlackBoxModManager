@@ -16,106 +16,94 @@
   <Grid x:Name="DragLayer" Margin="12">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
-      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <!--  The game install. The application asks for it in a dialog, never on a console.  -->
-    <GroupBox
-      Grid.Row="0"
-      Margin="0,0,0,8"
-      Padding="8"
-      Header="Game">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <StackPanel Grid.Column="0" Margin="0,0,8,0">
-          <!--
-            The picker holds the games that a listing of a real install confirmed. A
-            switch reloads the install, the profiles, and the mods.
-          -->
-          <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
-            <TextBlock
-              Margin="0,0,8,0"
-              VerticalAlignment="Center"
-              Text="Game" />
-            <ComboBox
-              Width="320"
-              DisplayMemberPath="DisplayName"
-              ItemsSource="{Binding Games}"
-              SelectedItem="{Binding SelectedGame, Mode=TwoWay}" />
-          </StackPanel>
-          <TextBlock
-            Style="{StaticResource Heading}"
-            Text="{Binding GameStatus}"
-            TextWrapping="Wrap" />
-          <TextBlock Style="{StaticResource Hint}" Text="{Binding GamePath}" />
-          <TextBlock
-            Margin="0,4,0,0"
-            Style="{StaticResource Hint}"
-            Text="{Binding DeployedState}" />
-          <TextBlock
-            Margin="0,4,0,0"
-            Style="{StaticResource Hint}"
-            Text="{Binding BinaryStatus}" />
-          <!--
-            The volume of the mod store decides whether a deploy can use hard links, so the
-            path belongs on screen and not only in the log.
-          -->
-          <TextBlock
-            Margin="0,4,0,0"
-            Style="{StaticResource Hint}"
-            Text="{Binding ModStoreStatus}"
-            TextWrapping="Wrap" />
-        </StackPanel>
-        <StackPanel Grid.Column="1" VerticalAlignment="Top">
-          <StackPanel Orientation="Horizontal">
-            <Button Command="{Binding DetectGameCommand}" Content="Detect" />
-            <Button Command="{Binding BrowseGameCommand}" Content="Browse" />
-            <Button
-              Margin="0"
-              Command="{Binding SetBinaryCommand}"
-              Content="Binary install" />
-          </StackPanel>
-          <StackPanel
-            Margin="0,4,0,0"
-            HorizontalAlignment="Right"
-            Orientation="Horizontal">
-            <Button
-              Margin="0"
-              Command="{Binding SetModStoreCommand}"
-              Content="Mod store"
-              ToolTip="Move the mod store. A store on the volume of the game makes every deploy use hard links." />
-          </StackPanel>
-        </StackPanel>
-      </Grid>
-    </GroupBox>
+    <!--
+      The bar. One row holds the game, the profile, and the way into the settings.
 
-    <!--  The profile. A profile fully determines the deployed result.  -->
-    <StackPanel
-      Grid.Row="1"
-      Margin="0,0,0,8"
-      Orientation="Horizontal">
-      <TextBlock
-        Margin="0,0,8,0"
-        VerticalAlignment="Center"
-        Text="Profile" />
-      <ComboBox
-        Width="220"
-        Margin="0,0,8,0"
-        ItemsSource="{Binding ProfileNames}"
-        SelectedItem="{Binding SelectedProfileName, Mode=TwoWay}" />
-      <Button Command="{Binding NewProfileCommand}" Content="New" />
-      <Button Command="{Binding RenameProfileCommand}" Content="Rename" />
-      <Button Command="{Binding DeleteProfileCommand}" Content="Delete" />
-    </StackPanel>
+      Step 12 replaced a Game card of five status lines and four buttons, plus a profile row
+      of three more. Every path setting lives in ConfigWindow now, and the state text lives in
+      the status bar below. See docs/roadmap/12-minimal-ui.md, Part G.
+    -->
+    <Grid Grid.Row="0" Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel Grid.Column="0" Orientation="Horizontal">
+        <!--
+          The picker holds the games that a listing of a real install confirmed. A switch
+          reloads the install, the profiles, and the mods.
+        -->
+        <!--
+          <b>The picker names the game with an ItemTemplate and never with DisplayMemberPath.</b>
+          The closed box of a ComboBox draws SelectionBoxItem through SelectionBoxItemTemplate,
+          and the template in Controls.xaml binds that one property alone. DisplayMemberPath
+          reaches the open list and misses the closed box, which then falls back to ToString and
+          reads "Need for Speed Underground 2 (Underground2)". A template covers both.
+        -->
+        <ComboBox
+          Width="240"
+          Margin="0,0,8,0"
+          ItemsSource="{Binding Games}"
+          SelectedItem="{Binding SelectedGame, Mode=TwoWay}"
+          ToolTip="The game that this window manages.">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding DisplayName}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <!--  The profile. A profile fully determines the deployed result.  -->
+        <ComboBox
+          Width="200"
+          Margin="0,0,4,0"
+          ItemsSource="{Binding ProfileNames}"
+          SelectedItem="{Binding SelectedProfileName, Mode=TwoWay}"
+          ToolTip="The profile that a deploy writes. A profile holds the mods and the load order." />
+
+        <Button
+          x:Name="ProfileMenuButton"
+          Margin="0"
+          ui:Kind.Value="Quiet"
+          Click="OnOpenOwnMenu"
+          Style="{StaticResource IconButton}"
+          ToolTip="Make a new profile, rename this one, or delete it.">
+          <Path Data="{StaticResource IconMore}" Style="{StaticResource IconGlyph}" />
+          <Button.ContextMenu>
+            <!--
+              A ContextMenu is not in the visual tree of the window, so it inherits no
+              DataContext that a binding can rely on. Every menu of this window takes the
+              DataContext of its placement target instead.
+            -->
+            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+              <MenuItem Command="{Binding NewProfileCommand}" Header="New profile" />
+              <MenuItem Command="{Binding RenameProfileCommand}" Header="Rename this profile" />
+              <Separator />
+              <MenuItem Command="{Binding DeleteProfileCommand}" Header="Delete this profile" />
+            </ContextMenu>
+          </Button.ContextMenu>
+        </Button>
+      </StackPanel>
+
+      <Button
+        Grid.Column="1"
+        Margin="0"
+        ui:Kind.Value="Quiet"
+        Click="OnOpenConfig"
+        Style="{StaticResource IconButton}"
+        ToolTip="Open the settings. The game directory, the Binary install, the mod store, and the workspace all live there.">
+        <Path Data="{StaticResource IconSettings}" Style="{StaticResource IconGlyph}" />
+      </Button>
+    </Grid>
 
     <!--  The mods and the log.  -->
-    <Grid Grid.Row="2">
+    <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="3*" MinWidth="360" />
         <ColumnDefinition Width="Auto" />
@@ -128,65 +116,130 @@
       -->
       <GroupBox Grid.Column="0" Padding="4">
         <Grid>
-          <!--
-            The DataGrid of step 9 became a row list in step 10, so that a row can carry a
-            drag handle and a drop can reorder it. Step 11 replaced the insertion line with a
-            ghost slot. See docs/roadmap/11-ui-polish.md, Part B. The event handlers live in
-            MainWindow.xaml.cs, on this ItemsControl, because the row template of
-            Theme/Parts.xaml has no code-behind of its own.
-          -->
-          <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <ItemsControl
-              x:Name="ModList"
-              AllowDrop="True"
-              DragLeave="ModList_DragLeave"
-              DragOver="ModList_DragOver"
-              Drop="ModList_Drop"
-              GiveFeedback="ModList_GiveFeedback"
-              ItemTemplate="{StaticResource ModRowTemplate}"
-              ItemsSource="{Binding Mods}"
-              PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
-              PreviewMouseMove="ModList_PreviewMouseMove"
-              QueryContinueDrag="ModList_QueryContinueDrag" />
-          </ScrollViewer>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
 
           <!--
-            The empty state. It covers the list only while the profile holds no mod, so it
-            never sits over a row and never blocks a drag.
+            The mod toolbar. Four glyphs and no label. The tooltip of each button is the only
+            name that it has, so no button may lose one.
 
-            The trigger reads Mods.Count. An ObservableCollection raises PropertyChanged for
-            Count, so the panel appears and disappears with no code and no converter.
+            The three buttons on the right act on the selected mod, and CanActOnMod grays all
+            three out while nothing is selected. See docs/roadmap/12-minimal-ui.md, Part F.
           -->
-          <StackPanel
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center">
-            <StackPanel.Style>
-              <Style TargetType="StackPanel">
-                <Setter Property="Visibility" Value="Collapsed" />
-                <Style.Triggers>
-                  <DataTrigger Binding="{Binding Mods.Count}" Value="0">
-                    <Setter Property="Visibility" Value="Visible" />
-                  </DataTrigger>
-                </Style.Triggers>
-              </Style>
-            </StackPanel.Style>
+          <Grid Grid.Row="0" Margin="2,2,2,6">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
             <Button
-              HorizontalAlignment="Center"
-              Command="{Binding ImportArchiveCommand}"
-              Style="{StaticResource AddModButton}"
-              ToolTip="Choose a mod archive. Use Import folder below for a directory." />
-            <TextBlock
-              Margin="0,14,0,0"
-              HorizontalAlignment="Center"
-              Style="{StaticResource Heading}"
-              Text="Add a mod" />
-            <TextBlock
-              MaxWidth="260"
-              HorizontalAlignment="Center"
-              Style="{StaticResource Hint}"
-              Text="The mods deploy in this order. A later mod overrides an earlier one."
-              TextAlignment="Center" />
-          </StackPanel>
+              x:Name="ImportButton"
+              Grid.Column="0"
+              Margin="0"
+              Click="OnOpenOwnMenu"
+              Style="{StaticResource IconButton}"
+              ToolTip="Add a mod. Choose an archive or a directory, or drop one on this list.">
+              <Path Data="{StaticResource IconPlus}" Style="{StaticResource IconGlyph}" />
+              <Button.ContextMenu>
+                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                  <MenuItem Command="{Binding ImportArchiveCommand}" Header="Archive…" />
+                  <MenuItem Command="{Binding ImportFolderCommand}" Header="Folder…" />
+                </ContextMenu>
+              </Button.ContextMenu>
+            </Button>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+              <Button
+                Command="{Binding MoveUpCommand}"
+                Style="{StaticResource IconButton}"
+                ToolTip="Move the mod one place up. An earlier mod loads first.">
+                <Path Data="{StaticResource IconChevronUp}" Style="{StaticResource IconGlyph}" />
+              </Button>
+              <Button
+                Command="{Binding MoveDownCommand}"
+                Style="{StaticResource IconButton}"
+                ToolTip="Move the mod one place down. A later mod overrides an earlier one.">
+                <Path Data="{StaticResource IconChevronDown}" Style="{StaticResource IconGlyph}" />
+              </Button>
+              <Button
+                Margin="6,0,0,0"
+                ui:Kind.Value="DangerOutline"
+                Command="{Binding RemoveModCommand}"
+                Style="{StaticResource IconButton}"
+                ToolTip="Remove the mod from the store. This deletes the files of the mod.">
+                <Path Data="{StaticResource IconTrash}" Style="{StaticResource IconGlyph}" />
+              </Button>
+            </StackPanel>
+          </Grid>
+
+          <Grid Grid.Row="1">
+            <!--
+              The DataGrid of step 9 became a row list in step 10, so that a row can carry a
+              drag handle and a drop can reorder it. Step 11 replaced the insertion line with a
+              ghost slot. See docs/roadmap/11-ui-polish.md, Part B. The event handlers live in
+              MainWindow.xaml.cs, on this ItemsControl, because the row template of
+              Theme/Parts.xaml has no code-behind of its own.
+
+              Step 12 added the right button handler and the drop of a file from outside. See
+              docs/roadmap/12-minimal-ui.md, Parts E and I.
+            -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <ItemsControl
+                x:Name="ModList"
+                AllowDrop="True"
+                DragLeave="ModList_DragLeave"
+                DragOver="ModList_DragOver"
+                Drop="ModList_Drop"
+                GiveFeedback="ModList_GiveFeedback"
+                ItemTemplate="{StaticResource ModRowTemplate}"
+                ItemsSource="{Binding Mods}"
+                PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
+                PreviewMouseMove="ModList_PreviewMouseMove"
+                PreviewMouseRightButtonDown="ModList_PreviewMouseRightButtonDown"
+                QueryContinueDrag="ModList_QueryContinueDrag" />
+            </ScrollViewer>
+
+            <!--
+              The empty state. It covers the list only while the profile holds no mod, so it
+              never sits over a row and never blocks a drag.
+
+              The trigger reads Mods.Count. An ObservableCollection raises PropertyChanged for
+              Count, so the panel appears and disappears with no code and no converter.
+
+              The tile opens the menu of ImportButton above. One menu, one pair of answers.
+            -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+              <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                  <Setter Property="Visibility" Value="Collapsed" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Mods.Count}" Value="0">
+                      <Setter Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </StackPanel.Style>
+              <Button
+                HorizontalAlignment="Center"
+                Click="OnOpenImportMenu"
+                Style="{StaticResource AddModButton}"
+                ToolTip="Add a mod. Choose an archive or a directory, or drop one on this list." />
+              <TextBlock
+                Margin="0,14,0,0"
+                HorizontalAlignment="Center"
+                Style="{StaticResource Heading}"
+                Text="Add a mod" />
+              <TextBlock
+                MaxWidth="260"
+                HorizontalAlignment="Center"
+                Style="{StaticResource Hint}"
+                Text="The mods deploy in this order. A later mod overrides an earlier one."
+                TextAlignment="Center" />
+            </StackPanel>
+          </Grid>
         </Grid>
       </GroupBox>
 
@@ -504,65 +557,58 @@
       </TabControl>
     </Grid>
 
-    <!--  The actions.  -->
-    <Grid Grid.Row="3" Margin="0,8,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <StackPanel Grid.Column="0" Orientation="Horizontal">
-        <Button
-          MinWidth="110"
-          Command="{Binding ImportArchiveCommand}"
-          Content="Import archive" />
-        <Button
-          MinWidth="110"
-          Command="{Binding ImportFolderCommand}"
-          Content="Import folder" />
-        <Button
-          ui:Kind.Value="Danger"
-          Command="{Binding RemoveModCommand}"
-          Content="Remove" />
-        <Button
-          Command="{Binding SetModGameCommand}"
-          Content="Set game"
-          ToolTip="Give the selected drop-in mod the game that this window manages." />
-        <Button Command="{Binding MoveUpCommand}" Content="Move up" />
-        <Button Command="{Binding MoveDownCommand}" Content="Move down" />
-        <!--
-          A deploy that the verify stopped leaves its result in the staging copy, and the
-          failure is only readable from inside that directory.
-        -->
-        <Button
-          ui:Kind.Value="Quiet"
-          Command="{Binding ShowFoldersCommand}"
-          Content="Folders"
-          ToolTip="Open the staging copy, the vanilla copy, the mod store, or the logs." />
-      </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal">
-        <CheckBox
-          Margin="0,0,12,0"
-          VerticalAlignment="Center"
-          Content="Full verify"
-          IsChecked="{Binding FullVerify, Mode=TwoWay}"
-          ToolTip="Hash every file of the staging copy. This is slow and exact." />
-        <Button
-          MinWidth="100"
-          ui:Kind.Value="Success"
-          Command="{Binding DeployCommand}"
-          Content="Deploy" />
-        <Button
-          MinWidth="120"
-          Margin="0"
-          ui:Kind.Value="Danger"
-          Command="{Binding RevertCommand}"
-          Content="Revert to vanilla" />
-      </StackPanel>
-    </Grid>
+    <!--
+      The two actions. Both carry a colored edge and no fill, so neither one shouts across
+      the window. See docs/roadmap/12-minimal-ui.md, Part C.
+    -->
+    <StackPanel
+      Grid.Row="2"
+      Margin="0,8,0,0"
+      HorizontalAlignment="Right"
+      Orientation="Horizontal">
+      <Button
+        MinWidth="100"
+        ui:Kind.Value="SuccessOutline"
+        Command="{Binding DeployCommand}"
+        Content="Deploy" />
+      <Button
+        MinWidth="120"
+        Margin="0"
+        ui:Kind.Value="DangerOutline"
+        Command="{Binding RevertCommand}"
+        Content="Revert to vanilla" />
+    </StackPanel>
 
-    <StatusBar Grid.Row="4" Margin="0,8,0,0">
+    <!--
+      The bottom line. The left item says what the application is doing. The right item says
+      what the game directory holds.
+
+      The tooltip carries the three paths that step 12 took off the main window. It names its
+      own DataContext, because a ToolTip sits outside the visual tree in the same way that a
+      ContextMenu does.
+    -->
+    <StatusBar Grid.Row="3" Margin="0,8,0,0">
       <StatusBarItem>
         <TextBlock Text="{Binding Status}" />
+      </StatusBarItem>
+      <StatusBarItem HorizontalContentAlignment="Right">
+        <TextBlock Text="{Binding StateSummary}" TextTrimming="CharacterEllipsis">
+          <TextBlock.ToolTip>
+            <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+              <StackPanel MaxWidth="420">
+                <TextBlock Text="{Binding GamePath}" TextWrapping="Wrap" />
+                <TextBlock
+                  Margin="0,4,0,0"
+                  Text="{Binding BinaryStatus}"
+                  TextWrapping="Wrap" />
+                <TextBlock
+                  Margin="0,4,0,0"
+                  Text="{Binding ModStoreStatus}"
+                  TextWrapping="Wrap" />
+              </StackPanel>
+            </ToolTip>
+          </TextBlock.ToolTip>
+        </TextBlock>
       </StatusBarItem>
     </StatusBar>
   </Grid>

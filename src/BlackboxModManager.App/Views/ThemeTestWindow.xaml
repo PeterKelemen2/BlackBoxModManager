@@ -29,6 +29,104 @@
           IsEnabled="False" />
       </WrapPanel>
 
+      <!--
+        The two outlined modes of step 12. Success and Danger above keep their solid fill,
+        because ConfirmWindow paints a destructive answer with Danger.
+      -->
+      <TextBlock Style="{StaticResource Heading}" Text="Outlined buttons" />
+      <WrapPanel Margin="0,0,0,16">
+        <Button ui:Kind.Value="SuccessOutline" Content="Deploy" />
+        <Button ui:Kind.Value="DangerOutline" Content="Revert to vanilla" />
+        <Button
+          ui:Kind.Value="SuccessOutline"
+          Content="Disabled"
+          IsEnabled="False" />
+        <Button
+          ui:Kind.Value="DangerOutline"
+          Content="Disabled"
+          IsEnabled="False" />
+      </WrapPanel>
+
+      <!--
+        The icon buttons. Every glyph is Path geometry from Theme/Icons.xaml, because a
+        glyph font that the machine does not hold kills the process under Wine.
+
+        The disabled pair is the check that matters. IconGlyph binds its stroke to the
+        Foreground of the button, so a disabled glyph has to dim with its label.
+      -->
+      <TextBlock Style="{StaticResource Heading}" Text="Icon buttons" />
+      <WrapPanel Margin="0,0,0,16">
+        <Button Style="{StaticResource IconButton}" ToolTip="Plus">
+          <Path Data="{StaticResource IconPlus}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button Style="{StaticResource IconButton}" ToolTip="Chevron up">
+          <Path Data="{StaticResource IconChevronUp}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button Style="{StaticResource IconButton}" ToolTip="Chevron down">
+          <Path Data="{StaticResource IconChevronDown}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button
+          ui:Kind.Value="DangerOutline"
+          Style="{StaticResource IconButton}"
+          ToolTip="Trash">
+          <Path Data="{StaticResource IconTrash}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button
+          ui:Kind.Value="Quiet"
+          Style="{StaticResource IconButton}"
+          ToolTip="Settings">
+          <Path Data="{StaticResource IconSettings}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button
+          ui:Kind.Value="Quiet"
+          Style="{StaticResource IconButton}"
+          ToolTip="More">
+          <Path Data="{StaticResource IconMore}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button
+          Margin="16,0,6,0"
+          IsEnabled="False"
+          Style="{StaticResource IconButton}"
+          ToolTip="Disabled chevron down">
+          <Path Data="{StaticResource IconChevronDown}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button
+          ui:Kind.Value="DangerOutline"
+          IsEnabled="False"
+          Style="{StaticResource IconButton}"
+          ToolTip="Disabled trash">
+          <Path Data="{StaticResource IconTrash}" Style="{StaticResource IconGlyph}" />
+        </Button>
+      </WrapPanel>
+
+      <!--
+        The menu. A menu popup is a layered window, and a hardware popup paints black under
+        Wine. Rendering.Apply forces software rendering there. Right-click the block below
+        to check that this holds for a menu and not only for a combo box.
+      -->
+      <TextBlock Style="{StaticResource Heading}" Text="Menu" />
+      <Border
+        Height="60"
+        Margin="0,0,0,16"
+        Background="{StaticResource SurfaceRaised}"
+        BorderBrush="{StaticResource BorderDefault}"
+        BorderThickness="1"
+        CornerRadius="{StaticResource RadiusCard}">
+        <TextBlock
+          HorizontalAlignment="Center"
+          VerticalAlignment="Center"
+          Style="{StaticResource Hint}"
+          Text="Right-click here to open a menu." />
+        <Border.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="First item" />
+            <MenuItem Header="Second item" />
+            <Separator />
+            <MenuItem Header="Disabled item" IsEnabled="False" />
+          </ContextMenu>
+        </Border.ContextMenu>
+      </Border>
+
       <TextBlock Style="{StaticResource Heading}" Text="Text boxes" />
       <WrapPanel Margin="0,0,0,16">
         <TextBox

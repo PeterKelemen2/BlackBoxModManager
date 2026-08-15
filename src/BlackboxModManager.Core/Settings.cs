@@ -70,6 +70,16 @@ namespace BlackboxModManager.Core
 		public string ModStoreOverride { get; set; }
 
 		/// <summary>
+		/// Whether a deploy hashes every file of the staging copy. False checks the name and
+		/// the length alone, which is fast.
+		///
+		/// This field needs no migration. A file that step 9 wrote holds no such key, and a
+		/// missing key reads as false. That is the value that the window used before, so the
+		/// Version above stays at 2.
+		/// </summary>
+		public bool FullVerify { get; set; }
+
+		/// <summary>
 		/// The mod store directory that this application uses. It falls back to the default
 		/// when the setting holds nothing.
 		/// </summary>

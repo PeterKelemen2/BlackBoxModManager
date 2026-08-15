@@ -1,0 +1,227 @@
+<Window
+  x:Class="BlackboxModManager.App.Views.ConfigWindow"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="clr-namespace:BlackboxModManager.App.Theme"
+  Title="Settings"
+  Width="680"
+  Height="690"
+  MinWidth="520"
+  MinHeight="420"
+  Background="{StaticResource SurfaceBase}"
+  ShowInTaskbar="False"
+  WindowStartupLocation="CenterOwner">
+  <!--
+    Every path of this application. Step 12 took these four settings off the main window.
+    See docs/roadmap/12-minimal-ui.md, Part H.
+
+    <b>This window holds no logic.</b> It takes the MainViewModel as its DataContext and it
+    binds to the commands that already exist. The code-behind opens it, sets the dialog
+    owner, and nothing else.
+  -->
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="0,0,8,0">
+
+        <!--  The game install. A deploy needs it, and nothing works without it.  -->
+        <GroupBox
+          Margin="0,0,0,12"
+          Padding="10"
+          Header="Game install">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+              <TextBlock
+                Style="{StaticResource Hint}"
+                Text="{Binding GameStatus}"
+                TextWrapping="Wrap" />
+              <!--  The path is selectable, so a user can copy part of it by hand.  -->
+              <TextBox
+                Margin="0,4,0,0"
+                Padding="0"
+                Background="Transparent"
+                BorderThickness="0"
+                IsReadOnly="True"
+                Text="{Binding GamePath, Mode=OneWay}"
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" VerticalAlignment="Top">
+              <Button
+                Margin="0,0,0,4"
+                HorizontalAlignment="Stretch"
+                Command="{Binding DetectGameCommand}"
+                Content="Detect"
+                ToolTip="Search the common install directories. This application asks before it takes one." />
+              <Button
+                Margin="0"
+                HorizontalAlignment="Stretch"
+                Command="{Binding BrowseGameCommand}"
+                Content="Browse"
+                ToolTip="Choose the install directory of this game." />
+            </StackPanel>
+          </Grid>
+        </GroupBox>
+
+        <!--  Binary. A Binary mod needs it. A drop-in mod does not.  -->
+        <GroupBox
+          Margin="0,0,0,12"
+          Padding="10"
+          Header="Binary install">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+              Grid.Column="0"
+              Margin="0,0,8,0"
+              Style="{StaticResource Hint}"
+              Text="{Binding BinaryStatus}"
+              TextWrapping="Wrap" />
+            <Button
+              Grid.Column="1"
+              Margin="0"
+              VerticalAlignment="Top"
+              Command="{Binding SetBinaryCommand}"
+              Content="Browse"
+              ToolTip="Choose the directory of the Binary 2.8.3 install. This application reads its hash lists." />
+          </Grid>
+        </GroupBox>
+
+        <!--
+          The mod store. The volume of this directory decides the cost of every deploy, so
+          the hint says so on screen and not only in the log.
+        -->
+        <GroupBox
+          Margin="0,0,0,12"
+          Padding="10"
+          Header="Mod store">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+              <TextBlock
+                Style="{StaticResource Hint}"
+                Text="{Binding ModStoreStatus}"
+                TextWrapping="Wrap" />
+              <TextBlock
+                Margin="0,4,0,0"
+                Style="{StaticResource Hint}"
+                Text="A hard link cannot cross a volume. A store on the volume of the game makes every deploy cost almost no disk space."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <Button
+              Grid.Column="1"
+              Margin="0"
+              VerticalAlignment="Top"
+              Command="{Binding SetModStoreCommand}"
+              Content="Change"
+              ToolTip="Move the mod store, or point this application at a store that already exists." />
+          </Grid>
+        </GroupBox>
+
+        <!--
+          The workspace. It holds the vanilla copy, so a move while a profile is deployed
+          would take the only way back. SetWorkRoot refuses that case.
+        -->
+        <GroupBox
+          Margin="0,0,0,12"
+          Padding="10"
+          Header="Workspace">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+              <TextBlock
+                Style="{StaticResource Hint}"
+                Text="{Binding WorkspaceStatus}"
+                TextWrapping="Wrap" />
+              <TextBox
+                Margin="0,4,0,0"
+                Padding="0"
+                Background="Transparent"
+                BorderThickness="0"
+                IsReadOnly="True"
+                Text="{Binding WorkspacePath, Mode=OneWay}"
+                TextWrapping="Wrap" />
+              <TextBlock
+                Margin="0,4,0,0"
+                Style="{StaticResource Hint}"
+                Text="The workspace holds the vanilla copy and the staging copy. Revert to vanilla before you move it."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <Button
+              Grid.Column="1"
+              Margin="0"
+              VerticalAlignment="Top"
+              Command="{Binding SetWorkRootCommand}"
+              Content="Change"
+              ToolTip="Move the workspace. Do this only when the volume of the game has no free space." />
+          </Grid>
+        </GroupBox>
+
+        <!--  The one deploy option that is not a path.  -->
+        <GroupBox Padding="10" Header="Deploy">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+              <TextBlock Text="Full verify" />
+              <TextBlock
+                Margin="0,2,0,0"
+                Style="{StaticResource Hint}"
+                Text="Hash every file of the staging copy after a deploy builds it. This is slow and exact. Off checks the name and the length alone."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <ToggleButton
+              Grid.Column="1"
+              VerticalAlignment="Top"
+              IsChecked="{Binding FullVerify, Mode=TwoWay}"
+              Style="{StaticResource TogglePill}" />
+          </Grid>
+        </GroupBox>
+
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="1" Margin="0,12,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <!--
+        A deploy that the verify stopped leaves its result in the staging copy, and the
+        failure is only readable from inside that directory.
+      -->
+      <Button
+        Grid.Column="0"
+        Margin="0"
+        ui:Kind.Value="Quiet"
+        Command="{Binding ShowFoldersCommand}"
+        Content="Folders"
+        ToolTip="Open the staging copy, the vanilla copy, the mod store, or the logs." />
+      <Button
+        Grid.Column="2"
+        MinWidth="80"
+        Margin="0"
+        Content="Close"
+        IsCancel="True"
+        IsDefault="True" />
+    </Grid>
+  </Grid>
+</Window>

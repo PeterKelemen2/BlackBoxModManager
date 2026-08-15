@@ -132,6 +132,62 @@
               <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource DangerPressed}" />
             </MultiTrigger>
 
+            <!--
+              The two outlined modes. A colored edge and colored text over no fill.
+
+              The Foreground setter targets the button and not Chrome, so the content
+              presenter inherits it. IconGlyph in Parts.xaml binds the stroke of an icon to
+              that same Foreground, so an outlined icon button colors its glyph with no
+              trigger of its own.
+            -->
+            <Trigger Property="ui:Kind.Value" Value="SuccessOutline">
+              <Setter TargetName="Chrome" Property="Background" Value="Transparent" />
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource SuccessDefault}" />
+              <Setter Property="Foreground" Value="{StaticResource SuccessDefault}" />
+            </Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="ui:Kind.Value" Value="SuccessOutline" />
+                <Condition Property="IsMouseOver" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SuccessSubtle}" />
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource SuccessHover}" />
+              <Setter Property="Foreground" Value="{StaticResource SuccessHover}" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="ui:Kind.Value" Value="SuccessOutline" />
+                <Condition Property="IsPressed" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource SuccessSubtle}" />
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource SuccessPressed}" />
+              <Setter Property="Foreground" Value="{StaticResource SuccessPressed}" />
+            </MultiTrigger>
+
+            <Trigger Property="ui:Kind.Value" Value="DangerOutline">
+              <Setter TargetName="Chrome" Property="Background" Value="Transparent" />
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource DangerDefault}" />
+              <Setter Property="Foreground" Value="{StaticResource DangerDefault}" />
+            </Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="ui:Kind.Value" Value="DangerOutline" />
+                <Condition Property="IsMouseOver" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource DangerSubtle}" />
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource DangerHover}" />
+              <Setter Property="Foreground" Value="{StaticResource DangerHover}" />
+            </MultiTrigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="ui:Kind.Value" Value="DangerOutline" />
+                <Condition Property="IsPressed" Value="True" />
+              </MultiTrigger.Conditions>
+              <Setter TargetName="Chrome" Property="Background" Value="{StaticResource DangerSubtle}" />
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource DangerPressed}" />
+              <Setter Property="Foreground" Value="{StaticResource DangerPressed}" />
+            </MultiTrigger>
+
             <!--  A Quiet button carries no fill until the pointer enters it.  -->
             <Trigger Property="ui:Kind.Value" Value="Quiet">
               <Setter TargetName="Chrome" Property="Background" Value="Transparent" />
@@ -522,6 +578,97 @@
       </Setter.Value>
     </Setter>
   </Style>
+
+  <!--
+    The menu. The import button, the profile button, and the mod row all open one. See
+    docs/roadmap/12-minimal-ui.md, Part D.
+
+    <b>HasDropShadow decides whether the popup surface takes transparency</b>, and it does
+    not draw a shadow here. WPF hosts a ContextMenu in a Popup that it creates itself, and
+    that Popup reads this property for AllowsTransparency. The template below holds no shadow
+    element, so a true value buys the rounded corners and nothing else. A false value would
+    square the corners off against an opaque surface.
+
+    The fill is a full opaque SurfaceOverlay under those corners, the same as the ComboBox
+    popup. Read the pitfalls of docs/roadmap/10-dark-theme.md, Part C, before you change it.
+  -->
+  <Style TargetType="ContextMenu">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+    <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+    <Setter Property="MinWidth" Value="150" />
+    <Setter Property="HasDropShadow" Value="True" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ContextMenu">
+          <Border
+            Padding="3"
+            Background="{StaticResource SurfaceOverlay}"
+            BorderBrush="{StaticResource BorderDefault}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource RadiusDefault}">
+            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
+    The menu item. One template covers every role, because this application opens context
+    menus alone and never a menu bar.
+  -->
+  <Style TargetType="MenuItem">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+    <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border
+            x:Name="Block"
+            Padding="{TemplateBinding Padding}"
+            Background="Transparent"
+            CornerRadius="{StaticResource RadiusSmall}">
+            <ContentPresenter VerticalAlignment="Center" ContentSource="Header" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="Block" Property="Background" Value="{StaticResource SurfaceHover}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Foreground" Value="{StaticResource TextDisabled}" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
+    The line between two menu items.
+
+    <b>A menu takes the keyed style and never the implicit one.</b> Menu asks for
+    MenuItem.SeparatorStyleKey by name, so an implicit Separator style never reaches a
+    separator inside a menu. Both entries below exist for that reason, and the keyed one
+    carries the whole definition.
+  -->
+  <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
+    <Setter Property="Margin" Value="6,4" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Separator">
+          <Rectangle Height="1" Fill="{StaticResource BorderDefault}" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style BasedOn="{StaticResource {x:Static MenuItem.SeparatorStyleKey}}" TargetType="Separator" />
 
   <!--
     The tab strip. The strip sits inside the card of the TabControl below, so a tab draws no

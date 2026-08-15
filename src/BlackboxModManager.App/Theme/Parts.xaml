@@ -100,6 +100,50 @@
     </Setter>
   </Style>
 
+  <!--
+    The glyph inside an icon button. The geometry comes from Theme/Icons.xaml. See
+    docs/roadmap/12-minimal-ui.md, Part B.
+
+    <b>The stroke reads the Foreground of the button that holds it.</b> That one binding
+    gives every icon its disabled color and both outlined colors for free. The Button
+    template in Controls.xaml sets Foreground on the button for the disabled state and for
+    every Kind, so the glyph follows with no trigger of its own.
+
+    The style sets no Stretch. The default is None, and the geometry already carries its true
+    size. Do not add Stretch="Uniform". WPF scales a stroked geometry by rules that are hard
+    to predict at 13 pixels. See docs/roadmap/11-ui-polish.md, Part C.
+  -->
+  <Style x:Key="IconGlyph" TargetType="Path">
+    <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeStartLineCap" Value="Round" />
+    <Setter Property="StrokeEndLineCap" Value="Round" />
+    <Setter Property="StrokeLineJoin" Value="Round" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <!--  The chrome of the button answers the hit test. The glyph never needs to.  -->
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <!--
+    A square button that holds one glyph and no label.
+
+    <b>MinWidth must go back to zero.</b> The implicit Button style holds MinWidth 80, and an
+    icon button without this setter draws as a wide slab with a small mark in the middle.
+
+    Every icon button needs a ToolTip. The label is gone, so the tooltip is the only name
+    that the control has.
+  -->
+  <Style
+    x:Key="IconButton"
+    BasedOn="{StaticResource {x:Type Button}}"
+    TargetType="Button">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Width" Value="{StaticResource ControlHeight}" />
+    <Setter Property="Height" Value="{StaticResource ControlHeight}" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
   <!--  The log. IBM Plex Sans, because a log line and a conflict line carry no heading.  -->
   <Style x:Key="LogLine" TargetType="TextBlock">
     <Setter Property="FontFamily" Value="{StaticResource LogFontFamily}" />
@@ -169,7 +213,29 @@
       Cursor="SizeAll"
       BorderBrush="{StaticResource BorderDefault}"
       BorderThickness="1"
-      CornerRadius="{StaticResource RadiusDefault}">
+      CornerRadius="{StaticResource RadiusDefault}"
+      Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+      <!--
+        The two mod actions that the toolbar does not hold. See
+        docs/roadmap/12-minimal-ui.md, Part E.
+
+        <b>A ContextMenu is not in the visual tree of the window</b>, so a binding with
+        RelativeSource AncestorType=Window finds nothing here. Tag above carries the
+        MainViewModel across that gap, and the menu takes it as its own DataContext. Every
+        item below then binds to a command by name.
+
+        The row itself carries the ModRowViewModel, so Tag is the only way through.
+
+        <b>ModList_PreviewMouseRightButtonDown selects the row before this opens.</b> Without
+        that handler the two commands act on the row that the user selected last.
+      -->
+      <Border.ContextMenu>
+        <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+          <MenuItem Command="{Binding SetModGameCommand}" Header="Set the game of this mod" />
+          <Separator />
+          <MenuItem Command="{Binding RemoveModCommand}" Header="Remove from the store" />
+        </ContextMenu>
+      </Border.ContextMenu>
       <Grid>
         <!--
           The dashed outline of the ghost. A Border cannot draw a dash, so this is a

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using BlackboxModManager.App.Services;
 using BlackboxModManager.App.ViewModels;
+using BlackboxModManager.App.Views;
 
 namespace BlackboxModManager.App
 {
@@ -140,6 +143,25 @@ namespace BlackboxModManager.App
 			this._model.SelectedMod = row;
 		}
 
+		/// <summary>
+		/// Selects the row under the pointer before its menu opens.
+		///
+		/// The menu of the row runs <c>Set game</c> and <c>Remove</c>, and both act on the
+		/// selected mod. Without this handler the menu acts on the row that the user selected
+		/// last, which is the wrong mod. See docs/roadmap/12-minimal-ui.md, Part E.
+		///
+		/// It never marks the event handled. WPF opens the ContextMenu of the row on the button
+		/// up that follows, and a handled press would stop that.
+		/// </summary>
+		private void ModList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+		{
+			FrameworkElement element = FindRowElement(e.OriginalSource as DependencyObject);
+
+			if (element?.DataContext is not ModRowViewModel row) return;
+
+			this._model.SelectedMod = row;
+		}
+
 		private void ModList_PreviewMouseMove(object sender, MouseEventArgs e)
 		{
 			if (e.LeftButton != MouseButtonState.Pressed) return;
@@ -213,6 +235,16 @@ namespace BlackboxModManager.App
 		/// </summary>
 		private void ModList_DragOver(object sender, DragEventArgs e)
 		{
+			// A file that comes from outside the window is an import and never a reorder. It
+			// carries no dragged row, so the preview below has nothing to move.
+			if (e.Data.GetDataPresent(DataFormats.FileDrop))
+			{
+				e.Effects = DragDropEffects.Copy;
+				e.Handled = true;
+
+				return;
+			}
+
 			e.Effects = DragDropEffects.Move;
 			e.Handled = true;
 
@@ -253,6 +285,15 @@ namespace BlackboxModManager.App
 		{
 			e.Handled = true;
 
+			// An import from outside the window. ModImporter reads an archive or a directory,
+			// so one path covers both. See docs/roadmap/12-minimal-ui.md, Part I.
+			if (e.Data.GetDataPresent(DataFormats.FileDrop))
+			{
+				if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) this.ImportDropped(paths);
+
+				return;
+			}
+
 			if (!e.Data.GetDataPresent(typeof(string))) return;
 
 			string modId = (string)e.Data.GetData(typeof(string));
@@ -262,6 +303,27 @@ namespace BlackboxModManager.App
 
 			// The collection already shows this order, so the commit moves nothing on screen.
 			this._model.MoveModTo(modId, index);
+		}
+
+		/// <summary>
+		/// Starts the import of a drop and does not wait for it.
+		///
+		/// <c>Drop</c> cannot await. The view model reports every failure of a long operation
+		/// through <c>RunAsync</c>, which catches, logs, and shows a dialog, so nothing escapes
+		/// this call.
+		/// </summary>
+		private async void ImportDropped(string[] paths)
+		{
+			try
+			{
+				await this._model.ImportDropAsync(paths);
+			}
+			catch (Exception ex)
+			{
+				// An async void method that throws ends the process. RunAsync already catches,
+				// so this only covers a failure before the operation starts.
+				this.ShowError(ex.Message);
+			}
 		}
 
 		/// <summary>One cursor for the whole drag.</summary>
@@ -297,25 +359,83 @@ namespace BlackboxModManager.App
 
 		// ---------------------------------------------------------------- IUserInteraction
 
+		/// <summary>
+		/// The window that owns the next dialog. It is this window unless another window of
+		/// this application is open in front of it.
+		///
+		/// <b>A dialog must never take a disabled owner.</b> ConfigWindow of step 12 runs
+		/// modal, which disables this window, and its buttons run the same commands that this
+		/// window runs. A file dialog owned by a disabled window can open behind that window
+		/// and take no input. ConfigWindow sets this property for as long as it is open. See
+		/// docs/roadmap/12-minimal-ui.md, Part H.
+		/// </summary>
+		public Window DialogOwner { get; set; }
+
+		private Window Owner_() => this.DialogOwner ?? this;
+
 		public string PickDirectory(string title, string start = null) =>
-			Dialogs.PickDirectory(this, title, start);
+			Dialogs.PickDirectory(this.Owner_(), title, start);
 
-		public string PickFile(string title, string filter) => Dialogs.PickFile(this, title, filter);
+		public string PickFile(string title, string filter) => Dialogs.PickFile(this.Owner_(), title, filter);
 
-		public string AskText(string question, string value = null) => Dialogs.AskText(this, question, value);
+		public string AskText(string question, string value = null) =>
+			Dialogs.AskText(this.Owner_(), question, value);
 
 		public string PickChoice(string question,
 			System.Collections.Generic.IReadOnlyList<Views.UserChoice> choices, string current = null) =>
-			Dialogs.PickChoice(this, question, choices, current);
+			Dialogs.PickChoice(this.Owner_(), question, choices, current);
 
 		public void ShowFolders(System.Collections.Generic.IReadOnlyList<Views.FolderRow> folders) =>
-			Dialogs.ShowFolders(this, folders);
+			Dialogs.ShowFolders(this.Owner_(), folders);
 
 		public bool Confirm(string question, string confirmLabel = "Yes", bool destructive = false) =>
-			Dialogs.Confirm(this, question, confirmLabel, destructive);
+			Dialogs.Confirm(this.Owner_(), question, confirmLabel, destructive);
 
-		public void ShowError(string message) => Dialogs.ShowError(this, message);
+		public void ShowError(string message) => Dialogs.ShowError(this.Owner_(), message);
 
-		public void ShowMessage(string message) => Dialogs.ShowMessage(this, message);
+		public void ShowMessage(string message) => Dialogs.ShowMessage(this.Owner_(), message);
+
+		// ---------------------------------------------------------------- The bar and the menus
+
+		/// <summary>
+		/// Opens the menu that the pressed button carries.
+		///
+		/// A button does not open its own ContextMenu on a left press, so the window does it
+		/// here. The menu reads its DataContext from the placement target, so this method sets
+		/// that target on every open.
+		/// </summary>
+		private void OnOpenOwnMenu(object sender, RoutedEventArgs e)
+		{
+			if (sender is not Button button) return;
+
+			ShowMenu(button, button.ContextMenu);
+		}
+
+		/// <summary>
+		/// Opens the import menu under the tile of the empty state. The tile carries no menu of
+		/// its own, so both ways into an import offer one pair of answers.
+		/// </summary>
+		private void OnOpenImportMenu(object sender, RoutedEventArgs e)
+		{
+			if (sender is not Button button) return;
+
+			ShowMenu(button, this.ImportButton.ContextMenu);
+		}
+
+		private static void ShowMenu(Button anchor, ContextMenu menu)
+		{
+			if (anchor is null || menu is null) return;
+
+			menu.PlacementTarget = anchor;
+			menu.Placement = PlacementMode.Bottom;
+			menu.VerticalOffset = 2;
+			menu.IsOpen = true;
+		}
+
+		/// <summary>
+		/// Opens the settings. Every path of this application lives there, and nothing else
+		/// does.
+		/// </summary>
+		private void OnOpenConfig(object sender, RoutedEventArgs e) => ConfigWindow.Show(this, this._model);
 	}
 }

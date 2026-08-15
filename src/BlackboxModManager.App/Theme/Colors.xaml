@@ -30,6 +30,18 @@
      <SolidColorBrush x:Key="DangerHover" Color="#F0665E" />
      <SolidColorBrush x:Key="DangerPressed" Color="#C7423B" />
 
+     <!--
+          The fill of an outlined button under the pointer. Both sit near SurfaceRaised
+          (#1E2127) and carry a trace of the color of the role. They are surfaces and not
+          accents, so no text ever reads against one alone.
+
+          These two tokens exist because a hover state cannot use Opacity. Step 10, Part A,
+          bans Opacity as a color tool, and the software rasterizer of Wine composites an
+          alpha value on every repaint.
+     -->
+     <SolidColorBrush x:Key="SuccessSubtle" Color="#1B2C1F" />
+     <SolidColorBrush x:Key="DangerSubtle" Color="#2C1D1D" />
+
      <SolidColorBrush x:Key="WarningDefault" Color="#D29922" />
 
      <SolidColorBrush x:Key="OnAccent" Color="#0B0D11" />
