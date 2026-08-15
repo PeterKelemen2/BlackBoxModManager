@@ -1,0 +1,214 @@
+{
+	// Each run task carries a POSIX command and a "windows" override.
+	//
+	// VS Code reads the top-level command on Linux and macOS. It reads the "windows" block
+	// on Windows. The shell scripts start the application under Wine. The PowerShell script
+	// starts it on Windows. See tools/run-app.sh and tools/run-app.ps1.
+	//
+	// The tasks call "bash" and "powershell" by name. A direct call to the script would
+	// depend on the execute bit and on the line endings of the checkout.
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build",
+			"detail": "Builds every project in the solution.",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"build",
+				"${workspaceFolder}/BlackboxModManager.slnx",
+				"--nologo"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "Test",
+			"detail": "Runs the xUnit tests. The tests need the example_mods directory.",
+			"type": "process",
+			"command": "dotnet",
+			"args": [
+				"test",
+				"${workspaceFolder}/BlackboxModManager.slnx",
+				"--nologo"
+			],
+			"group": {
+				"kind": "test",
+				"isDefault": true
+			},
+			"problemMatcher": "$msCompile",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "Run app",
+			"detail": "Builds the window and starts it. Linux uses Wine.",
+			"type": "process",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/tools/run-app.sh"
+			],
+			"windows": {
+				"command": "powershell",
+				"args": [
+					"-NoProfile",
+					"-ExecutionPolicy",
+					"Bypass",
+					"-File",
+					"${workspaceFolder}/tools/run-app.ps1"
+				]
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "Run app: probe window",
+			"detail": "Opens one probe window and exits. Pick the theme, the font, or the dialogs.",
+			"type": "process",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/tools/run-app.sh",
+				"${input:probeSwitch}"
+			],
+			"windows": {
+				"command": "powershell",
+				"args": [
+					"-NoProfile",
+					"-ExecutionPolicy",
+					"Bypass",
+					"-File",
+					"${workspaceFolder}/tools/run-app.ps1",
+					"${input:probeSwitch}"
+				]
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			// The shell script always publishes a self-contained Release build, because the
+			// Wine prefix holds no .NET runtime. The PowerShell script builds Debug by
+			// default, so this task asks it for the same shape.
+			"label": "Run app: publish and run",
+			"detail": "Publishes a self-contained Release build into artifacts/app and starts it.",
+			"type": "process",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/tools/run-app.sh"
+			],
+			"windows": {
+				"command": "powershell",
+				"args": [
+					"-NoProfile",
+					"-ExecutionPolicy",
+					"Bypass",
+					"-File",
+					"${workspaceFolder}/tools/run-app.ps1",
+					"-Configuration",
+					"Release",
+					"-Publish"
+				]
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			"label": "Run deploy test",
+			"detail": "Installs both example mods into a scratch copy of the game. Linux only.",
+			"type": "process",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/tools/run-deploy-test.sh"
+			],
+			"windows": {
+				"command": "powershell",
+				"args": [
+					"-NoProfile",
+					"-Command",
+					"Write-Host 'The deploy test has no Windows script. Run tools/run-deploy-test.sh on Linux.' -ForegroundColor Yellow; exit 2"
+				]
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		},
+		{
+			// The harness belongs to step 1. See tools/Harness/README.md.
+			"label": "Run harness",
+			"detail": "Applies one manifest to a scratch copy of Underground 2. Linux only.",
+			"type": "process",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/tools/run-harness.sh",
+				"${input:manifestPath}"
+			],
+			"windows": {
+				"command": "powershell",
+				"args": [
+					"-NoProfile",
+					"-Command",
+					"Write-Host 'The harness has no Windows script. Run tools/run-harness.sh on Linux.' -ForegroundColor Yellow; exit 2"
+				]
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		}
+	],
+	"inputs": [
+		{
+			"id": "probeSwitch",
+			"type": "pickString",
+			"description": "Pick the probe window.",
+			"default": "--themetest",
+			"options": [
+				{
+					"label": "Theme test: the styled controls",
+					"value": "--themetest"
+				},
+				{
+					"label": "Font test: the three bundled fonts",
+					"value": "--fonttest"
+				},
+				{
+					"label": "Dialog test: the four dialogs",
+					"value": "--dialogtest"
+				}
+			]
+		},
+		{
+			"id": "manifestPath",
+			"type": "promptString",
+			"description": "Give the path of the .end manifest.",
+			"default": "example_mods/NFSU2 - 1 Lap URL And Other Races v2.0/1 Lap URL Races.end"
+		}
+	]
+}
