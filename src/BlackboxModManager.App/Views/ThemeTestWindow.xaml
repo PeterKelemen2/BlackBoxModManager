@@ -95,12 +95,15 @@
       </ComboBox>
 
       <TextBlock Style="{StaticResource Heading}" Text="Tabs" />
-      <TabControl Height="120" Margin="0,0,0,16">
+      <TabControl Height="130" Margin="0,0,0,16">
         <TabItem Header="One">
-          <TextBlock Margin="8" Text="The body of the first tab." />
+          <TextBlock Margin="8" Text="The body of the first tab. The strip sits inside this card." />
         </TabItem>
         <TabItem Header="Two">
           <TextBlock Margin="8" Text="The body of the second tab." />
+        </TabItem>
+        <TabItem Header="Three">
+          <TextBlock Margin="8" Text="The body of the third tab." />
         </TabItem>
       </TabControl>
 
@@ -113,11 +116,22 @@
 
       <TextBlock Style="{StaticResource Heading}" Text="Card (GroupBox)" />
       <GroupBox
-        Margin="0,0,0,16"
+        Margin="0,0,0,8"
         Padding="8"
         Header="A card header">
         <TextBlock Text="The body of the card." ToolTip="A tooltip over the card body." />
       </GroupBox>
+
+      <!--  A card with no Header hides the header row. The mod list card depends on that.  -->
+      <GroupBox Margin="0,0,0,16" Padding="8">
+        <TextBlock Text="A card with no header. The body starts at the top edge." />
+      </GroupBox>
+
+      <TextBlock Style="{StaticResource Heading}" Text="The plus of the empty mod list" />
+      <WrapPanel Margin="0,0,0,16">
+        <Button Margin="0,0,16,0" Style="{StaticResource AddModButton}" />
+        <Button IsEnabled="False" Style="{StaticResource AddModButton}" />
+      </WrapPanel>
 
       <TextBlock Style="{StaticResource Heading}" Text="Grid splitter" />
       <Grid Height="40" Margin="0,0,0,16">

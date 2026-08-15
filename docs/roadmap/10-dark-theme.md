@@ -191,7 +191,7 @@ Restyle every control that the window uses. **A `Background` setter alone is not
 | `GroupBox`                  | Becomes the card of Part E.                                                   |
 | `ToolTip`                   | The `?` marker of the settings panel depends on it.                           |
 | `StatusBar`                 | The bottom line.                                                              |
-| `GridSplitter`              | A 1 pixel line with a wider hit area.                                         |
+| `GridSplitter`              | A hit area with no line. It drags and it draws nothing.                       |
 | `Window`                    | Background, foreground, font, and the text options.                           |
 
 **Replace the focus visual.** The WPF default draws a dotted rectangle from the era of Windows 2000. Set `FocusVisualStyle="{x:Null}"` in the base styles and draw focus inside each template with a `BorderStrong` edge.
@@ -262,8 +262,8 @@ After a drop, `MainViewModel` saves the profile and calls `RefreshMods`. That cl
 
 ## Part E — the right panel and the other parts
 
-- **The card.** One style replaces every `GroupBox` in the window. It holds a header row in `Heading` and a `SurfaceRaised` body with `RadiusCard` corners. The Game box, the mod list box, and each section of the settings panel use it.
-- **The tab strip.** `Mod`, `Settings`, `Loader`, `Log`, and `Conflicts`. An unselected tab shows `TextSecondary` and no fill. The selected tab shows `SurfaceRaised`, `TextPrimary`, and a 2 pixel `AccentDefault` edge. The body joins the selected tab with no seam.
+- **The card.** One style replaces every `GroupBox` in the window. It holds a header row in `Heading` and a `SurfaceRaised` body with `RadiusCard` corners. A `GroupBox` with no `Header` hides the header row and shows the body alone. The Game box, the mod list box, and each section of the settings panel use it.
+- **The tab strip.** `Mod`, `Settings`, `Loader`, `Log`, and `Conflicts`. The strip sits inside the card of the `TabControl`, above the body. An unselected tab shows `TextSecondary` and no fill. The selected tab draws an `AccentDefault` block with `OnAccent` text and `RadiusDefault` corners. The card of the `TabControl` carries `RadiusCard` corners, which is the radius of the `GroupBox` card. **Change the two radii together.** The mod list and the right panel sit side by side, and a reader sees any difference across the splitter.
 - **The list row.** The variant list, the loader list, and the folder list all use the same `#40808080` bottom border today. Replace all three with one `ListRow` style over `BorderDefault`.
 - **The settings row.** The key, the `?` marker, the editor, and the `Text` toggle. The `?` marker becomes a round `Quiet` glyph with a hover fill.
 - **The log and the conflict list.** `LogFontFamily`, which is IBM Plex Sans, at `FontSizeSmall` over `SurfaceRaised` with no border. A conflict line reads in `WarningDefault`. Plex Sans is proportional, so a column of paths does not align. Part B says what to do about that.
@@ -285,6 +285,8 @@ After a drop, `MainViewModel` saves the profile and calls `RefreshMods`. That cl
 **Do not take over the window chrome.** A custom title bar needs `WindowStyle="None"` with `AllowsTransparency="True"`, and that makes the whole window a layered surface that WPF composites itself. That is the same path that paints a hardware dropdown black. **The window keeps the native frame, and the title bar therefore stays in the theme of the host.** Do not treat that as a defect of this step.
 
 **A `Popup` is still the risk of the window.** The `ComboBox` dropdown and every tooltip live in a popup. The software rasterizer fixes the black paint, and this step does not change the render mode. Confirm each popup of the new theme under Wine anyway. A rounded corner on a popup border does not clip the popup itself, so keep a full opaque fill under it.
+
+**Hold the tab headers in a `WrapPanel` and never in a `TabPanel`.** `TabPanel` cuts the right margin off the header that carries it. It measures a header at the full desired width, margin included, and it then places the next header at that width. The header draws wider than the space that it gets, and the right edge disappears. A 4 pixel gap between the pills took the whole right corner radius, so each pill showed two round corners and two square ones. A `WrapPanel` arranges the same headers correctly, and it wraps to a second row in the same way.
 
 **No glyph font, no icon font, and no image asset.** Draw the check mark, the arrow, and the drag handle with `Path` geometry. A named glyph family is the failure of step 5, fact 9, in a new place.
 

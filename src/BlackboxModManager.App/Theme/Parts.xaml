@@ -41,6 +41,65 @@
     <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
 
+  <!--
+    The plus of the empty mod list. A square card with a drawn cross, big enough to read as
+    the one thing to press in an empty panel.
+
+    The cross is Path geometry and never a glyph font. Step 10, fact 9, holds here. A named
+    glyph family that the machine does not hold reaches MS.Internal.Invariant.FailFast, and
+    that kills the process with no dialog.
+  -->
+  <Style x:Key="AddModButton" TargetType="Button">
+    <Setter Property="Width" Value="76" />
+    <Setter Property="Height" Value="76" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border
+            x:Name="Face"
+            Background="{StaticResource SurfaceOverlay}"
+            BorderBrush="{StaticResource BorderStrong}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource RadiusCard}">
+            <Path
+              x:Name="Cross"
+              Width="28"
+              Height="28"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              Data="M 0,14 L 28,14 M 14,0 L 14,28"
+              Stroke="{StaticResource TextSecondary}"
+              StrokeEndLineCap="Round"
+              StrokeStartLineCap="Round"
+              StrokeThickness="2" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Face" Property="Background" Value="{StaticResource AccentDefault}" />
+              <Setter TargetName="Face" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
+              <Setter TargetName="Cross" Property="Stroke" Value="{StaticResource OnAccent}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Face" Property="Background" Value="{StaticResource AccentPressed}" />
+              <Setter TargetName="Face" Property="BorderBrush" Value="{StaticResource AccentPressed}" />
+              <Setter TargetName="Cross" Property="Stroke" Value="{StaticResource OnAccent}" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="Face" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Face" Property="Background" Value="{StaticResource SurfaceRaised}" />
+              <Setter TargetName="Face" Property="BorderBrush" Value="{StaticResource BorderDefault}" />
+              <Setter TargetName="Cross" Property="Stroke" Value="{StaticResource TextDisabled}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!--  The log. IBM Plex Sans, because a log line and a conflict line carry no heading.  -->
   <Style x:Key="LogLine" TargetType="TextBlock">
     <Setter Property="FontFamily" Value="{StaticResource LogFontFamily}" />

@@ -1,4 +1,4 @@
-<ResourceDictionary
+﻿<ResourceDictionary
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="clr-namespace:BlackboxModManager.App.Theme">
@@ -524,33 +524,51 @@
   </Style>
 
   <!--
-    The tab strip. An unselected tab shows TextSecondary and no fill. The selected tab
-    shows SurfaceRaised, TextPrimary, and a 2 pixel AccentDefault edge.
+    The tab strip. The strip sits inside the card of the TabControl below, so a tab draws no
+    edge of its own. The selected tab draws an AccentDefault block with OnAccent text. An
+    unselected tab shows TextSecondary and no fill, and it takes a SurfaceHover block under
+    the pointer.
+
+    The block takes RadiusDefault corners. A full radius turns a short header such as Mod or
+    Log into an oval, because a Border clamps the radius to half of its shorter side.
+
+    The IsSelected trigger comes after the IsMouseOver trigger on purpose. A later trigger
+    wins, so the selected pill keeps its accent fill while the pointer rests on it.
   -->
   <Style TargetType="TabItem">
     <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
     <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
     <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
-    <Setter Property="Padding" Value="12,6" />
+    <Setter Property="Padding" Value="14,5" />
+    <!--
+      The gap between two pills. The items host of the TabControl below must stay a
+      WrapPanel for this margin to survive. Read the comment there before you change either
+      one.
+    -->
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="TabItem">
           <Border
-            x:Name="Border"
+            x:Name="Pill"
             Padding="{TemplateBinding Padding}"
             Background="Transparent"
-            BorderBrush="Transparent"
-            BorderThickness="0,0,0,2">
+            CornerRadius="{StaticResource RadiusDefault}">
             <ContentPresenter
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
               ContentSource="Header" />
           </Border>
           <ControlTemplate.Triggers>
-            <Trigger Property="IsSelected" Value="True">
-              <Setter TargetName="Border" Property="Background" Value="{StaticResource SurfaceRaised}" />
-              <Setter TargetName="Border" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Pill" Property="Background" Value="{StaticResource SurfaceHover}" />
               <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Pill" Property="Background" Value="{StaticResource AccentDefault}" />
+              <Setter Property="Foreground" Value="{StaticResource OnAccent}" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -558,30 +576,49 @@
     </Setter>
   </Style>
 
+  <!--
+    The card of the right panel. The tab strip sits inside this card, above the body, and the
+    card carries RadiusCard corners. That is the same radius as the GroupBox card below, so
+    the mod list and this panel match across the splitter. Change both together.
+  -->
   <Style TargetType="TabControl">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="TabControl">
-          <Grid>
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <TabPanel
-              Grid.Row="0"
-              Background="Transparent"
-              IsItemsHost="True" />
-            <Border
-              Grid.Row="1"
-              Background="{StaticResource SurfaceRaised}"
-              BorderBrush="{StaticResource BorderDefault}"
-              BorderThickness="1"
-              CornerRadius="{StaticResource RadiusDefault}">
-              <ContentPresenter ContentSource="SelectedContent" />
-            </Border>
-          </Grid>
+          <Border
+            Background="{StaticResource SurfaceRaised}"
+            BorderBrush="{StaticResource BorderDefault}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource RadiusCard}">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+              </Grid.RowDefinitions>
+              <!--
+                A WrapPanel holds the headers, and never a TabPanel.
+
+                <b>TabPanel cuts the right margin off the header that carries it.</b> It
+                measures a header at the full desired width, margin included, and it then
+                places the next header at that width. The header draws wider than the space
+                that it gets, and the right edge disappears. A 4 pixel margin took the whole
+                right corner radius of the pill, so the pill showed two round corners and two
+                square ones.
+
+                A WrapPanel arranges the same headers correctly, and it wraps to a second row
+                when the splitter makes this panel narrow. TabPanel wraps as well, so this
+                swap loses nothing.
+              -->
+              <WrapPanel
+                Grid.Row="0"
+                Margin="6,6,6,2"
+                Background="Transparent"
+                IsItemsHost="True" />
+              <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" />
+            </Grid>
+          </Border>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
@@ -678,7 +715,13 @@
     <Setter Property="Background" Value="Transparent" />
   </Style>
 
-  <!--  The card. One style replaces every GroupBox in the window.  -->
+  <!--
+    The card. One style replaces every GroupBox in the window.
+
+    A GroupBox with no Header hides the header row and shows the body alone. The mod list
+    card depends on that. Without the trigger, the empty header still takes its margin, and
+    the card then starts 4 pixels lower than the tab card beside it.
+  -->
   <Style TargetType="GroupBox">
     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
     <Setter Property="Template">
@@ -690,6 +733,7 @@
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <ContentPresenter
+              x:Name="HeaderHost"
               Grid.Row="0"
               Margin="2,0,0,4"
               ContentSource="Header">
@@ -707,6 +751,11 @@
               <ContentPresenter />
             </Border>
           </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="Header" Value="{x:Null}">
+              <Setter TargetName="HeaderHost" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
@@ -762,19 +811,21 @@
     </Setter>
   </Style>
 
-  <!--  A 1 pixel line with a wider hit area.  -->
+  <!--
+    A hit area with no line. The splitter drags and it draws nothing. The two cards on each
+    side already separate the panels, so a line between them adds a third edge.
+
+    The rectangle carries a transparent fill and never a null fill. A transparent fill
+    answers a hit test and a null fill does not, so a null fill would leave the splitter
+    undraggable. The control sets the resize cursor itself, and that cursor is the only
+    signal that the gap takes a drag.
+  -->
   <Style TargetType="GridSplitter">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="GridSplitter">
-          <Grid>
-            <Rectangle Fill="Transparent" />
-            <Rectangle
-              Width="1"
-              HorizontalAlignment="Center"
-              Fill="{StaticResource BorderDefault}" />
-          </Grid>
+          <Rectangle Fill="Transparent" />
         </ControlTemplate>
       </Setter.Value>
     </Setter>

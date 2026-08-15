@@ -122,31 +122,72 @@
         <ColumnDefinition Width="2*" MinWidth="240" />
       </Grid.ColumnDefinitions>
 
-      <GroupBox
-        Grid.Column="0"
-        Padding="4"
-        Header="Mods, in load order. A later mod overrides an earlier one.">
-        <!--
-          The DataGrid of step 9 became a row list in step 10, so that a row can carry a
-          drag handle and a drop can reorder it. Step 11 replaced the insertion line with a
-          ghost slot. See docs/roadmap/11-ui-polish.md, Part B. The event handlers live in
-          MainWindow.xaml.cs, on this ItemsControl, because the row template of
-          Theme/Parts.xaml has no code-behind of its own.
-        -->
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <ItemsControl
-            x:Name="ModList"
-            AllowDrop="True"
-            DragLeave="ModList_DragLeave"
-            DragOver="ModList_DragOver"
-            Drop="ModList_Drop"
-            GiveFeedback="ModList_GiveFeedback"
-            ItemTemplate="{StaticResource ModRowTemplate}"
-            ItemsSource="{Binding Mods}"
-            PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
-            PreviewMouseMove="ModList_PreviewMouseMove"
-            QueryContinueDrag="ModList_QueryContinueDrag" />
-        </ScrollViewer>
+      <!--
+        The card carries no header. A row list of mods with a drag handle needs no caption,
+        and the empty state below names the panel on the one screen where the rows cannot.
+      -->
+      <GroupBox Grid.Column="0" Padding="4">
+        <Grid>
+          <!--
+            The DataGrid of step 9 became a row list in step 10, so that a row can carry a
+            drag handle and a drop can reorder it. Step 11 replaced the insertion line with a
+            ghost slot. See docs/roadmap/11-ui-polish.md, Part B. The event handlers live in
+            MainWindow.xaml.cs, on this ItemsControl, because the row template of
+            Theme/Parts.xaml has no code-behind of its own.
+          -->
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl
+              x:Name="ModList"
+              AllowDrop="True"
+              DragLeave="ModList_DragLeave"
+              DragOver="ModList_DragOver"
+              Drop="ModList_Drop"
+              GiveFeedback="ModList_GiveFeedback"
+              ItemTemplate="{StaticResource ModRowTemplate}"
+              ItemsSource="{Binding Mods}"
+              PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
+              PreviewMouseMove="ModList_PreviewMouseMove"
+              QueryContinueDrag="ModList_QueryContinueDrag" />
+          </ScrollViewer>
+
+          <!--
+            The empty state. It covers the list only while the profile holds no mod, so it
+            never sits over a row and never blocks a drag.
+
+            The trigger reads Mods.Count. An ObservableCollection raises PropertyChanged for
+            Count, so the panel appears and disappears with no code and no converter.
+          -->
+          <StackPanel
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center">
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding Mods.Count}" Value="0">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <Button
+              HorizontalAlignment="Center"
+              Command="{Binding ImportArchiveCommand}"
+              Style="{StaticResource AddModButton}"
+              ToolTip="Choose a mod archive. Use Import folder below for a directory." />
+            <TextBlock
+              Margin="0,14,0,0"
+              HorizontalAlignment="Center"
+              Style="{StaticResource Heading}"
+              Text="Add a mod" />
+            <TextBlock
+              MaxWidth="260"
+              HorizontalAlignment="Center"
+              Style="{StaticResource Hint}"
+              Text="The mods deploy in this order. A later mod overrides an earlier one."
+              TextAlignment="Center" />
+          </StackPanel>
+        </Grid>
       </GroupBox>
 
       <GridSplitter
@@ -415,8 +456,14 @@
           the application.
         -->
         <TabItem Header="Log">
+          <!--
+            The margin holds the rows away from the rounded corners of the card. A selected
+            row paints SurfacePressed, and a row at the last line would square off the
+            corner without it.
+          -->
           <ListBox
             x:Name="LogList"
+            Margin="6"
             HorizontalContentAlignment="Stretch"
             BorderThickness="0"
             ItemsSource="{Binding Log}"
