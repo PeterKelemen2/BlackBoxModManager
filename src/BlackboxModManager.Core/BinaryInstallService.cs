@@ -71,9 +71,8 @@ namespace BlackboxModManager.Core
 
 			if (!status.IsUsable) return status;
 
-			Settings settings = SettingsStore.Load(this._settingsFile);
-			settings.BinaryInstallDirectory = status.Root;
-			SettingsStore.Save(this._settingsFile, settings);
+			SettingsStore.Update(
+				this._settingsFile, settings => settings.BinaryInstallDirectory = status.Root);
 
 			return status;
 		}
@@ -83,9 +82,7 @@ namespace BlackboxModManager.Core
 		/// </summary>
 		public void Forget()
 		{
-			Settings settings = SettingsStore.Load(this._settingsFile);
-			settings.BinaryInstallDirectory = null;
-			SettingsStore.Save(this._settingsFile, settings);
+			SettingsStore.Update(this._settingsFile, settings => settings.BinaryInstallDirectory = null);
 		}
 	}
 

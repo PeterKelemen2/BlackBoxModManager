@@ -132,6 +132,36 @@ namespace BlackboxModManager.App.ViewModels
 			return GameCatalog.All[0];
 		}
 
+		/// <summary>
+		/// Writes one change into the settings file, on top of what the file holds now.
+		///
+		/// <b>Three objects write this file.</b> This view model keeps a copy from its last
+		/// read. <c>GameInstallService</c> and <c>BinaryInstallService</c> write their own keys
+		/// straight to disk. A save of the old copy drops every key that those two services
+		/// wrote after that read.
+		///
+		/// That is why a game install path went away. <c>BrowseGame</c> wrote the path to disk.
+		/// The next game switch saved the old copy, which held no such path.
+		///
+		/// <c>SettingsStore.Update</c> reads the file again and merges. This method keeps what
+		/// it wrote, so the field holds the same values as the file.
+		/// </summary>
+		private void SaveSettings(Action<Settings> change)
+		{
+			this._settings = SettingsStore.Update(change);
+		}
+
+		/// <summary>
+		/// Reads the settings file again into the field.
+		///
+		/// Call this after a service writes the file. The field is the source of every later
+		/// read and of every later merge. See <see cref="SaveSettings"/>.
+		/// </summary>
+		private void ReloadSettings()
+		{
+			this._settings = SettingsStore.Load();
+		}
+
 		// ---------------------------------------------------------------- state
 
 		[ObservableProperty]
@@ -158,8 +188,7 @@ namespace BlackboxModManager.App.ViewModels
 		/// </summary>
 		partial void OnFullVerifyChanged(bool value)
 		{
-			this._settings.FullVerify = value;
-			SettingsStore.Save(this._settings);
+			this.SaveSettings(settings => settings.FullVerify = value);
 		}
 
 		/// <summary>
@@ -225,8 +254,7 @@ namespace BlackboxModManager.App.ViewModels
 		private void SwitchGame(GameDefinition definition)
 		{
 			this._game = definition;
-			this._settings.LastGame = definition.Game.ToString();
-			SettingsStore.Save(this._settings);
+			this.SaveSettings(settings => settings.LastGame = definition.Game.ToString());
 
 			this.OnPropertyChanged(nameof(this.Game));
 			this.Write($"The window now manages {definition.DisplayName}.");
@@ -327,6 +355,10 @@ namespace BlackboxModManager.App.ViewModels
 				return;
 			}
 
+			// The service wrote the file. Read it again, so that the next save merges on top
+			// of the new path instead of dropping it.
+			this.ReloadSettings();
+
 			this.RefreshGame();
 			this.Write($"The game install is {status.Root}.");
 		}
@@ -363,6 +395,8 @@ namespace BlackboxModManager.App.ViewModels
 					return;
 				}
 
+				this.ReloadSettings();
+
 				this.RefreshGame();
 				this.Write($"The game install is {status.Root}.");
 				return;
@@ -383,6 +417,8 @@ namespace BlackboxModManager.App.ViewModels
 				this._ask.ShowError(status.Message);
 				return;
 			}
+
+			this.ReloadSettings();
 
 			this.RefreshBinary();
 		}
@@ -551,8 +587,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			if (this._profile is null) return;
 
-			this._settings.ActiveProfiles[this.Game.ToString()] = name;
-			SettingsStore.Save(this._settings);
+			this.SaveSettings(settings => settings.ActiveProfiles[this.Game.ToString()] = name);
 
 			this.RefreshMods();
 		}
@@ -1349,13 +1384,13 @@ namespace BlackboxModManager.App.ViewModels
 
 			// Store the new place only after the move, so a failed move leaves the setting on
 			// the directory that still holds the mods.
-			this._settings.ModStoreOverride =
+			string store =
 				FileTree.IsSameOrInside(target, AppPaths.ModsDirectory)
 					&& FileTree.IsSameOrInside(AppPaths.ModsDirectory, target)
 				? null
 				: target;
 
-			SettingsStore.Save(this._settings);
+			this.SaveSettings(settings => settings.ModStoreOverride = store);
 
 			this.OpenStore();
 			this.Write($"The mod store is now {this._store.Root}.");
@@ -1489,8 +1524,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			string previous = this.WorkspacePath;
 
-			this._settings.WorkRootOverride = target;
-			SettingsStore.Save(this._settings);
+			this.SaveSettings(settings => settings.WorkRootOverride = target);
 
 			this.RefreshWorkspace();
 

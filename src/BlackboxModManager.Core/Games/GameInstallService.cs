@@ -142,9 +142,8 @@ namespace BlackboxModManager.Core.Games
 
 			if (!status.IsUsable) return status;
 
-			Settings settings = SettingsStore.Load(this._settingsFile);
-			settings.GameDirectories[Key(game)] = status.Root;
-			SettingsStore.Save(this._settingsFile, settings);
+			SettingsStore.Update(
+				this._settingsFile, settings => settings.GameDirectories[Key(game)] = status.Root);
 
 			return status;
 		}
@@ -154,9 +153,7 @@ namespace BlackboxModManager.Core.Games
 		/// </summary>
 		public void Forget(GameINT game)
 		{
-			Settings settings = SettingsStore.Load(this._settingsFile);
-			settings.GameDirectories.Remove(Key(game));
-			SettingsStore.Save(this._settingsFile, settings);
+			SettingsStore.Update(this._settingsFile, settings => settings.GameDirectories.Remove(Key(game)));
 		}
 
 		private static string Key(GameINT game) => game.ToString();

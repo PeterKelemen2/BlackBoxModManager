@@ -805,12 +805,35 @@
     </Setter>
   </Style>
 
-  <!--  The scrollbar. A default scrollbar is the loudest light element left.  -->
+  <!--
+    The scrollbar. A default scrollbar is the loudest light element left.
+
+    <b>Never give the thumb a fixed size along the scroll direction.</b> The Track measures the
+    viewport against the content and gives the thumb its length. A Height on a vertical thumb
+    overrides that length. The bar then shows one small dot at every content length, and the
+    dot no longer reports how much of the list the window holds.
+
+    So this thumb sets no size at all. The Track sets the length. The Margin sets the width,
+    and it insets the bar from both edges of the 10 pixel track.
+  -->
   <Style x:Key="ThemeScrollBarThumb" TargetType="Thumb">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="OverridesDefaultStyle" Value="True" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Thumb">
-          <Border Background="{StaticResource BorderStrong}" CornerRadius="{StaticResource RadiusSmall}" />
+          <Border
+            x:Name="Bar"
+            Background="{StaticResource BorderStrong}"
+            CornerRadius="{StaticResource RadiusSmall}" />
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Bar" Property="Background" Value="{StaticResource TextDisabled}" />
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="Bar" Property="Background" Value="{StaticResource TextSecondary}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
@@ -818,22 +841,33 @@
 
   <Style x:Key="ThemeScrollBarRepeatButton" TargetType="RepeatButton">
     <Setter Property="Focusable" Value="False" />
+    <Setter Property="OverridesDefaultStyle" Value="True" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RepeatButton">
+          <!--  A transparent Rectangle still takes a click. A null Fill does not.  -->
           <Rectangle Fill="Transparent" />
         </ControlTemplate>
       </Setter.Value>
     </Setter>
   </Style>
 
+  <!--
+    A Track carries one orientation and one direction. The vertical bar counts down the screen,
+    so it needs IsDirectionReversed. The horizontal bar counts to the right, so it does not.
+    One template cannot serve both. The trigger below swaps in the horizontal template.
+  -->
   <Style TargetType="ScrollBar">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Width" Value="10" />
+    <Setter Property="MinWidth" Value="10" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ScrollBar">
-          <Track x:Name="PART_Track" IsDirectionReversed="True">
+          <Track
+            x:Name="PART_Track"
+            IsDirectionReversed="True"
+            Orientation="Vertical">
             <Track.DecreaseRepeatButton>
               <RepeatButton Command="ScrollBar.PageUpCommand" Style="{StaticResource ThemeScrollBarRepeatButton}" />
             </Track.DecreaseRepeatButton>
@@ -841,9 +875,13 @@
               <RepeatButton Command="ScrollBar.PageDownCommand" Style="{StaticResource ThemeScrollBarRepeatButton}" />
             </Track.IncreaseRepeatButton>
             <Track.Thumb>
+              <!--
+                MinHeight keeps a grab target on a long list. Without it the Track can make the
+                thumb 1 pixel tall. Margin gives the bar a width of 6 inside the 10 pixel track.
+              -->
               <Thumb
-                Width="6"
-                Height="6"
+                MinHeight="28"
+                Margin="2,0"
                 Style="{StaticResource ThemeScrollBarThumb}" />
             </Track.Thumb>
           </Track>
@@ -853,7 +891,32 @@
     <Style.Triggers>
       <Trigger Property="Orientation" Value="Horizontal">
         <Setter Property="Width" Value="Auto" />
+        <Setter Property="MinWidth" Value="0" />
         <Setter Property="Height" Value="10" />
+        <Setter Property="MinHeight" Value="10" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Track
+                x:Name="PART_Track"
+                IsDirectionReversed="False"
+                Orientation="Horizontal">
+                <Track.DecreaseRepeatButton>
+                  <RepeatButton Command="ScrollBar.PageLeftCommand" Style="{StaticResource ThemeScrollBarRepeatButton}" />
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                  <RepeatButton Command="ScrollBar.PageRightCommand" Style="{StaticResource ThemeScrollBarRepeatButton}" />
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                  <Thumb
+                    MinWidth="28"
+                    Margin="0,2"
+                    Style="{StaticResource ThemeScrollBarThumb}" />
+                </Track.Thumb>
+              </Track>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
       </Trigger>
     </Style.Triggers>
   </Style>

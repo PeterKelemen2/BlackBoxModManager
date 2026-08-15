@@ -155,6 +155,32 @@ namespace BlackboxModManager.Core
 
 		public static void Save(Settings settings) => Save(AppPaths.SettingsFile, settings);
 
+		/// <summary>
+		/// Reads the file, applies one change, and writes the file again. It returns what it
+		/// wrote.
+		///
+		/// <b>Use this and never a Load that a Save follows much later.</b> More than one object
+		/// writes this file. A caller that holds a copy from an earlier read, and then saves that
+		/// copy, deletes every key that another object wrote in between.
+		///
+		/// That defect lost a game install directory. The window read the file at start. The
+		/// install service wrote the new directory to disk. The next game switch saved the copy
+		/// from the start, and the copy held no such directory.
+		/// </summary>
+		public static Settings Update(Action<Settings> change) => Update(AppPaths.SettingsFile, change);
+
+		public static Settings Update(string path, Action<Settings> change)
+		{
+			if (change is null) throw new ArgumentNullException(nameof(change));
+
+			Settings settings = Load(path);
+
+			change(settings);
+			Save(path, settings);
+
+			return settings;
+		}
+
 		public static void Save(string path, Settings settings)
 		{
 			if (settings is null) throw new ArgumentNullException(nameof(settings));
