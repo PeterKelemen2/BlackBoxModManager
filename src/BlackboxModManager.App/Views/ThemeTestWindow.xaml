@@ -122,6 +122,19 @@
           <Path Data="{StaticResource IconMore}" Style="{StaticResource IconGlyph}" />
         </Button>
         <Button
+          ui:Kind.Value="Quiet"
+          Style="{StaticResource IconButton}"
+          ToolTip="Clipboard">
+          <Path Data="{StaticResource IconClipboard}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <!--  The small size. The Mod tab puts this one beside a line of hint text.  -->
+        <Button
+          ui:Kind.Value="Quiet"
+          Style="{StaticResource IconButtonSmall}"
+          ToolTip="Clipboard, small">
+          <Path Data="{StaticResource IconClipboard}" Style="{StaticResource IconGlyph}" />
+        </Button>
+        <Button
           Margin="16,0,6,0"
           IsEnabled="False"
           Style="{StaticResource IconButton}"

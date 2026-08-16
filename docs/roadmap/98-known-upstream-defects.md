@@ -154,3 +154,17 @@ The whole archive takes more than 30 minutes. `7z.exe` writes the same 1205 file
 **What we did:** the application ships 7-Zip and starts `7z.exe` for a 7z and a rar. SharpCompress still reads the listing of every archive, because that read costs milliseconds and it carries the safety guard of the entry names. It also still unpacks the files when `7z.exe` is not beside the application. See [13-import-progress.md](13-import-progress.md), Parts C and D.
 
 **Act on this** if anybody removes 7-Zip from the build. The import then works and takes half an hour for an archive of this shape. No setting of SharpCompress avoids that. A fix needs a decoder that reads each solid group one time.
+
+## 15. `VersionCommand` reads a static that the library never sets
+
+**Where:** `Endscript/Endscript/Version.cs` and `Endscript/Commands/VersionCommand.cs`.
+
+**What happens:** `Version.Value` is a static property with no default. Nothing in Endscript assigns it. `VersionCommand.Prepare` then runs `Version.Value.CompareTo(this._version)` with no null test. A script that holds a `version` line ends the parse with a `NullReferenceException`. The text of that error is "Object reference not set to an instance of an object", which names neither the static nor the cause.
+
+**This hits real mods and not edge cases.** Binary writes the `version` line into the launcher script that it exports, so most published mods carry one. The mod `NFSMWRV-1024x-Advanced` states `version 2.8.3` on line 3 of `RecompiledVinylsMain.end`. The Mod tab reported that line as a parse failure and showed no variant and no question.
+
+**Work around it:** the host sets the static. `EndscriptVersion.Ensure` assigns `BinaryInstallStatus.ExpectedVersion`, which is `2.8.3.0`. `ScriptReader.Parse` calls it before it builds the parser.
+
+**The value is a constant and it does not follow the Binary install of the user.** The number states what our engine runs, and our engine is the Endscript library. A user who holds a newer Binary still gets the command set of this library. A script that asks for more then gets the message of the library, which names both numbers and is correct.
+
+**Do not add a second parse path.** `ScriptReader.Parse` is the only place that builds an `EndScriptParser`. Any new caller must call `Ensure` first.

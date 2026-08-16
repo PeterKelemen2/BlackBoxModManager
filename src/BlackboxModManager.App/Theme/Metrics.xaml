@@ -19,6 +19,9 @@
   <sys:Double x:Key="FontSizeHeading">15</sys:Double>
 
   <sys:Double x:Key="ControlHeight">28</sys:Double>
+
+  <!--  An icon button that sits beside a line of hint text. See IconButtonSmall.  -->
+  <sys:Double x:Key="ControlHeightSmall">20</sys:Double>
   <sys:Double x:Key="ModRowHeight">52</sys:Double>
 
   <Thickness x:Key="SpaceTight">4</Thickness>

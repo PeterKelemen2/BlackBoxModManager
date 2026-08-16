@@ -110,6 +110,17 @@ namespace BlackboxModManager.App.ViewModels
 
 		public bool HasProblem => !this.IsInstallable;
 
+		/// <summary>
+		/// The problem with the facts that a bug report needs around it. The message alone
+		/// names a script file and a line, and the reader of the report cannot tell which
+		/// mod and which manifest that file belongs to.
+		/// </summary>
+		public string ProblemReport =>
+			$"Variant: {this.Name}{Environment.NewLine}" +
+			$"State: {this._variant.State}{Environment.NewLine}" +
+			$"Manifest: {this._variant.ManifestPath}{Environment.NewLine}" +
+			$"Problem: {this.Problem}";
+
 		public ObservableCollection<OptionSetViewModel> Questions { get; } =
 			new ObservableCollection<OptionSetViewModel>();
 

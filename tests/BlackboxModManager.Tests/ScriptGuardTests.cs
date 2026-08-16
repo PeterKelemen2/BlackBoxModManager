@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using BlackboxModManager.Core.Mods;
+using Endscript.Commands;
 using Xunit;
 
 namespace BlackboxModManager.Tests
@@ -97,6 +99,66 @@ namespace BlackboxModManager.Tests
 			temp.WriteScript(Path.Combine("inner", "two.end"), "update_collection GLOBAL\\GLOBALB.LZC A B C 1");
 
 			Assert.Equal(3, ScriptAppendGraph.Walk(temp.File("root.end")).Count);
+		}
+
+		// ---------------------------------------------------------------------- version line
+
+		[Fact]
+		public void AVersionLineParsesAndAsksNoQuestion()
+		{
+			// VersionCommand.Prepare reads the static Endscript.Version.Value, and the library
+			// leaves it null. A script that states a version threw a NullReferenceException
+			// before ScriptReader set the value. See defect 15.
+			using var temp = new TempDirectory();
+			temp.WriteScript("root.end",
+				"version 2.8.3",
+				"update_collection GLOBAL\\GLOBALB.LZC CarTypeInfos A B 1");
+
+			BaseCommand[] commands = ScriptReader.Parse(temp.File("root.end"));
+
+			Assert.Contains(commands, command => command is VersionCommand);
+			Assert.Empty(ModPackageReader.Extract(commands));
+		}
+
+		[Fact]
+		public void AVersionAboveTheSupportedOneNamesBothNumbers()
+		{
+			using var temp = new TempDirectory();
+			temp.WriteScript("root.end", "version 99.0.0");
+
+			ScriptParseException error = Assert.Throws<ScriptParseException>(
+				() => ScriptReader.Parse(temp.File("root.end")));
+
+			Assert.Equal(2, error.Line);
+			Assert.Contains("99.0.0", error.Message, StringComparison.Ordinal);
+			Assert.Contains(EndscriptVersion.Supported.ToString(), error.Message, StringComparison.Ordinal);
+		}
+
+		[Fact]
+		public void TheRecompiledVinylsLauncherShapeReadsItsCombobox()
+		{
+			// The shape of RecompiledVinylsMain.end: a version line, then a watermark, then a
+			// combobox whose blocks append one file each.
+			using var temp = new TempDirectory();
+			temp.WriteScript("root.end",
+				"version 2.8.3",
+				"watermark \"\"",
+				"combobox \"Install\" \"Remove Backups\" \"What do you want to do?\"",
+				"\"Install\"",
+				"append Menu\\Install.end",
+				"\"Remove Backups\"",
+				"append Menu\\RemoveBackups.end",
+				"end");
+			temp.WriteScript(Path.Combine("Menu", "Install.end"),
+				"update_collection GLOBAL\\GLOBALB.LZC CarTypeInfos A B 1");
+			temp.WriteScript(Path.Combine("Menu", "RemoveBackups.end"),
+				"update_collection GLOBAL\\GLOBALB.LZC CarTypeInfos A C 2");
+
+			IReadOnlyList<ModOptionSet> sets =
+				ModPackageReader.Extract(ScriptReader.Parse(temp.File("root.end")));
+
+			Assert.Single(sets);
+			Assert.Equal(new[] { "Install", "Remove Backups" }, sets[0].Options.Select(o => o.Name));
 		}
 
 		// ------------------------------------------------------------------ unknown verbs

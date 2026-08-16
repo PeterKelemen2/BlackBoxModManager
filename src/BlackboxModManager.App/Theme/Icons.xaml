@@ -79,6 +79,18 @@
   <Geometry x:Key="IconSpinnerArc" po:Freeze="True">M 7,1.5 A 5.5,5.5 0 1 1 1.5,7</Geometry>
 
   <!--
+    Copy to the clipboard. A board and a clip, both of straight lines.
+
+    A real clipboard glyph rounds its corners. A 1 pixel radius lands below one pixel on the
+    software rasterizer of Wine, and the corner then draws as a smudge. Straight lines carry
+    the same meaning at this size.
+  -->
+  <Geometry x:Key="IconClipboard" po:Freeze="True">
+    M 2.75,2 L 0.5,2 L 0.5,11.5 L 9.5,11.5 L 9.5,2 L 7.25,2
+    M 2.75,0.5 L 7.25,0.5 L 7.25,3.5 L 2.75,3.5 Z
+  </Geometry>
+
+  <!--
     The profile menu. Three dots.
 
     Each dot is a small circle of two arcs and never a zero length line. A zero length

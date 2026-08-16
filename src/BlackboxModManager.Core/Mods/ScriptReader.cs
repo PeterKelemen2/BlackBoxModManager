@@ -40,6 +40,10 @@ namespace BlackboxModManager.Core.Mods
 		/// </summary>
 		public static BaseCommand[] Parse(string scriptPath)
 		{
+			// A script that states a version reads Endscript.Version.Value during the parse.
+			// The library leaves that static null. See defect 15.
+			EndscriptVersion.Ensure();
+
 			var parser = new EndScriptParser(scriptPath);
 
 			try

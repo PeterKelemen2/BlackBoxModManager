@@ -110,6 +110,8 @@ public string Directory { get; }
 
 Read `CurrentFile`, `CurrentLine`, and `CurrentIndex` inside a catch block. They identify the exact failure point.
 
+**Set `Endscript.Version.Value` before the first `Read`.** The library declares that static and never assigns it. `VersionCommand.Prepare` reads it with no null test, so a script with a `version` line throws a `NullReferenceException`. `EndscriptVersion.Ensure` sets it, and `ScriptReader.Parse` calls that first. See [98-known-upstream-defects.md](98-known-upstream-defects.md), defect 15.
+
 ## `CollectionMap`
 
 ```csharp

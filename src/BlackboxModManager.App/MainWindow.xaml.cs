@@ -175,6 +175,30 @@ namespace BlackboxModManager.App
 			}
 		}
 
+		/// <summary>
+		/// The copy button beside the problem of a variant in the Mod tab.
+		///
+		/// The message names a script file, a line, and the words of the library. A user who
+		/// reports a broken mod has to send that text, and no other control on the tab gives
+		/// it to them.
+		/// </summary>
+		private void OnCopyProblem(object sender, RoutedEventArgs e)
+		{
+			if ((sender as Button)?.Tag is not VariantRowViewModel row) return;
+
+			try
+			{
+				// The second argument keeps the text on the clipboard after this process ends.
+				Clipboard.SetDataObject(row.ProblemReport, true);
+			}
+			catch (Exception ex)
+			{
+				// Another application can hold the clipboard open. Windows then refuses every
+				// write until that application lets go.
+				this.ShowError($"The copy did not reach the clipboard. {ex.Message}");
+			}
+		}
+
 		/// <summary>The row of a list that contains the source of the event.</summary>
 		private static ListBoxItem FindListItem(DependencyObject source)
 		{

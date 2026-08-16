@@ -145,6 +145,20 @@
   </Style>
 
   <!--
+    An icon button beside a line of hint text. The full size button reads as a slab next to
+    an 11 pixel line, so this one is 20 pixels.
+
+    Every rule of IconButton holds here. The tooltip is the only name that the control has.
+  -->
+  <Style
+    x:Key="IconButtonSmall"
+    BasedOn="{StaticResource IconButton}"
+    TargetType="Button">
+    <Setter Property="Width" Value="{StaticResource ControlHeightSmall}" />
+    <Setter Property="Height" Value="{StaticResource ControlHeightSmall}" />
+  </Style>
+
+  <!--
     The spinner of a button that runs a long operation.
 
     The control starts collapsed, so an idle button carries no gap and no mark. The button

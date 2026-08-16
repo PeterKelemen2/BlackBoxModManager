@@ -296,11 +296,37 @@
                           FontWeight="Bold"
                           IsChecked="{Binding Enabled, Mode=TwoWay}"
                           IsEnabled="{Binding IsInstallable}" />
-                        <TextBlock
+                        <!--
+                          The problem of a variant, and a button that copies it.
+
+                          A parse failure names a script file, a line, and a message from
+                          the library. Nobody retypes that into a bug report, so the row
+                          carries a copy button of its own.
+                        -->
+                        <Grid
                           Margin="20,2,0,0"
-                          Style="{StaticResource Hint}"
-                          Text="{Binding Problem}"
-                          Visibility="{Binding HasProblem, Converter={StaticResource BoolToVisible}}" />
+                          Visibility="{Binding HasProblem, Converter={StaticResource BoolToVisible}}">
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                          </Grid.ColumnDefinitions>
+                          <TextBlock
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource Hint}"
+                            Text="{Binding Problem}" />
+                          <Button
+                            Grid.Column="1"
+                            Margin="6,0,0,0"
+                            VerticalAlignment="Top"
+                            ui:Kind.Value="Quiet"
+                            Click="OnCopyProblem"
+                            Style="{StaticResource IconButtonSmall}"
+                            Tag="{Binding}"
+                            ToolTip="Copy this message to the clipboard.">
+                            <Path Data="{StaticResource IconClipboard}" Style="{StaticResource IconGlyph}" />
+                          </Button>
+                        </Grid>
                         <ItemsControl Margin="20,4,0,0" ItemsSource="{Binding Questions}">
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
