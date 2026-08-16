@@ -21,6 +21,26 @@ using Nikki.Core;
 namespace BlackboxModManager.App.ViewModels
 {
 	/// <summary>
+	/// The operation that runs right now.
+	///
+	/// <c>IsBusy</c> answers whether one runs. This answers which one, and the deploy button
+	/// and the revert button each draw a spinner from that answer. Only one operation runs at
+	/// a time, so the two buttons never spin together.
+	/// </summary>
+	public enum RunningWork
+	{
+		/// <summary>Nothing runs.</summary>
+		None = 0,
+
+		Deploy,
+
+		Revert,
+
+		/// <summary>An import, a scan, or another operation that draws no spinner of its own.</summary>
+		Other,
+	}
+
+	/// <summary>
 	/// The window.
 	///
 	/// The view model owns the state and the commands. Every long operation runs on a
@@ -332,6 +352,30 @@ namespace BlackboxModManager.App.ViewModels
 		}
 
 		public bool IsIdle => !this._busy;
+
+		private RunningWork _work;
+
+		/// <summary>
+		/// Which operation runs right now. <c>RunAsync</c> sets this at the start and it puts
+		/// <c>None</c> back at the end.
+		/// </summary>
+		public RunningWork Work
+		{
+			get => this._work;
+			private set
+			{
+				if (!this.SetProperty(ref this._work, value)) return;
+
+				this.OnPropertyChanged(nameof(this.IsDeploying));
+				this.OnPropertyChanged(nameof(this.IsReverting));
+			}
+		}
+
+		/// <summary>True while the deploy runs. The deploy button draws its spinner from this.</summary>
+		public bool IsDeploying => this._work == RunningWork.Deploy;
+
+		/// <summary>True while the revert runs. The revert button draws its spinner from this.</summary>
+		public bool IsReverting => this._work == RunningWork.Revert;
 
 		public bool IsGameReady => this._install != null;
 
@@ -1301,7 +1345,7 @@ namespace BlackboxModManager.App.ViewModels
 				{
 					report($"Loader: {loader}");
 				}
-			});
+			}, RunningWork.Deploy);
 
 			this.RefreshDeployedState();
 			this.RefreshLoaders();
@@ -1315,7 +1359,8 @@ namespace BlackboxModManager.App.ViewModels
 			if (!this._ask.Confirm("Put the vanilla state back into the game directory?",
 				"Revert", destructive: true)) return;
 
-			await this.RunAsync("Revert to vanilla.", report => this.Service().Revert(install, report));
+			await this.RunAsync("Revert to vanilla.",
+				report => this.Service().Revert(install, report), RunningWork.Revert);
 
 			this.RefreshDeployedState();
 		}
@@ -1688,11 +1733,18 @@ namespace BlackboxModManager.App.ViewModels
 		///
 		/// Every disk operation goes through here. IsBusy blocks the commands while it
 		/// runs, so no two operations touch the staging copy at once.
+		///
+		/// The kind names the operation for the buttons. Work carries that name while the
+		/// operation runs, and the button of a deploy or a revert draws a spinner from it.
 		/// </summary>
-		private async Task RunAsync(string title, Action<Action<string>> work)
+		private async Task RunAsync(string title, Action<Action<string>> work,
+			RunningWork kind = RunningWork.Other)
 		{
 			if (this.IsBusy) return;
 
+			// Name the operation before IsBusy raises its own change. The buttons then read one
+			// state and never a half of it.
+			this.Work = kind;
 			this.IsBusy = true;
 			this.Status = title;
 			this.Write(title);
@@ -1715,6 +1767,7 @@ namespace BlackboxModManager.App.ViewModels
 			finally
 			{
 				this.IsBusy = false;
+				this.Work = RunningWork.None;
 			}
 		}
 

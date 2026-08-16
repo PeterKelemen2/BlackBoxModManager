@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -68,6 +70,122 @@ namespace BlackboxModManager.App
 				// A scroll is cosmetic. It never fails an operation, and it never closes the
 				// window.
 			}
+		}
+
+		// ---------------------------------------------------------------------- The log
+		//
+		// The log holds one string per line, and the list carries the copy. The selection
+		// lives in the control and never in the view model, so these four handlers read
+		// LogList and the view model knows nothing about them.
+		//
+		// SelectionMode Extended in MainWindow.xaml gives the control the Control gesture and
+		// the Shift gesture with no code. What the code adds is the right press, the menu, and
+		// the copy itself.
+
+		/// <summary>
+		/// Selects the line under the pointer before the menu of the list opens.
+		///
+		/// WPF changes no selection on a right press. A menu that copies the selection would
+		/// then copy the lines that the user chose last and not the line under the pointer.
+		///
+		/// <b>A press inside the selection keeps that selection.</b> A user who picked ten
+		/// lines with Control and Shift right clicks one of them to copy all ten, and a reset
+		/// here would throw the other nine away.
+		///
+		/// It never marks the event handled. WPF opens the ContextMenu on the button up that
+		/// follows, and a handled press would stop that.
+		/// </summary>
+		private void LogList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+		{
+			if (sender is not ListBox list) return;
+
+			ListBoxItem item = FindListItem(e.OriginalSource as DependencyObject);
+
+			// A press on the empty space below the last line changes nothing.
+			if (item is null || item.IsSelected) return;
+
+			int index = list.ItemContainerGenerator.IndexFromContainer(item);
+
+			if (index < 0) return;
+
+			// SelectedIndex drops every other line and moves the anchor of the Shift gesture to
+			// this one. A write to IsSelected leaves that anchor where it was.
+			list.SelectedIndex = index;
+		}
+
+		/// <summary>
+		/// Stops the menu while the list holds no selection. A "Copy" that copies nothing is
+		/// worse than no menu at all.
+		/// </summary>
+		private void LogList_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+		{
+			if (sender is ListBox list && list.SelectedItems.Count > 0) return;
+
+			e.Handled = true;
+		}
+
+		/// <summary>Control with C copies the selection, the same as the menu does.</summary>
+		private void LogList_PreviewKeyDown(object sender, KeyEventArgs e)
+		{
+			if (e.Key != Key.C || Keyboard.Modifiers != ModifierKeys.Control) return;
+
+			this.CopyLines(sender as ListBox);
+			e.Handled = true;
+		}
+
+		/// <summary>The "Copy" item of the menu of the log.</summary>
+		private void OnCopyLog(object sender, RoutedEventArgs e)
+		{
+			this.CopyLines(this.LogList);
+		}
+
+		/// <summary>
+		/// Puts the selected lines on the clipboard, one line per row, in the order that the
+		/// log holds them.
+		/// </summary>
+		private void CopyLines(ListBox list)
+		{
+			if (list is null || list.SelectedItems.Count == 0) return;
+
+			// SelectedItems holds the lines in the order that the user clicked them. A copy of
+			// four scattered lines has to read top to bottom, so the index of each line comes
+			// along and sorts them back.
+			var lines = new List<(int Index, string Text)>(list.SelectedItems.Count);
+
+			foreach (object item in list.SelectedItems)
+			{
+				lines.Add((list.Items.IndexOf(item), item?.ToString() ?? String.Empty));
+			}
+
+			lines.Sort((a, b) => a.Index.CompareTo(b.Index));
+
+			var text = new StringBuilder();
+
+			foreach ((int _, string line) in lines) text.AppendLine(line);
+
+			try
+			{
+				Clipboard.SetText(text.ToString());
+			}
+			catch (Exception ex)
+			{
+				// Another application can hold the clipboard open. Windows then refuses every
+				// write until that application lets go.
+				this.ShowError($"The copy did not reach the clipboard. {ex.Message}");
+			}
+		}
+
+		/// <summary>The row of a list that contains the source of the event.</summary>
+		private static ListBoxItem FindListItem(DependencyObject source)
+		{
+			while (source != null)
+			{
+				if (source is ListBoxItem item) return item;
+
+				source = GetParentObject(source);
+			}
+
+			return null;
 		}
 
 		// ---------------------------------------------------------------------- The mod list

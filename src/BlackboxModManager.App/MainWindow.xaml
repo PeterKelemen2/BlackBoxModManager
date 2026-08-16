@@ -539,13 +539,28 @@
             this value. Every other value gives the item an endless width to measure in,
             and TextWrapping on the line then does nothing.
           -->
+          <!--
+            SelectionMode Extended gives the list the two gestures that every list has.
+            Control adds one line to the selection, and Shift adds the range from the line
+            that the user clicked before. The menu below copies whatever the selection holds,
+            and Control with C copies the same lines. See MainWindow.xaml.cs, The log.
+          -->
           <ListBox
             x:Name="LogList"
             Margin="6"
             HorizontalContentAlignment="Stretch"
             BorderThickness="0"
+            ContextMenuOpening="LogList_ContextMenuOpening"
             ItemsSource="{Binding Log}"
-            ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            PreviewKeyDown="LogList_PreviewKeyDown"
+            PreviewMouseRightButtonDown="LogList_PreviewMouseRightButtonDown"
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+            SelectionMode="Extended">
+            <ListBox.ContextMenu>
+              <ContextMenu>
+                <MenuItem Click="OnCopyLog" Header="Copy" />
+              </ContextMenu>
+            </ListBox.ContextMenu>
             <ListBox.ItemTemplate>
               <DataTemplate>
                 <TextBlock Style="{StaticResource LogLine}" Text="{Binding}" />
@@ -587,6 +602,13 @@
     <!--
       The two actions. Both carry a colored edge and no fill, so neither one shouts across
       the window. See docs/roadmap/12-minimal-ui.md, Part C.
+
+      Each button holds a spinner and a label. Both operations run for minutes on a big
+      install, and both gray every button out while they run, so the window needs one mark
+      that says which of the two is at work. The spinner is that mark.
+
+      An idle button carries no spinner and no gap. The button grows by the width of the
+      spinner while its operation runs. See the Spinner style in Theme/Parts.xaml.
     -->
     <StackPanel
       Grid.Row="2"
@@ -596,14 +618,42 @@
       <Button
         MinWidth="100"
         ui:Kind.Value="SuccessOutline"
-        Command="{Binding DeployCommand}"
-        Content="Deploy" />
+        Command="{Binding DeployCommand}">
+        <StackPanel Orientation="Horizontal">
+          <Control Margin="0,0,6,0" VerticalAlignment="Center">
+            <Control.Style>
+              <Style BasedOn="{StaticResource Spinner}" TargetType="Control">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsDeploying}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Control.Style>
+          </Control>
+          <TextBlock VerticalAlignment="Center" Text="Deploy" />
+        </StackPanel>
+      </Button>
       <Button
         MinWidth="120"
         Margin="0"
         ui:Kind.Value="DangerOutline"
-        Command="{Binding RevertCommand}"
-        Content="Revert to vanilla" />
+        Command="{Binding RevertCommand}">
+        <StackPanel Orientation="Horizontal">
+          <Control Margin="0,0,6,0" VerticalAlignment="Center">
+            <Control.Style>
+              <Style BasedOn="{StaticResource Spinner}" TargetType="Control">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsReverting}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Control.Style>
+          </Control>
+          <TextBlock VerticalAlignment="Center" Text="Revert to vanilla" />
+        </StackPanel>
+      </Button>
     </StackPanel>
 
     <!--

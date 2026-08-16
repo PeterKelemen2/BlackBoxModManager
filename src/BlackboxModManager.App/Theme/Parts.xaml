@@ -144,6 +144,83 @@
     <Setter Property="Padding" Value="0" />
   </Style>
 
+  <!--
+    The spinner of a button that runs a long operation.
+
+    The control starts collapsed, so an idle button carries no gap and no mark. The button
+    grows by the width of the spinner when its operation starts. That growth is the point.
+    A reserved gap sits in both buttons at all times and says nothing.
+
+    A collapsed control also stops the turn, because IsVisible reads false for it.
+
+    <b>The turn is a Control template and never a Style setter on a Path.</b> WPF freezes a
+    Freezable that a Setter holds, and an animation of a frozen RotateTransform throws. A
+    template builds one transform for each instance, so the two buttons of the window can
+    both carry one of these.
+
+    The turn steps 45 degrees eight times per second. A continuous turn asks the software
+    rasterizer of Wine for a repaint on every frame, and this reads the same for much less
+    work. See docs/roadmap/10-dark-theme.md, Part E.
+
+    The arc takes AccentDefault and never the Foreground of the button. A button grays out
+    while its operation runs, and a spinner in TextDisabled is the one part of that button
+    that still has to catch the eye.
+  -->
+  <Style x:Key="Spinner" TargetType="Control">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Visibility" Value="Collapsed" />
+    <Setter Property="Foreground" Value="{StaticResource AccentDefault}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Control">
+          <Path
+            Width="14"
+            Height="14"
+            Data="{StaticResource IconSpinnerArc}"
+            RenderTransformOrigin="0.5,0.5"
+            Stroke="{TemplateBinding Foreground}"
+            StrokeEndLineCap="Round"
+            StrokeStartLineCap="Round"
+            StrokeThickness="2">
+            <Path.RenderTransform>
+              <RotateTransform x:Name="Turner" Angle="0" />
+            </Path.RenderTransform>
+          </Path>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsVisible" Value="True">
+              <Trigger.EnterActions>
+                <BeginStoryboard x:Name="Turn">
+                  <Storyboard>
+                    <DoubleAnimationUsingKeyFrames
+                      RepeatBehavior="Forever"
+                      Storyboard.TargetName="Turner"
+                      Storyboard.TargetProperty="Angle"
+                      Duration="0:0:0.8">
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.0" Value="0" />
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.1" Value="45" />
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.2" Value="90" />
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.3" Value="135" />
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.4" Value="180" />
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.5" Value="225" />
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.6" Value="270" />
+                      <DiscreteDoubleKeyFrame KeyTime="0:0:0.7" Value="315" />
+                    </DoubleAnimationUsingKeyFrames>
+                  </Storyboard>
+                </BeginStoryboard>
+              </Trigger.EnterActions>
+              <Trigger.ExitActions>
+                <StopStoryboard BeginStoryboardName="Turn" />
+              </Trigger.ExitActions>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!--  The log. IBM Plex Sans, because a log line and a conflict line carry no heading.  -->
   <Style x:Key="LogLine" TargetType="TextBlock">
     <Setter Property="FontFamily" Value="{StaticResource LogFontFamily}" />

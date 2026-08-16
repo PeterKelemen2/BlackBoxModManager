@@ -48,6 +48,44 @@
       </WrapPanel>
 
       <!--
+        The spinner of a long operation. The deploy button and the revert button of the
+        main window each hold one, and the running one turns.
+
+        The pair below shows both states. The left button turns. The right button is idle,
+        so it carries no spinner and no gap, and it holds the width of a plain button.
+        Both buttons stand disabled, because that is the state that the main window puts
+        them in while the operation runs.
+      -->
+      <TextBlock Style="{StaticResource Heading}" Text="Spinner" />
+      <WrapPanel Margin="0,0,0,16">
+        <Button
+          MinWidth="100"
+          ui:Kind.Value="SuccessOutline"
+          IsEnabled="False">
+          <StackPanel Orientation="Horizontal">
+            <Control
+              Margin="0,0,6,0"
+              VerticalAlignment="Center"
+              Style="{StaticResource Spinner}"
+              Visibility="Visible" />
+            <TextBlock VerticalAlignment="Center" Text="Deploy" />
+          </StackPanel>
+        </Button>
+        <Button
+          MinWidth="120"
+          ui:Kind.Value="DangerOutline"
+          IsEnabled="False">
+          <StackPanel Orientation="Horizontal">
+            <Control
+              Margin="0,0,6,0"
+              VerticalAlignment="Center"
+              Style="{StaticResource Spinner}" />
+            <TextBlock VerticalAlignment="Center" Text="Revert to vanilla" />
+          </StackPanel>
+        </Button>
+      </WrapPanel>
+
+      <!--
         The icon buttons. Every glyph is Path geometry from Theme/Icons.xaml, because a
         glyph font that the machine does not hold kills the process under Wine.
 
