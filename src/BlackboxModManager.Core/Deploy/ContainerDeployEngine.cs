@@ -17,16 +17,22 @@ namespace BlackboxModManager.Core.Deploy
 	/// <summary>
 	/// Applies Binary mods to the containers of the staging copy.
 	///
-	/// <b>Load once. Apply every enabled mod. Save once.</b> This is the most important rule
-	/// in the project, and this class is the whole of it. Every enabled variant runs against
-	/// one loaded BaseProfile before one Save, so the edits composite at the collection and
-	/// the entry level. No mod overwrites the container of another mod, and container
-	/// merging never becomes a problem that somebody has to solve.
+	/// <b>One pass for each variant, in load order.</b> Each pass builds a new BaseProfile,
+	/// loads the containers that the manifest of that one variant names, runs the script of
+	/// that variant, and saves. The next pass reads what the last pass wrote. The edits
+	/// composite through the disk, so no mod overwrites the container of another mod. This
+	/// is what Binary 2.8.3 does, and every Binary mod is written for it.
 	///
-	/// <b>One pass per mod breaks it.</b> Load adds a container per call, and Save then
-	/// writes one file twice from two states. See defect 6.
+	/// <b>One shared profile for every mod does not work.</b> The command <c>delete</c>
+	/// saves a container and then removes it from the profile. A mod that ends with
+	/// <c>delete</c> leaves the next mod with no container to edit, and the next mod fails
+	/// with "was never loaded". See defect 18.
 	///
-	/// The whole pass holds LibraryGate and runs on the calling thread. The hash list
+	/// <b>Never call Load twice on one profile.</b> Load adds a container per call, and Save
+	/// then writes one file twice from two states. See defect 6. Each pass gets a new
+	/// profile, so that rule holds.
+	///
+	/// The whole loop holds LibraryGate and runs on the calling thread. The hash list
 	/// statics are process-global and LoadHashList resets the key map of Nikki. See defect 8.
 	/// </summary>
 	public sealed class ContainerDeployEngine : IDeployEngine
@@ -75,34 +81,52 @@ namespace BlackboxModManager.Core.Deploy
 
 			// Classify every command before anything writes. A refused command and a path
 			// outside the staging copy both stop the deploy here. See step 8.
-			CommandGate.Check(variants, context.StagingDirectory, context.Log);
+			GateResult gate = CommandGate.Check(variants, context.StagingDirectory, context.Log);
 
-			MergedLoad merged = MergedLaunch.Build(variants, context.StagingDirectory);
+			// The union covers every container that any enabled mod loads. The engine loads
+			// one variant at a time, and it uses this union for two other jobs. It makes
+			// every container private before the first pass, and it reports the containers
+			// that the deploy rewrote.
+			MergedLoad merged = MergedLaunch.Build(variants, context.StagingDirectory, strict: false);
 
 			foreach (string note in merged.Notes) context.Log(note);
 
-			context.Log($"The merged load names {merged.Files.Count} containers: {String.Join(", ", merged.Files)}.");
+			context.Log($"The enabled mods name {merged.Files.Count} containers: {String.Join(", ", merged.Files)}.");
 
-			this.Prepare(context, merged);
+			this.Prepare(context, merged, gate);
 
-			// One gate covers the statics, the load, every script, and the save.
+			// One gate covers the statics, every load, every script, and every save.
 			using (LibraryGate.Enter())
 			{
-				return this.RunPass(context, merged, variants);
+				return this.RunPasses(context, merged, variants, gate);
 			}
 		}
 
 		/// <summary>
-		/// Makes every container of the merged load private and confirms that it exists.
+		/// Makes every container that the deploy can write private, and confirms that each
+		/// container of the merged load exists.
 		///
 		/// <b>This is the step that protects the install of the user.</b> TreeReplicator
 		/// builds the staging copy with hard links, so a staging container, the vanilla
-		/// container, and the live container are one file with three names. Save writes a
-		/// container in place, and that write would reach all three. MakePrivate breaks the
-		/// share first.
+		/// container, and the live container are one file with three names. Nikki writes a
+		/// container with FileMode.Create, which keeps the share and reaches all three names.
+		/// MakePrivate breaks the share first.
+		///
+		/// <b>The manifest list is not the whole list.</b> A script creates a container with
+		/// <c>new</c> and writes it back with <c>delete</c>, and no manifest names that
+		/// container. A script also writes a file that is no container at all. The command
+		/// <c>unlock_memory</c> writes a header over five memory files, and <c>move_file</c>
+		/// and <c>copy_file</c> write a target. The gate reads every command and reports both
+		/// lists. Cover them, or a mod of this shape rewrites the vanilla baseline and the
+		/// game of the user. See defect 16.
 		/// </summary>
-		private void Prepare(DeployContext context, MergedLoad merged)
+		private void Prepare(DeployContext context, MergedLoad merged, GateResult gate)
 		{
+			CheckBaseline(context, merged, gate);
+
+			var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			int privateCount = 0;
+
 			foreach (string file in merged.Files)
 			{
 				string path = ModPath.Resolve(context.StagingDirectory, file);
@@ -119,17 +143,98 @@ namespace BlackboxModManager.Core.Deploy
 				}
 
 				StagingFiles.MakePrivate(path);
+				done.Add(Path.GetFullPath(path));
+				++privateCount;
 			}
 
-			context.Log($"The staging copy holds {merged.Files.Count} private containers, " +
+			int extra = 0;
+
+			foreach (string file in gate.Containers)
+			{
+				string path = ModPath.Resolve(context.StagingDirectory, file);
+
+				if (!done.Add(Path.GetFullPath(path))) continue;
+
+				// A container that does not exist yet is normal here. The command "new
+				// override" creates one, and a new file shares nothing.
+				if (!File.Exists(path)) continue;
+
+				StagingFiles.MakePrivate(path);
+				++privateCount;
+				++extra;
+			}
+
+			int files = 0;
+
+			foreach (string path in gate.WritePaths)
+			{
+				if (!done.Add(Path.GetFullPath(path))) continue;
+
+				// The gate already proved that this path stays inside the staging copy. A
+				// path that does not exist yet needs no call, because a new file shares
+				// nothing.
+				if (!File.Exists(path)) continue;
+
+				StagingFiles.MakePrivate(path);
+				++privateCount;
+				++files;
+			}
+
+			context.Log($"The staging copy holds {privateCount} private files, " +
 				"so a write cannot reach the vanilla copy or the game.");
+
+			if (extra > 0)
+			{
+				context.Log($"  {extra} of them are containers that a script creates and no manifest names.");
+			}
+
+			if (files > 0)
+			{
+				context.Log($"  {files} of them are files that a filesystem command writes.");
+			}
 		}
 
 		/// <summary>
-		/// The single pass. It loads, applies every variant in load order, and saves.
+		/// Stops the deploy when the vanilla copy no longer holds what the snapshot recorded.
+		///
+		/// <b>A deploy against a changed baseline gives a wrong result.</b> Every Binary mod
+		/// reads the container before it writes it. A container that already carries the edits
+		/// of a past run makes the script report "already exists" for every name that it adds,
+		/// and the user cannot see why.
+		///
+		/// The check covers the files that this deploy writes, and it reads their content. A
+		/// hash of the whole install costs seconds for every deploy and answers nothing more
+		/// about these files.
 		/// </summary>
-		private DeployReport RunPass(DeployContext context, MergedLoad merged,
-			IReadOnlyList<EnabledVariant> variants)
+		private static void CheckBaseline(DeployContext context, MergedLoad merged, GateResult gate)
+		{
+			if (context.Baseline is null || String.IsNullOrWhiteSpace(context.VanillaDirectory)) return;
+
+			var paths = new List<string>(merged.Files.Count + gate.Containers.Count + gate.WritePaths.Count);
+
+			paths.AddRange(merged.Files);
+			paths.AddRange(gate.Containers);
+
+			foreach (string full in gate.WritePaths)
+			{
+				string relative = BaselineVerifier.RelativeTo(context.StagingDirectory, full);
+
+				if (relative != null) paths.Add(relative);
+			}
+
+			IReadOnlyList<SnapshotDifference> drift = BaselineVerifier.CheckFiles(
+				context.Baseline, context.VanillaDirectory, paths);
+
+			if (drift.Count > 0) throw new DeployServiceException(BaselineVerifier.Describe(drift));
+
+			context.Log("The vanilla copy still matches its record for every file that this deploy writes.");
+		}
+
+		/// <summary>
+		/// Runs one load, apply and save pass for each variant, in load order.
+		/// </summary>
+		private DeployReport RunPasses(DeployContext context, MergedLoad merged,
+			IReadOnlyList<EnabledVariant> variants, GateResult gate)
 		{
 			GameINT game = context.Game.Game;
 
@@ -141,38 +246,29 @@ namespace BlackboxModManager.Core.Deploy
 
 			try
 			{
-				// Both statics must hold a value before Load. Load calls LoadHashList first,
-				// and Save writes CustomHashList as its last step. See defect 7.
+				// Both statics must hold a value before the first Load. Load calls
+				// LoadHashList first, and Save writes CustomHashList as its last step. The
+				// statics are process-global, so one call covers every pass. See defect 7.
 				ProfileHashLists.Apply(context.Binary, game);
 
 				(string main, string custom) = ProfileHashLists.Current(game);
 				context.Log($"The main hash list is {main}.");
 				context.Log($"The custom hash list is {custom}.");
 
-				BaseProfile profile = BaseProfile.NewProfile(game, merged.Launch.Directory);
-
-				context.Log("Load the containers. This runs once for the whole deploy.");
-				string[] loadErrors = profile.Load(merged.Launch);
-
-				Fail(context, "The load reported", loadErrors);
-
-				// A Load that reports nothing may have loaded nothing. Load returns an empty
-				// array at once when Files is empty, and it drops a container that failed.
-				if (profile.Count != merged.Files.Count)
+				// The gate reads the variants in load order and returns one script for each.
+				// A pass that took the script of another mod would edit the wrong containers,
+				// so prove the pairing before anything writes.
+				if (gate.Scripts.Count != variants.Count)
 				{
 					throw new DeployServiceException(
-						$"The merged load names {merged.Files.Count} containers and the profile holds " +
-						$"{profile.Count}. The deploy stopped before it changed anything.");
+						$"The command gate read {gate.Scripts.Count} scripts for {variants.Count} variants. " +
+						"The deploy stopped before it changed anything.");
 				}
 
-				foreach (SynchronizedDatabase database in profile) context.Log($"  loaded {database.Filename}");
-
-				foreach (EnabledVariant variant in variants) Apply(context, profile, variant);
-
-				context.Log("Save the containers. This runs once, after every mod applied.");
-				string[] saveErrors = profile.Save();
-
-				Fail(context, "The save reported", saveErrors);
+				for (int i = 0; i < variants.Count; ++i)
+				{
+					RunOne(context, variants[i], gate.Scripts[i], game);
+				}
 
 				var containers = new List<ContainerWrite>(merged.Files.Count);
 
@@ -201,12 +297,48 @@ namespace BlackboxModManager.Core.Deploy
 		}
 
 		/// <summary>
-		/// Runs the script of one variant against the loaded profile.
+		/// One pass. It loads the containers of one variant, runs the script of that variant,
+		/// and saves.
 		///
-		/// The manager gets the same profile instance every time. That is what makes the
-		/// single pass work.
+		/// The profile is new for each pass, so the load reads what the last pass wrote.
 		/// </summary>
-		private static void Apply(DeployContext context, BaseProfile profile, EnabledVariant variant)
+		private static void RunOne(DeployContext context, EnabledVariant variant,
+			ResolvedScript resolved, GameINT game)
+		{
+			MergedLoad load = MergedLaunch.Build(new[] { variant }, context.StagingDirectory);
+
+			context.Log($"Pass {variant.Order}: {variant.Label}. " +
+				$"Load {load.Files.Count} containers: {String.Join(", ", load.Files)}.");
+
+			BaseProfile profile = BaseProfile.NewProfile(game, load.Launch.Directory);
+			string[] loadErrors = profile.Load(load.Launch);
+
+			Fail(context, $"The load for \"{variant.Label}\" reported", loadErrors);
+
+			// A Load that reports nothing may have loaded nothing. Load returns an empty
+			// array at once when Files is empty, and it drops a container that failed.
+			if (profile.Count != load.Files.Count)
+			{
+				throw new DeployServiceException(
+					$"The variant \"{variant.Label}\" names {load.Files.Count} containers and the profile " +
+					$"holds {profile.Count}. The deploy stopped before it changed anything.");
+			}
+
+			Apply(context, profile, variant, resolved);
+
+			string[] saveErrors = profile.Save();
+
+			Fail(context, $"The save for \"{variant.Label}\" reported", saveErrors);
+		}
+
+		/// <summary>
+		/// Runs the script of one variant against the profile of that pass.
+		///
+		/// The commands come from the gate, which already walked the append graph and parsed
+		/// the script. A second parse reads every appended file again for no new answer.
+		/// </summary>
+		private static void Apply(DeployContext context, BaseProfile profile, EnabledVariant variant,
+			ResolvedScript resolved)
 		{
 			Launch manifest = variant.Variant.Manifest;
 			string scriptPath = ModPath.Resolve(manifest.ThisDir, manifest.Endscript);
@@ -217,12 +349,16 @@ namespace BlackboxModManager.Core.Deploy
 					$"The variant \"{variant.Label}\" names the script {manifest.Endscript} and it is not at {scriptPath}.");
 			}
 
-			// The library parser splices every append inline and keeps no cycle guard.
-			ScriptAppendGraph.Walk(scriptPath);
+			BaseCommand[] commands = resolved.Commands;
 
-			BaseCommand[] commands = ScriptReader.Parse(scriptPath);
+			if (commands.Length == 0)
+			{
+				throw new DeployServiceException(
+					$"The variant \"{variant.Label}\" holds no command. The deploy stopped before it " +
+					"changed anything.");
+			}
 
-			context.Log($"Apply {variant.Order}: {variant.Label}, {commands.Length} commands.");
+			context.Log($"  {variant.Label} runs {commands.Length} commands.");
 
 			// The third argument becomes Path.GetDirectoryName(launcher) inside
 			// CollectionMap, and every command that reads a file resolves against that.

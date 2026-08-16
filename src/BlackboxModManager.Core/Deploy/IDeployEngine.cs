@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Games;
 using BlackboxModManager.Core.Profiles;
+using BlackboxModManager.Core.Staging;
 using BlackboxModManager.Core.Store;
 
 namespace BlackboxModManager.Core.Deploy
@@ -46,12 +47,28 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public ProxyPlan Proxies { get; }
 
+		/// <summary>
+		/// The vanilla copy that the staging copy came from, and the record of its content.
+		/// Both are null when the caller built no baseline, and an engine then skips the
+		/// baseline check.
+		///
+		/// <b>An engine reads this and never writes to it.</b> The staging copy holds hard
+		/// links back to these files, so an engine that writes without breaking the share
+		/// changes the baseline and the install of the user. The check exists to catch that
+		/// the next time a deploy runs. See defect 16.
+		/// </summary>
+		public string VanillaDirectory { get; }
+
+		public VanillaSnapshot Baseline { get; }
+
 		public DeployContext(GameInstall game, string stagingDirectory, Profile profile,
 			ModStore store, BinaryInstall binary = null, Action<string> log = null,
-			ProxyPlan proxies = null)
+			ProxyPlan proxies = null, string vanillaDirectory = null, VanillaSnapshot baseline = null)
 		{
 			this.Binary = binary;
 			this.Proxies = proxies;
+			this.VanillaDirectory = vanillaDirectory;
+			this.Baseline = baseline;
 
 			this.Game = game ?? throw new ArgumentNullException(nameof(game));
 			this.Profile = profile ?? throw new ArgumentNullException(nameof(profile));

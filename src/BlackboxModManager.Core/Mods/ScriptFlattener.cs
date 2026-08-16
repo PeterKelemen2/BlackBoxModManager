@@ -14,6 +14,16 @@ namespace BlackboxModManager.Core.Mods
 	{
 		public string Variant { get; }
 
+		/// <summary>
+		/// The parsed script, with every append spliced inline. This is what the library
+		/// executes.
+		///
+		/// <b>The deploy runs this array and does not read the script again.</b> A second
+		/// parse reads every appended file a second time, and one mod appends hundreds. The
+		/// jump targets of every selectable command are already resolved.
+		/// </summary>
+		public BaseCommand[] Commands { get; }
+
 		/// <summary>Every command of the selected branches, in execution order.</summary>
 		public IReadOnlyList<ResolvedEdit> Edits { get; }
 
@@ -39,9 +49,11 @@ namespace BlackboxModManager.Core.Mods
 
 		public ResolvedScript(string variant, IReadOnlyList<ResolvedEdit> edits,
 			IReadOnlyList<string> answers, IReadOnlyList<ResolverNote> notes,
-			IReadOnlyList<ScriptWarning> warnings = null, bool isApproximate = false)
+			IReadOnlyList<ScriptWarning> warnings = null, bool isApproximate = false,
+			BaseCommand[] commands = null)
 		{
 			this.Variant = variant;
+			this.Commands = commands ?? Array.Empty<BaseCommand>();
 			this.Edits = edits ?? Array.Empty<ResolvedEdit>();
 			this.Answers = answers ?? Array.Empty<string>();
 			this.Notes = notes ?? Array.Empty<ResolverNote>();
@@ -279,7 +291,7 @@ namespace BlackboxModManager.Core.Mods
 			public ResolvedScript Result()
 			{
 				return new ResolvedScript(this._variant.Name, this._edits, this._answers,
-					this._resolver.Notes, this._warnings, this._approximate);
+					this._resolver.Notes, this._warnings, this._approximate, this._commands);
 			}
 
 			/// <summary>

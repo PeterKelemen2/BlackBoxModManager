@@ -117,12 +117,15 @@ namespace BlackboxModManager.Core.Deploy
 
 			VanillaSnapshot snapshot = this.EnsureVanilla(workspace, write);
 
+			CheckBaseline(workspace, snapshot, fullVerify, write);
+
 			write("Build the staging copy.");
 			ReplicationReport staging = TreeReplicator.Build(
 				workspace.VanillaDirectory, workspace.StagingDirectory, write);
 
 			var context = new DeployContext(
-				install, workspace.StagingDirectory, profile, this._store, this._binary, write, proxies);
+				install, workspace.StagingDirectory, profile, this._store, this._binary, write, proxies,
+				workspace.VanillaDirectory, snapshot);
 
 			DeployReport report = this.RunEngines(context, profile, write, loaders);
 
@@ -241,6 +244,32 @@ namespace BlackboxModManager.Core.Deploy
 			workspace.WriteState(new WorkspaceState());
 
 			return snapshot;
+		}
+
+		/// <summary>
+		/// Stops the deploy when the vanilla copy no longer holds what the snapshot recorded.
+		///
+		/// The quick check compares the length of every file. It costs one directory walk, and
+		/// it catches a file that a past deploy rewrote or truncated. The full check reads
+		/// every byte of the install, so the user turns it on when a deploy gave a result that
+		/// nobody can explain.
+		///
+		/// The container engine reads the content of the files that it writes, whatever this
+		/// setting says. That is the small list where the exact answer matters.
+		/// </summary>
+		private static void CheckBaseline(GameWorkspace workspace, VanillaSnapshot snapshot,
+			bool fullVerify, Action<string> write)
+		{
+			write(fullVerify
+				? "Check the vanilla copy against its record. The full check reads every byte."
+				: "Check the vanilla copy against its record.");
+
+			IReadOnlyList<SnapshotDifference> drift = SnapshotReader.Compare(
+				snapshot, workspace.VanillaDirectory, fullVerify);
+
+			if (drift.Count == 0) return;
+
+			throw new DeployServiceException(BaselineVerifier.Describe(drift));
 		}
 
 		/// <summary>

@@ -28,9 +28,16 @@ namespace BlackboxModManager.Tests
 		/// <summary>
 		/// Writes a VERSN1 manifest in the dialect that Binary emits. It holds one
 		/// backslash where standard JSON needs two.
+		///
+		/// Name the containers to put in the Files list. An empty list gives one container,
+		/// which is what most tests need.
 		/// </summary>
-		public void WriteManifest(string name, string game, string script)
+		public void WriteManifest(string name, string game, string script, params string[] files)
 		{
+			string[] chosen = files is null || files.Length == 0
+				? new[] { @"GLOBAL\GLOBALB.LZC" }
+				: files;
+
 			var text = new StringBuilder();
 			text.AppendLine("[VERSN1]");
 			text.AppendLine();
@@ -40,7 +47,14 @@ namespace BlackboxModManager.Tests
 			text.AppendLine("  \"Directory\": \"\",");
 			text.AppendLine($"  \"Endscript\": \"{script}\",");
 			text.AppendLine("  \"Files\": [");
-			text.AppendLine("    \"GLOBAL\\GLOBALB.LZC\"");
+
+			for (int i = 0; i < chosen.Length; ++i)
+			{
+				string comma = i + 1 < chosen.Length ? "," : String.Empty;
+
+				text.AppendLine($"    \"{chosen[i]}\"{comma}");
+			}
+
 			text.AppendLine("  ],");
 			text.AppendLine("  \"Links\": []");
 			text.AppendLine("}");

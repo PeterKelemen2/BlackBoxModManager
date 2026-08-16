@@ -40,11 +40,11 @@ namespace BlackboxModManager.Core.Deploy
 	}
 
 	/// <summary>
-	/// Builds the one manifest that the single pass loads from.
+	/// Builds the manifest that one pass loads from.
 	///
-	/// <b>Load once. Apply every enabled mod. Save once.</b> This class exists to make the
-	/// first part of that rule possible. Every enabled variant contributes its container
-	/// files to one union, and the deploy loads that union one time.
+	/// The engine calls this two ways. It calls it with one variant to build the manifest of
+	/// one pass. It calls it with every variant to get the union, which it needs to make each
+	/// container private and to report what the deploy rewrote.
 	/// </summary>
 	public static class MergedLaunch
 	{
@@ -53,8 +53,13 @@ namespace BlackboxModManager.Core.Deploy
 		///
 		/// stagingDirectory becomes Directory. Every container path and every absolute link
 		/// resolves against it, so it must be the staging copy and never the live install.
+		///
+		/// Set strict to true when the result feeds a Load. Two spellings of one container in
+		/// one load lose the edits of the first mod with no error, so the build stops. Set it
+		/// to false for a union that nothing loads, where the first spelling is enough.
 		/// </summary>
-		public static MergedLoad Build(IReadOnlyList<EnabledVariant> variants, string stagingDirectory)
+		public static MergedLoad Build(IReadOnlyList<EnabledVariant> variants, string stagingDirectory,
+			bool strict = true)
 		{
 			if (variants is null) throw new ArgumentNullException(nameof(variants));
 			if (String.IsNullOrWhiteSpace(stagingDirectory)) throw new ArgumentException("The staging directory is empty.", nameof(stagingDirectory));
@@ -84,7 +89,7 @@ namespace BlackboxModManager.Core.Deploy
 					{
 						// Two spellings of one container cannot share one load. See the
 						// note on the method below.
-						if (!String.Equals(chosen, file, StringComparison.Ordinal))
+						if (strict && !String.Equals(chosen, file, StringComparison.Ordinal))
 						{
 							throw new DeployServiceException(SpellingProblem(chosen, file, contributors, variant));
 						}
@@ -212,9 +217,9 @@ namespace BlackboxModManager.Core.Deploy
 				? String.Join(", ", list)
 				: "an earlier mod";
 
-			return $"Two mods name one container in two ways. {owners} writes \"{chosen}\" and " +
+			return $"One load names one container in two ways. {owners} writes \"{chosen}\" and " +
 				$"\"{variant.Label}\" writes \"{other}\". The container editor matches that name as plain " +
-				"text, so one load cannot serve both spellings. Deploy these mods one at a time.";
+				"text, so one load cannot serve both spellings. Correct the manifest of the mod.";
 		}
 
 		private static string GameOf(IReadOnlyList<EnabledVariant> variants)
