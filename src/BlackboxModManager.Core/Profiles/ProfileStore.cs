@@ -37,6 +37,20 @@ namespace BlackboxModManager.Core.Profiles
 			this.Root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
 		}
 
+		/// <summary>
+		/// Copies a profile, with no shared object between the copy and the original.
+		///
+		/// <b>A background check reads a copy and never the live profile.</b> The window
+		/// changes the live profile when the user clicks, and a read of a list that another
+		/// thread changes gives a wrong answer or an exception.
+		/// </summary>
+		public static Profile Clone(Profile profile)
+		{
+			if (profile is null) throw new ArgumentNullException(nameof(profile));
+
+			return JsonSerializer.Deserialize<Profile>(JsonSerializer.Serialize(profile, Options), Options);
+		}
+
 		public string DirectoryOf(GameINT game) => Path.Combine(this.Root, game.ToString());
 
 		/// <summary>

@@ -1353,37 +1353,108 @@ namespace BlackboxModManager.App.ViewModels
 		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private void RefreshConflicts()
 		{
+			// The check runs on a background thread and the result comes back later. Nothing
+			// waits for it, because the panel is the only thing that it changes.
+			_ = this.RefreshConflictsAsync();
+		}
+
+		/// <summary>
+		/// Counts the conflict checks that this window started. Only the newest one writes
+		/// its result.
+		/// </summary>
+		private int _conflictRun;
+
+		/// <summary>
+		/// Reads the conflicts on a background thread and shows the result.
+		///
+		/// <b>The check is slow enough to freeze the window.</b> It reads every mod folder and
+		/// it walks every script. One Most Wanted profile with two Binary mods needs about
+		/// 900 ms, and the window calls this after every click on a checkbox.
+		///
+		/// The check reads a copy of the profile. The user can click again while it runs, and
+		/// a read of the live profile would then race the change.
+		/// </summary>
+		private async Task RefreshConflictsAsync()
+		{
+			int run = ++this._conflictRun;
+
 			this.Conflicts.Clear();
 
 			if (this._install is null || this._profile is null) return;
 
+			GameInstall install = this._install;
+			DeployService service = this.Service();
+			Profile snapshot;
+
 			try
 			{
-				ConflictReport report = this.Service().CheckConflicts(this._install, this._profile);
+				snapshot = ProfileStore.Clone(this._profile);
+			}
+			catch (Exception ex)
+			{
+				this.Conflicts.Add(ex.Message);
+				return;
+			}
 
-				this.Conflicts.Add(report.Summary());
+			this.Conflicts.Add("Check the mods for conflicts.");
 
-				foreach (ConflictEntry entry in report.Conflicts) this.Conflicts.Add(entry.ToString());
+			IReadOnlyList<string> lines;
+
+			try
+			{
+				lines = await Task.Run(() => Describe(service, install, snapshot)).ConfigureAwait(true);
+			}
+			catch (Exception ex)
+			{
+				// A selection that is half finished is normal while the user works. Report
+				// it in the panel and never as a dialog.
+				lines = new[] { ex.Message };
+			}
+
+			// A later click started another check. That one writes the panel.
+			if (run != this._conflictRun) return;
+
+			this.Conflicts.Clear();
+
+			foreach (string line in lines) this.Conflicts.Add(line);
+		}
+
+		/// <summary>
+		/// Runs the conflict check and turns the report into the lines of the panel. This runs
+		/// on a background thread, so it touches nothing that the window owns.
+		/// </summary>
+		private static IReadOnlyList<string> Describe(DeployService service, GameInstall install,
+			Profile profile)
+		{
+			var lines = new List<string>();
+
+			try
+			{
+				ConflictReport report = service.CheckConflicts(install, profile);
+
+				lines.Add(report.Summary());
+
+				foreach (ConflictEntry entry in report.Conflicts) lines.Add(entry.ToString());
 
 				// A refused command and a path outside staging both stop the deploy. Put
 				// them above the warnings, because the user has to act on them.
-				foreach (string line in report.Rejections) this.Conflicts.Add($"The deploy stops. {line}");
+				foreach (string line in report.Rejections) lines.Add($"The deploy stops. {line}");
 
-				foreach (string line in report.Escapes) this.Conflicts.Add($"The deploy stops. {line}");
+				foreach (string line in report.Escapes) lines.Add($"The deploy stops. {line}");
 
-				foreach (string line in report.Warnings) this.Conflicts.Add($"Warning. {line}");
+				foreach (string line in report.Warnings) lines.Add($"Warning. {line}");
 
-				foreach (string line in report.Unchecked) this.Conflicts.Add($"Not checked. {line}");
+				foreach (string line in report.Unchecked) lines.Add($"Not checked. {line}");
 
 				foreach (string line in report.Approximate)
 				{
-					this.Conflicts.Add($"The mod \"{line}\" uses an 'if' command. The check walked both " +
+					lines.Add($"The mod \"{line}\" uses an 'if' command. The check walked both " +
 						"branches, so a conflict against it is possible and not certain.");
 				}
 
 				if (report.Conflicts.Count > 0)
 				{
-					this.Conflicts.Add("The last mod in the load order wins a field conflict. " +
+					lines.Add("The last mod in the load order wins a field conflict. " +
 						"Move a mod to change the winner. An existence conflict makes a command fail, " +
 						"and load order does not settle it.");
 				}
@@ -1392,8 +1463,10 @@ namespace BlackboxModManager.App.ViewModels
 			{
 				// A selection that is half finished is normal while the user works. Report
 				// it in the panel and never as a dialog.
-				this.Conflicts.Add(ex.Message);
+				lines.Add(ex.Message);
 			}
+
+			return lines;
 		}
 
 		// ---------------------------------------------------------------- deploy
