@@ -1,9 +1,9 @@
 [submodule "third_party/Nikki"]
 	path = third_party/Nikki
-	url = git@github.com:PeterKelemen2/Nikki.git
+	url = https://github.com/PeterKelemen2/Nikki.git
 [submodule "third_party/Endscript"]
 	path = third_party/Endscript
-	url = git@github.com:PeterKelemen2/Endscript.git
+	url = https://github.com/PeterKelemen2/Endscript.git
 [submodule "third_party/CoreExtensions"]
 	path = third_party/CoreExtensions
-	url = git@github.com:PeterKelemen2/CoreExtensions.git
+	url = https://github.com/PeterKelemen2/CoreExtensions.git
