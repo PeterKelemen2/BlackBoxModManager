@@ -168,3 +168,121 @@ The whole archive takes more than 30 minutes. `7z.exe` writes the same 1205 file
 **The value is a constant and it does not follow the Binary install of the user.** The number states what our engine runs, and our engine is the Endscript library. A user who holds a newer Binary still gets the command set of this library. A script that asks for more then gets the message of the library, which names both numbers and is correct.
 
 **Do not add a second parse path.** `ScriptReader.Parse` is the only place that builds an `EndScriptParser`. Any new caller must call `Ensure` first.
+
+## 16. A container that `new` creates is in no manifest, and the save reaches the vanilla copy
+
+**Where:** `Endscript/Commands/NewCommand.cs`, `Endscript/Profiles/BaseProfile.New` and `Delete`, and `Nikki/Support.<Game>/Framework/DatabaseSaver.WriteFromBuffer`.
+
+**What happens:** three facts combine into one data loss.
+
+1. `new [type] [file]` adds a container to the loaded profile at run time. `delete [file]` calls `SaveOneSDB` and writes that container to disk. Neither file is in the `Files` list of any manifest, so `MergedLaunch` never sees it.
+2. `DatabaseSaver.WriteFromBuffer` opens the target with `File.Open(path, FileMode.Create)`. That call truncates the existing file. It does not replace the directory entry.
+3. `TreeReplicator` builds the staging copy with hard links. A staging container, the vanilla container, and the live container are one file with several names.
+
+A write with `FileMode.Create` keeps the share, so the new content reaches every name. **The mod rewrites the vanilla baseline and the game of the user, and the revert then restores modded files.**
+
+**We hit this.** The mod `NFSMWRV-1024x-Advanced` runs `new negate "CARS\<car>\VINYLS.BIN"` and `delete "CARS\<car>\VINYLS.BIN"` for 46 cars. Its manifest names one container, `GLOBAL\GLOBALB.LZC`. One interrupted deploy rewrote 8 files in the vanilla copy of a real install before it stopped.
+
+**Work around it:** make every container private, not only the containers of the merged load. `CommandGate.Check` returns the target of every command as `GateResult.Containers`, and `ContainerDeployEngine.Prepare` calls `StagingFiles.MakePrivate` for each one that exists. A container that does not exist yet needs no call, because a new file shares nothing.
+
+**A container is not the only thing that a script writes.** The first fix covered the commands that carry an edit key. It missed every command of category `FilesystemEffect`, because those carry no key. `unlock_memory` writes a header over five memory files of the game. `move_file` and `copy_file` write a target that no manifest names.
+
+The same real install proves it. Four files carry the time of the deploy that failed:
+
+```
+GLOBAL/FrontEndMemoryFile.bin    18:24
+GLOBAL/InGameMemoryFile.bin      18:24
+GLOBAL/PermanentMemoryFile.bin   18:24
+GLOBAL/GlobalMemoryFile.bin      18:24
+```
+
+`CommandGate.Check` now also returns `GateResult.WritePaths`, which holds the resolved path of every write of every filesystem command. `EditKeyExtractor` already expands the word `all` of `unlock_memory` into the five names, so the list is complete. `Prepare` makes each of those private too.
+
+**The manifest list is never the whole list.** Any future code that writes into the staging copy must take its file list from the commands and not from the manifest.
+
+**How to repair an install that this damaged.** The vanilla copy holds the modded content, so every later deploy reads modded input and reports errors that name no cause.
+
+1. Close the application.
+2. Delete the workspace directory `<game dir>.blackbox`.
+3. Restore the game install from its installer, or reinstall the game.
+4. Start the application and deploy one time. That records a new baseline.
+
+`BaselineVerifier` now compares the vanilla copy against `vanilla.json` before every deploy and stops when the two disagree. That catches the next hole. It cannot catch a baseline that was already wrong when the application recorded it.
+
+## 17. Nikki forces a full garbage collection inside its hot loops
+
+**Where:** `CoreExtensions/Management/ForcedX.cs`, plus the callers in `Nikki/Core/Manager.cs`, `Nikki/Support.<Game>/Class/TPKBlock.cs`, both database framework classes, and `Endscript/Core/CollectionMap.cs`.
+
+**What happens:** `ForcedX.GCCollect` runs `GC.Collect`, then `GC.WaitForPendingFinalizers`, then `GC.Collect` again. That is two blocking collections of every generation. Four call sites run it inside a loop.
+
+1. `Manager<T>.Capacity` calls it on every growth. The `Add` methods grow with `this.Capacity += this.Extender`, which is a fixed step and not a doubling. A manager that takes N collections therefore grows N divided by `Extender` times, and each growth copies the whole array and collects.
+2. `Manager<T>.Add` calls `Contains(cname)` first, and `Contains` is a linear scan with a string compare. Adding N collections costs N squared compares.
+3. `CollectionMap.LoadMapFromProfile(true)` rebuilds the whole path map and then collects. `NewCommand` and `DeleteCommand` both call it.
+4. `DatabaseSaver.Invoke` and `DatabaseLoader` collect once for each container.
+
+**What we did:** the `Capacity` setter no longer collects. `Manager<T>.Grow` doubles the array instead of adding a fixed step. `CollectionMap.LoadMapFromProfile` ignores its `gccollect` flag. Every `ForcedX.GCCollect` call in Nikki and in Endscript is gone. `ContainerByteStabilityTests` proves that the containers still hold the same bytes.
+
+**The forced collections were not the cost.** This entry first blamed them for a deploy that took about 100 seconds for each car. A measurement disproved that. Removing every call changed the time of one load and save of six real containers from 49,891 ms to 49,480 ms. The linear `Contains` in `Add` is real and it is also not the cost.
+
+**Where the time goes.** See defect 20. One save of `CARS\911GT2\VINYLS.BIN` took 46,198 ms, and 45,159 ms of that was the native compressor. The container holds 322 textures and 281 MB of decompressed texture data, and Nikki compresses all of it on every save.
+
+**Keep the changes.** They cost nothing, they remove two blocking collections from paths that run thousands of times, and they make the heap behavior of a large deploy sane. Do not expect them to change a wall clock number on their own.
+
+## 18. `delete` removes a container from the profile, and the next mod cannot find it
+
+**Where:** `Endscript/Profiles/BaseProfile.Delete` and `Endscript/Commands/DeleteCommand.cs`.
+
+**What happens:** `delete [file]` saves the container to disk and then calls `RemoveAt`. The container leaves the profile. A later command that names the same container fails, and `ImportCommand`, `AddCollectionCommand`, `CopyCollectionCommand`, `RemoveCollectionCommand` and `StaticCommand` all report the same text: `File <name> was never loaded`.
+
+**We hit this.** The mod `nfsmwuhud11302024a` runs `delete GLOBAL\GLOBALB.LZC` on line 249 of `assets/userstart.end`. It sits before `NFSMWRV-1024x-Advanced` in the load order. The vinyls mod then runs `import override GLOBAL\GLOBALB.LZC DBModelParts "CarParts\VINYL.bin"` on line 14 of `Menu\Install.end`, and the deploy reported 391 errors that started with that line.
+
+**This is our design meeting the library.** The engine loaded one profile for every enabled mod and saved one time. That rule cannot survive `delete`, because one mod can unload a container that another mod needs.
+
+**What we did:** the engine runs one load, one script and one save for each variant, in load order. Each pass builds a new `BaseProfile` from the manifest of that one variant. The next pass reads what the last pass wrote. This is what Binary 2.8.3 does, and every published mod is written for it. See [06-binary-deployment.md](06-binary-deployment.md).
+
+## 19. `Map.BinKeys` takes writes from parallel tasks and it is a plain dictionary
+
+**Where:** `Nikki/Core/Map.cs`, `Nikki/Utils/Hashing.cs` and `Endscript/Profiles/BaseProfile.cs`.
+
+**What happens:** `Map.BinKeys` and `Map.VltKeys` were `Dictionary<uint, string>`. `Hashing.BinHash` adds an entry on every call, and `Hashing.VltHash` writes through the indexer. `BaseProfile.Load` and `BaseProfile.Save` read and write containers with `Task.Run` and `Task.WaitAll`, and parsing one container hashes thousands of strings.
+
+A `Dictionary` gives no guarantee under a write from two threads. The result is a lost entry, a corrupt bucket chain, or a read that never returns. `TryAdd` does not change that.
+
+**We saw no failure from this.** It is a race, so it shows up as a rare wrong hash name or a hang, and neither names a cause.
+
+**What we did:** both maps are now `ConcurrentDictionary<uint, string>`. Every caller uses `TryGetValue`, `TryAdd`, the indexer, `Values` or `Clear`, and all of those exist on the concurrent type.
+
+**One behavior changed.** `SaveHashList` writes the custom hash list from `Map.BinKeys.Values`, and a concurrent dictionary does not promise the insert order. The file is our own, it lives under our application data, and it is read as a set of names. The order does not matter. No container byte depends on it.
+
+## 20. Nikki compresses every texture on every save, and one lock serializes all of it
+
+**Where:** `Nikki/Support.Shared/Class/TPKBlock.GetCompressedFullData` and `Nikki/Utils/Interop.cs`.
+
+**What happens:** a save of a texture container assembles every TPK block again from scratch. `GetCompressedFullData` walks every texture, reads `texture.Data`, and calls `Interop.Compress(array, LZCompressionType.BEST)`. `BEST` makes the native library try every codec and keep the smallest result. Nikki keeps no record of which textures changed, so an edit to one texture recompresses all of them.
+
+`Interop` then held one static lock around every native call, so none of that work could use a second core.
+
+**The measurement.** One load and one save of six real Most Wanted containers, with no edit:
+
+| Container | Save time | Compressed |
+| --- | --- | --- |
+| `GLOBAL\GLOBALB.LZC` | 152 ms | none |
+| `GLOBAL\GLOBALA.BUN` | 4 ms | none |
+| `CARS\TEXTURES.BIN` | 3,902 ms | 489 calls, 32 MB |
+| `CARS\911GT2\VINYLS.BIN` | 46,198 ms | 322 calls, 281 MB |
+| `FRONTEND\FRONTB.LZC` | 55 ms | none |
+| `GLOBAL\INGAMEA.BUN` | 44 ms | none |
+
+**Read the input of that table.** The 9.3 MB `CARS\911GT2\VINYLS.BIN` was not a vanilla file. It was the output of an earlier run of the vinyls mod, which the damaged baseline had recorded as vanilla. See defect 16. A vanilla container of that car is 1,750,208 bytes.
+
+That is why the failed deploy took 35 minutes. Each car loaded a container that already held the textures of a past run, so every save recompressed all of them again. A deploy against a clean install starts from the small container and costs far less.
+
+The same six containers from a clean install take 20,448 ms before this change and 8,757 ms after it.
+
+**The lock is not needed.** `BlockCompress` and `BlockDecompress` take the input buffer and the output buffer from the caller and keep no state. A test compressed 35 blocks of real texture data on one thread, then on four threads with the lock gone, and every output byte matched. The same test took 429 ms with the lock and 219 ms without it.
+
+**What we did:** `Interop` holds no lock. `GetCompressedFullData` computes the running data offset of every texture in one cheap pass, because `Texture.DataLength` gives the length with no decompression. It then compresses every texture with `Parallel.For` and writes the results in texture order.
+
+One save of `CARS\911GT2\VINYLS.BIN` fell from 46,198 ms to 15,471 ms on four cores. The six containers together fell from 51,267 ms to 17,654 ms. Every output byte stayed the same.
+
+**What is still open.** The gain is bounded by the core count. The real fix is to keep the compressed blocks that the loader read and write them back for a texture that nothing changed. That does not work as written, because the header of each texture holds the total data length before it. Adding one texture shifts that number for every later texture, so their bytes change too. A fix needs the header to move out of the compressed blob, and that changes the container format.
