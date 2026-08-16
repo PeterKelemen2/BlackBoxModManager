@@ -26,10 +26,13 @@
 
   <ItemGroup>
     <!-- A pack URI reads a Resource. It does not read Content or Embedded Resource. Name
-         the three files, and never glob Fonts/*.ttf. See docs/roadmap/10-dark-theme.md,
+         each file, and never glob Fonts/*.ttf. See docs/roadmap/10-dark-theme.md,
          Part B. -->
     <Resource Include="Fonts\Inter_18pt-Regular.ttf" />
     <Resource Include="Fonts\Inter_18pt-SemiBold.ttf" />
+    <Resource Include="Fonts\JetBrainsMono-Regular.ttf" />
+    <!-- The log used IBM Plex Sans before JetBrains Mono. The file stays as a spare, and
+         LogFontFamilyAlternate names it. -->
     <Resource Include="Fonts\IBMPlexSans-Regular.ttf" />
   </ItemGroup>
 

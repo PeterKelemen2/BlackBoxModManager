@@ -54,22 +54,43 @@
         FontFamily="{StaticResource LogFontFamily}"
         FontWeight="Normal"
         Style="{StaticResource Heading}"
-        Text="IBM Plex Sans, Regular" />
+        Text="LogFontFamily — JetBrains Mono, Regular" />
       <TextBlock
         Margin="0,0,0,4"
         FontFamily="{StaticResource LogFontFamily}"
         FontSize="{StaticResource FontSizeSmall}"
-        Text="11 pt sample" />
+        Text="11 pt  C:\Users\PC\AppData\Roaming\BlackBoxModManager" />
       <TextBlock
         Margin="0,0,0,4"
         FontFamily="{StaticResource LogFontFamily}"
         FontSize="{StaticResource FontSizeBody}"
-        Text="13 pt sample" />
+        Text="13 pt  C:\Users\PC\AppData\Roaming\BlackBoxModManager" />
       <TextBlock
         Margin="0,0,0,16"
         FontFamily="{StaticResource LogFontFamily}"
         FontSize="{StaticResource FontSizeHeading}"
-        Text="15 pt sample" />
+        Text="15 pt  ILil01O · 0123456789" />
+
+      <!--
+        The spare family of the log. The two path lines above must align column by
+        column. The two path lines below must not. That difference proves that the log
+        reads the monospace family.
+      -->
+      <TextBlock
+        FontFamily="{StaticResource LogFontFamilyAlternate}"
+        FontWeight="Normal"
+        Style="{StaticResource Heading}"
+        Text="LogFontFamilyAlternate — IBM Plex Sans, Regular" />
+      <TextBlock
+        Margin="0,0,0,4"
+        FontFamily="{StaticResource LogFontFamilyAlternate}"
+        FontSize="{StaticResource FontSizeSmall}"
+        Text="11 pt  C:\Users\PC\AppData\Roaming\BlackBoxModManager" />
+      <TextBlock
+        Margin="0,0,0,16"
+        FontFamily="{StaticResource LogFontFamilyAlternate}"
+        FontSize="{StaticResource FontSizeBody}"
+        Text="13 pt  C:\Users\PC\AppData\Roaming\BlackBoxModManager" />
 
       <TextBlock
         Margin="0,0,0,4"

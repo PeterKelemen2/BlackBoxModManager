@@ -74,33 +74,36 @@ The window must name a font family that the machine holds for certain. **Embed t
 
 `src/BlackboxModManager.App/Fonts/` is **ready, and this part of the step is done**. It holds three font files, two license files, two download notes, and a `README.md` that repeats the rules below.
 
-The two Google Fonts downloads that landed there first came to 30 MB and 96 static files. The window uses three of them, so the rest is pruned. Read the "What goes in the repository" section for what went and why. Both `OFL.txt` files stay, because the SIL Open Font License 1.1 asks for the text and it permits the bundle.
+The two Google Fonts downloads that landed there first came to 30 MB and 96 static files. The window uses three of them, so the rest is pruned. Read the "What goes in the repository" section for what went and why. A JetBrains Mono download came later, and it took the log. Each `OFL.txt` file stays, because the SIL Open Font License 1.1 asks for the text and it permits the bundle.
 
-**No font tool is a dependency of this step.** The three files are ready to use as they are.
+**No font tool is a dependency of this step.** The files are ready to use as they are.
 
-### The decision — Inter for the window, IBM Plex Sans for the log
+### The decision — Inter for the window, JetBrains Mono for the log
 
-**Inter carries every text of the window. IBM Plex Sans carries the log, the conflict list, and the paths.**
+**Inter carries every text of the window. JetBrains Mono carries the log, the conflict list, and the paths.**
 
 Inter wins the interface because it is drawn for an interface at a small size. It has a tall x-height and open counters, and the theme sets 11, 13, and 15 points.
 
-IBM Plex Sans marks the log as a different kind of text. One weight is enough there, because a log line and a conflict line carry no heading.
+JetBrains Mono marks the log as a different kind of text, and it aligns a column of paths. Both lists hold paths. One weight is enough there, because a log line and a conflict line carry no heading.
 
-**IBM Plex Sans is not monospace, so a column of paths does not align.** IBM Plex Mono is the family that aligns, and the folder does not hold it. Add `IBM_Plex_Mono` to the folder and change one resource if the alignment matters later. **Never name a system monospace family such as `Consolas` instead.** That is the failure of step 5, fact 9.
+**Never name a system monospace family such as `Consolas` instead.** That is the failure of step 5, fact 9. The file must ship with the assembly.
 
-### The three files that ship
+The log read IBM Plex Sans until JetBrains Mono replaced it. That file stays in `Fonts/` and in the project file. `LogFontFamilyAlternate` names it, and no style reads that key today.
 
-These three sit in `Fonts/` and nothing else does. **No italic ships, and no variable file ships.**
+### The four files that ship
 
-| File                      | nameID 1              | nameID 16    | nameID 17  | `usWeightClass` | Size   |
-| ------------------------- | --------------------- | ------------ | ---------- | --------------- | ------ |
-| `Inter_18pt-Regular.ttf`  | `Inter 18pt`          | `Inter 18pt` | `Regular`  | 400             | 335 KB |
-| `Inter_18pt-SemiBold.ttf` | `Inter 18pt SemiBold` | `Inter 18pt` | `SemiBold` | 600             | 336 KB |
-| `IBMPlexSans-Regular.ttf` | `IBM Plex Sans`       | —            | —          | 400             | 213 KB |
+These four sit in `Fonts/` and nothing else does. **No italic ships, and no variable file ships.**
+
+| File                        | nameID 1              | nameID 16    | nameID 17  | `usWeightClass` | Size   |
+| --------------------------- | --------------------- | ------------ | ---------- | --------------- | ------ |
+| `Inter_18pt-Regular.ttf`    | `Inter 18pt`          | `Inter 18pt` | `Regular`  | 400             | 335 KB |
+| `Inter_18pt-SemiBold.ttf`   | `Inter 18pt SemiBold` | `Inter 18pt` | `SemiBold` | 600             | 336 KB |
+| `JetBrainsMono-Regular.ttf` | `JetBrains Mono`      | —            | —          | 400             | 112 KB |
+| `IBMPlexSans-Regular.ttf`   | `IBM Plex Sans`       | —            | —          | 400             | 213 KB |
 
 Those values come from the name table of each file. Four conclusions follow, and they decide the rest of Part B.
 
-**The Inter family is named `Inter 18pt`, not `Inter`.** The Inter download splits the optical size axis into three families: `Inter 18pt`, `Inter 24pt`, and `Inter 28pt`. **Take the 18pt set.** It is the small end of the axis, and the theme never sets a size above 15 points. A pack URI that says `#Inter` resolves to nothing.
+**The Inter family carries the optical size in its name.** The Inter download splits the optical size axis into three families: `Inter 18pt`, `Inter 24pt`, and `Inter 28pt`. **Take the 18pt set.** It is the small end of the axis, and the theme never sets a size above 15 points. A pack URI that says `#Inter` resolves to nothing. **The name in the table is not the name that a pack URI takes.** The next section gives the name that works.
 
 **Two weights are enough.** Regular at 400 carries the body text. SemiBold at 600 carries a heading, a button, a card title, and a mod name. The download also holds Medium at 500, and the theme does not need a third step.
 
@@ -108,26 +111,45 @@ Those values come from the name table of each file. Four conclusions follow, and
 
 **The SemiBold file declares its own family name.** `Inter 18pt SemiBold` sits at nameID 1, and the typographic family `Inter 18pt` sits at nameID 16. Regular and Bold share one nameID 1, because they are a RIBBI pair. Medium and SemiBold do not. The next section holds the consequence.
 
-### Name the face, and do not ask WPF to match a weight
+### The name that WPF reads is not the name in the name table
 
-WPF may group `Inter 18pt` and `Inter 18pt SemiBold` into one family through nameID 16, so that `FontWeight="SemiBold"` selects the second file. It may instead read nameID 1 alone and treat `Inter 18pt SemiBold` as a family of its own, the way it treats `Segoe UI Semibold`. **Do not bet the theme on which one it does.** A wrong bet gives synthetic bold, which the software rasterizer smears at 13 points, and the fault is hard to see.
+**WPF finds the two Inter files under `Inter 18pt 18pt`.** It does not find them under `Inter 18pt`. The name table holds `Inter 18pt` at nameID 1 and at nameID 16. Windows adds the optical size a second time, and WPF reports the longer name. A pack URI that says `#Inter 18pt` matches no family. The window then draws in the fallback face, and WPF reports no error.
 
-Write each family resource so that both models land on the same file. A `FontFamily` takes a list, and WPF walks it in order.
+**Ask the machine for the name. Do not read the name out of the font file.** This command prints every family that WPF finds in a folder:
+
+```powershell
+Add-Type -AssemblyName PresentationCore
+[Windows.Media.Fonts]::GetFontFamilies("<path to Fonts>") | ForEach-Object { $_.Source }
+```
+
+The four files give three families:
+
+```text
+file:///.../Fonts/#IBM Plex Sans
+file:///.../Fonts/#Inter 18pt 18pt
+file:///.../Fonts/#JetBrains Mono
+```
+
+### One family holds both Inter files
+
+WPF groups `Inter_18pt-Regular.ttf` and `Inter_18pt-SemiBold.ttf` into `Inter 18pt 18pt` through nameID 16. The family holds four typefaces: Normal, SemiBold, and one oblique of each. `FontWeight="SemiBold"` then picks the second file. So both Inter resources name one family, and the weight selects the face.
 
 ```xml
 <FontFamily x:Key="UiFontFamily">
-  /BlackboxModManager;component/Fonts/#Inter 18pt
+  /BlackboxModManager;component/Fonts/#Inter 18pt 18pt
 </FontFamily>
 
-<!-- The first name wins if WPF reads nameID 1. The second name wins if WPF groups
-     the two files through nameID 16, and FontWeight then picks SemiBold out of the
-     group. Both roads reach Inter_18pt-SemiBold.ttf. -->
+<!-- This key stays separate from UiFontFamily, because the styles name it. -->
 <FontFamily x:Key="UiFontFamilyStrong">
-  /BlackboxModManager;component/Fonts/#Inter 18pt SemiBold,
-  /BlackboxModManager;component/Fonts/#Inter 18pt
+  /BlackboxModManager;component/Fonts/#Inter 18pt 18pt
 </FontFamily>
 
 <FontFamily x:Key="LogFontFamily">
+  /BlackboxModManager;component/Fonts/#JetBrains Mono
+</FontFamily>
+
+<!-- The family of the log before JetBrains Mono. No style reads this key today. -->
+<FontFamily x:Key="LogFontFamilyAlternate">
   /BlackboxModManager;component/Fonts/#IBM Plex Sans
 </FontFamily>
 ```
@@ -139,7 +161,7 @@ A style that wants the heavy face sets **both** the family and the weight:
 <Setter Property="FontWeight" Value="SemiBold" />
 ```
 
-**`--fonttest` still has to confirm it.** Put the two families side by side at every size, with `Inter 18pt` at `FontWeight` Normal and SemiBold, and `UiFontFamilyStrong` below them. The two heavy lines must look the same, and both must look heavier than the Regular line and cleaner than a synthetic bold.
+**`--fonttest` does not catch a wrong family name.** The probe shows a heavy face against a Regular face, and both look correct in the fallback family. Measure the glyphs instead. Draw one string with `FormattedText` in `Inter 18pt 18pt`, and compare the pixels with a screenshot of the window. A wrong family name shifts the width of a full sentence by several pixels.
 
 ### What goes in the repository — done
 
@@ -266,7 +288,7 @@ After a drop, `MainViewModel` saves the profile and calls `RefreshMods`. That cl
 - **The tab strip.** `Mod`, `Settings`, `Loader`, `Log`, and `Conflicts`. The strip sits inside the card of the `TabControl`, above the body. An unselected tab shows `TextSecondary` and no fill. The selected tab draws an `AccentDefault` block with `OnAccent` text and `RadiusDefault` corners. The card of the `TabControl` carries `RadiusCard` corners, which is the radius of the `GroupBox` card. **Change the two radii together.** The mod list and the right panel sit side by side, and a reader sees any difference across the splitter.
 - **The list row.** The variant list, the loader list, and the folder list all use the same `#40808080` bottom border today. Replace all three with one `ListRow` style over `BorderDefault`.
 - **The settings row.** The key, the `?` marker, the editor, and the `Text` toggle. The `?` marker becomes a round `Quiet` glyph with a hover fill.
-- **The log and the conflict list.** `LogFontFamily`, which is IBM Plex Sans, at `FontSizeSmall` over `SurfaceRaised` with no border. A conflict line reads in `WarningDefault`. Plex Sans is proportional, so a column of paths does not align. Part B says what to do about that.
+- **The log and the conflict list.** `LogFontFamily`, which is JetBrains Mono, at `FontSizeSmall` over `SurfaceRaised` with no border. A conflict line reads in `WarningDefault`. Both lists wrap, so `ScrollViewer.HorizontalScrollBarVisibility` stays `Disabled` on each one.
 - **The status bar.** One line of `TextSecondary` over `SurfaceBase`, with a top border.
 
 ## Part F — the dialogs

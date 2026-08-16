@@ -6,21 +6,44 @@
     string of the window lives here and nowhere else.
   -->
 
+  <!--
+    The family name of the two Inter files is "Inter 18pt 18pt". The name repeats the
+    size, because the file carries "Inter 18pt" in nameID 16 and "18pt" in nameID 17.
+    Do not shorten the name to "Inter 18pt". WPF finds no family under that name, and it
+    then draws the whole window in the fallback face with no error.
+
+    This command prints the name that WPF reads from the directory:
+
+      Add-Type -AssemblyName PresentationCore
+      [Windows.Media.Fonts]::GetFontFamilies("<path to Fonts>") | ForEach-Object { $_.Source }
+  -->
   <FontFamily x:Key="UiFontFamily">
-    /BlackboxModManager;component/Fonts/#Inter 18pt
+    /BlackboxModManager;component/Fonts/#Inter 18pt 18pt
   </FontFamily>
 
   <!--
-    The first name wins if WPF reads nameID 1. The second name wins if WPF groups the
-    two files through nameID 16, and FontWeight then picks SemiBold out of the group.
-    Both roads reach Inter_18pt-SemiBold.ttf.
+    One family holds both files. WPF groups Inter_18pt-Regular.ttf and
+    Inter_18pt-SemiBold.ttf through nameID 16, so FontWeight picks the face.
+    This key stays separate from UiFontFamily, because the callers name it.
   -->
   <FontFamily x:Key="UiFontFamilyStrong">
-    /BlackboxModManager;component/Fonts/#Inter 18pt SemiBold,
-    /BlackboxModManager;component/Fonts/#Inter 18pt
+    /BlackboxModManager;component/Fonts/#Inter 18pt 18pt
   </FontFamily>
 
+  <!--
+    The log and the conflict list. A monospace family aligns a column of paths, and both
+    lists hold paths. JetBrains Mono ships one file, so WPF draws a synthetic bold. No
+    style asks for bold here.
+  -->
   <FontFamily x:Key="LogFontFamily">
+    /BlackboxModManager;component/Fonts/#JetBrains Mono
+  </FontFamily>
+
+  <!--
+    The log used this family before JetBrains Mono. No style reads this key today. It
+    stays here, and the file stays in the project, so that one edit takes the log back.
+  -->
+  <FontFamily x:Key="LogFontFamilyAlternate">
     /BlackboxModManager;component/Fonts/#IBM Plex Sans
   </FontFamily>
 

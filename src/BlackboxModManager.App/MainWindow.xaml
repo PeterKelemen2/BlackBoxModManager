@@ -514,13 +514,18 @@
             row paints SurfacePressed, and a row at the last line would square off the
             corner without it.
           -->
+          <!--
+            HorizontalScrollBarVisibility must stay Disabled. A log line wraps only with
+            this value. Every other value gives the item an endless width to measure in,
+            and TextWrapping on the line then does nothing.
+          -->
           <ListBox
             x:Name="LogList"
             Margin="6"
             HorizontalContentAlignment="Stretch"
             BorderThickness="0"
             ItemsSource="{Binding Log}"
-            ScrollViewer.HorizontalScrollBarVisibility="Auto">
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
               <DataTemplate>
                 <TextBlock Style="{StaticResource LogLine}" Text="{Binding}" />
@@ -535,11 +540,13 @@
               <RowDefinition Height="*" />
               <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
+            <!--  A conflict line wraps for the same reason as a log line.  -->
             <ListBox
               Grid.Row="0"
               HorizontalContentAlignment="Stretch"
               BorderThickness="0"
-              ItemsSource="{Binding Conflicts}">
+              ItemsSource="{Binding Conflicts}"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListBox.ItemTemplate>
                 <DataTemplate>
                   <TextBlock Style="{StaticResource ConflictLine}" Text="{Binding}" />
