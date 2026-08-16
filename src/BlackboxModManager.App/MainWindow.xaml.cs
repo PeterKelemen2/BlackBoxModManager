@@ -93,6 +93,25 @@ namespace BlackboxModManager.App
 		private int _dragOriginalIndex = -1;
 		private DragGhost _dragGhost;
 
+		/// <summary>
+		/// The parent of an object of the tree, from the visual tree or from the logical tree.
+		///
+		/// The source of a mouse event is not always a Visual. A press on the text of a TextBlock
+		/// reports a Run, which is a ContentElement, and VisualTreeHelper.GetParent throws for it.
+		/// A Run has no visual parent, so the step to its host must go through the content tree.
+		/// </summary>
+		private static DependencyObject GetParentObject(DependencyObject source)
+		{
+			if (source is Visual or System.Windows.Media.Media3D.Visual3D) return VisualTreeHelper.GetParent(source);
+
+			if (source is ContentElement content)
+			{
+				return ContentOperations.GetParent(content) ?? LogicalTreeHelper.GetParent(content);
+			}
+
+			return LogicalTreeHelper.GetParent(source);
+		}
+
 		/// <summary>The row whose template root, named "RowBorder", contains the source of the event.</summary>
 		private static FrameworkElement FindRowElement(DependencyObject source)
 		{
@@ -100,7 +119,7 @@ namespace BlackboxModManager.App
 			{
 				if (source is FrameworkElement element && element.Name == "RowBorder") return element;
 
-				source = VisualTreeHelper.GetParent(source);
+				source = GetParentObject(source);
 			}
 
 			return null;
@@ -114,7 +133,7 @@ namespace BlackboxModManager.App
 				if (source is System.Windows.Controls.Primitives.ButtonBase) return true;
 				if (source is FrameworkElement element && element.Name == "RowBorder") return false;
 
-				source = VisualTreeHelper.GetParent(source);
+				source = GetParentObject(source);
 			}
 
 			return false;
