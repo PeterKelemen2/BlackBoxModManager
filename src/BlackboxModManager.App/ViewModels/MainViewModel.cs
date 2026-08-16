@@ -240,6 +240,62 @@ namespace BlackboxModManager.App.ViewModels
 				.Trim();
 		}
 
+		/// <summary>
+		/// True when the profile holds a change that the game directory does not. The action
+		/// row shows a warning while this is true.
+		/// </summary>
+		[ObservableProperty]
+		private bool _hasPendingChanges;
+
+		/// <summary>The one line of that warning.</summary>
+		[ObservableProperty]
+		private string _pendingMessage = String.Empty;
+
+		/// <summary>
+		/// The fingerprint of the profile that the game directory holds. A null value means
+		/// that no workspace answered the question yet.
+		/// </summary>
+		private string _deployedFingerprint;
+
+		/// <summary>
+		/// Compares the profile against the game directory and sets the warning.
+		///
+		/// <b>Call this after every change to the profile and after every deploy.</b>
+		/// <c>SaveProfile</c>, <c>RefreshMods</c>, and <c>RefreshDeployedState</c> all end
+		/// here, and every path that changes the profile passes through one of those three.
+		///
+		/// The comparison reads the fingerprint of the profile in memory. See
+		/// <c>ProfileFingerprint</c> for what reaches that string and what does not.
+		/// </summary>
+		private void RefreshPending()
+		{
+			if (this._install is null || this._profile is null)
+			{
+				this.HasPendingChanges = false;
+				this.PendingMessage = String.Empty;
+
+				return;
+			}
+
+			// A workspace of an older build holds no fingerprint. We cannot prove that the
+			// game directory matches the profile, so we say that and ask for a deploy.
+			if (this._deployedFingerprint is null)
+			{
+				this.HasPendingChanges = true;
+				this.PendingMessage = "The game directory does not report what it holds. Deploy to make it match.";
+
+				return;
+			}
+
+			bool same = String.Equals(
+				this._deployedFingerprint, ProfileFingerprint.Of(this._profile), StringComparison.Ordinal);
+
+			this.HasPendingChanges = !same;
+			this.PendingMessage = same
+				? String.Empty
+				: "The game directory does not hold these changes yet. Deploy to apply them.";
+		}
+
 		[ObservableProperty]
 		private string _detailsHeader = "Select a mod to see what it offers.";
 
@@ -530,6 +586,8 @@ namespace BlackboxModManager.App.ViewModels
 			if (this._install is null)
 			{
 				this.DeployedState = String.Empty;
+				this._deployedFingerprint = null;
+				this.RefreshPending();
 				this.RefreshStateSummary();
 				return;
 			}
@@ -543,12 +601,21 @@ namespace BlackboxModManager.App.ViewModels
 					? "The game directory holds the vanilla state."
 					: $"The game directory holds the profile \"{state.DeployedProfile}\", " +
 						$"with {state.DeployedFileCount} files from mods.";
+
+				// A vanilla directory holds the result of a profile that enables nothing. Name
+				// that fingerprint, so an all-off profile against a vanilla game reports no
+				// pending change.
+				this._deployedFingerprint = state.IsVanilla
+					? ProfileFingerprint.Vanilla
+					: state.DeployedFingerprint;
 			}
 			catch (Exception ex)
 			{
 				this.DeployedState = ex.Message;
+				this._deployedFingerprint = null;
 			}
 
+			this.RefreshPending();
 			this.RefreshStateSummary();
 		}
 
@@ -652,6 +719,10 @@ namespace BlackboxModManager.App.ViewModels
 			if (this._profile is null) return;
 
 			this._profiles.Save(this.Game, this._profile);
+
+			// Every change to the profile lands here, so the warning of the action row does
+			// as well.
+			this.RefreshPending();
 		}
 
 		// ---------------------------------------------------------------- mods
@@ -717,6 +788,10 @@ namespace BlackboxModManager.App.ViewModels
 			GameINT game = this.Game;
 			var row = new ImportRowViewModel(source);
 
+			// The identifier of the mod that the import added. The background work sets it and
+			// the window thread reads it after the wait, so no lock is needed.
+			string added = null;
+
 			this.Imports.Add(row);
 
 			// Progress<T> keeps the thread that builds it. This runs on the window thread, so
@@ -748,6 +823,7 @@ namespace BlackboxModManager.App.ViewModels
 				await this.RunAsync($"Import {Path.GetFileName(source)}.", report =>
 				{
 					ModImportResult result = this._importer.Import(source, game, null, progress);
+					added = result.Mod.Id;
 
 					report($"The import added \"{result.Mod.Name}\" of kind {result.Mod.Kind} " +
 						$"for {result.Mod.Game}, with {result.Content.Files.Count} files.");
@@ -758,6 +834,16 @@ namespace BlackboxModManager.App.ViewModels
 			finally
 			{
 				this.Imports.Remove(row);
+			}
+
+			// A mod that the user just added starts enabled. Reconcile puts a new entry in the
+			// profile switched off, because it also runs for a mod that another game left
+			// behind. An import is the one case where the user asked for this mod, so say so
+			// before the list draws.
+			if (added != null && this._profile != null && this.Game == game)
+			{
+				this._profile.Ensure(added).Enabled = true;
+				this.SaveProfile();
 			}
 
 			this.RefreshMods();
@@ -980,6 +1066,7 @@ namespace BlackboxModManager.App.ViewModels
 			}
 
 			this.Status = $"{this.Mods.Count} mods, {this._profile.EnabledCount} enabled.";
+			this.RefreshPending();
 			this.RefreshConflicts();
 			this.RefreshLoaders();
 		}

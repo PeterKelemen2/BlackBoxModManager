@@ -610,11 +610,47 @@
       An idle button carries no spinner and no gap. The button grows by the width of the
       spinner while its operation runs. See the Spinner style in Theme/Parts.xaml.
     -->
-    <StackPanel
-      Grid.Row="2"
-      Margin="0,8,0,0"
-      HorizontalAlignment="Right"
-      Orientation="Horizontal">
+    <Grid Grid.Row="2" Margin="0,8,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <!--
+        The warning of a profile that the game directory does not hold yet. It appears when
+        the user adds a mod, switches one on or off, moves one, or answers a question, and
+        it goes away on the next deploy. See ProfileFingerprint in the core.
+
+        The message sits in its own column and it trims. A long line must never push the two
+        buttons off the right edge of a narrow window.
+      -->
+      <StackPanel
+        Grid.Column="0"
+        Margin="2,0,12,0"
+        VerticalAlignment="Center"
+        Orientation="Horizontal"
+        Visibility="{Binding HasPendingChanges, Converter={StaticResource BoolToVisible}}">
+        <Path
+          Margin="0,0,6,0"
+          VerticalAlignment="Center"
+          Data="{StaticResource IconWarning}"
+          Stroke="{StaticResource WarningDefault}"
+          StrokeEndLineCap="Round"
+          StrokeLineJoin="Round"
+          StrokeStartLineCap="Round"
+          StrokeThickness="1.5" />
+        <TextBlock
+          VerticalAlignment="Center"
+          Foreground="{StaticResource WarningDefault}"
+          Text="{Binding PendingMessage}"
+          TextTrimming="CharacterEllipsis"
+          ToolTip="{Binding PendingMessage}" />
+      </StackPanel>
+
+      <StackPanel
+        Grid.Column="1"
+        HorizontalAlignment="Right"
+        Orientation="Horizontal">
       <Button
         MinWidth="100"
         ui:Kind.Value="SuccessOutline"
@@ -654,7 +690,8 @@
           <TextBlock VerticalAlignment="Center" Text="Revert to vanilla" />
         </StackPanel>
       </Button>
-    </StackPanel>
+      </StackPanel>
+    </Grid>
 
     <!--
       The bottom line. The left item says what the application is doing. The right item says

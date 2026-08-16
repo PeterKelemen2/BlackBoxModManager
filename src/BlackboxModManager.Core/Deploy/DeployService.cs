@@ -143,6 +143,7 @@ namespace BlackboxModManager.Core.Deploy
 				DeployedProfile = profile.Name,
 				Deployed = DateTimeOffset.UtcNow,
 				DeployedFileCount = report.FileCount,
+				DeployedFingerprint = ProfileFingerprint.Of(profile),
 			});
 
 			write(report.Summary());

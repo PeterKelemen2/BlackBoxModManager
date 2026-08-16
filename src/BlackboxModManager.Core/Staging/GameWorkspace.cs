@@ -22,6 +22,17 @@ namespace BlackboxModManager.Core.Staging
 		/// <summary>The number of files that the last deploy put in place.</summary>
 		public int DeployedFileCount { get; set; }
 
+		/// <summary>
+		/// The fingerprint of the profile that the last deploy applied. See
+		/// <c>ProfileFingerprint</c>.
+		///
+		/// The window compares this against the profile of the moment and asks for a deploy
+		/// when the two differ. <b>A null value means that the answer is unknown.</b> A
+		/// workspace that a build before this field wrote holds no fingerprint, and the window
+		/// cannot prove that the game directory matches. It says so and asks for a deploy.
+		/// </summary>
+		public string DeployedFingerprint { get; set; }
+
 		[JsonIgnore]
 		public bool IsVanilla => String.IsNullOrEmpty(this.DeployedProfile);
 	}

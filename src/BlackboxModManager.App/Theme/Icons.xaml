@@ -56,6 +56,18 @@
   </Geometry>
 
   <!--
+    The warning of the action row. A triangle, a stem, and a dot.
+
+    The dot is a small circle of two arcs and never a zero length line, for the same reason
+    that IconMore below draws its dots that way.
+  -->
+  <Geometry x:Key="IconWarning" po:Freeze="True">
+    M 7,0.8 L 13.4,12 L 0.6,12 Z
+    M 7,4.8 L 7,8.2
+    M 6.3,10.1 A 0.7,0.7 0 1 1 7.7,10.1 A 0.7,0.7 0 1 1 6.3,10.1
+  </Geometry>
+
+  <!--
     The spinner of the deploy button and the revert button. Three quarters of a circle,
     which is the gap that makes a rotation readable.
 
