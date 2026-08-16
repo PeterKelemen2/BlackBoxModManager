@@ -22,6 +22,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 10   | [10-dark-theme.md](10-dark-theme.md)             | Nothing. Look and input only.  |
 | 11   | [11-ui-polish.md](11-ui-polish.md)               | Nothing. Look and input only.  |
 | 12   | [12-minimal-ui.md](12-minimal-ui.md)             | Nothing. Look and input only.  |
+| 13   | [13-import-progress.md](13-import-progress.md)   | Done. See "Completed" below.   |
 | 90   | [90-texmod.md](90-texmod.md)                     | Nothing. Explicitly last.      |
 
 Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, 8, and 9 are done. **The success criterion of the project brief passes.**
@@ -31,6 +32,8 @@ Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6,
 **Step 11 polishes what step 10 left.** It puts the last message box into a themed window, it replaces the insertion line of the drag with a ghost slot, it centers the check mark, and it adds a toggle pill. It changes no behavior either. Read [11-ui-polish.md](11-ui-polish.md).
 
 **Step 12 empties the main window.** Every path setting moves into a config window, the seven buttons of the mod toolbar become four glyphs, and the two solid action buttons take a colored edge instead of a fill. It changes no behavior either. **It is built and checked on Windows, and no part of it ran under Wine yet.** Read the Results section of [12-minimal-ui.md](12-minimal-ui.md).
+
+**Step 13 makes the import show its work.** An import of a 98 MB archive took more than 30 minutes and wrote one log line. The mod list now draws a row for the import at once, with the step, the count, and a bar. The unpack runs through a bundled 7-Zip, and the same import now takes about 18 seconds. Read [13-import-progress.md](13-import-progress.md).
 
 **Step 7 is part done.** The plumbing carries any number of games, and the application manages three of the six targets. Underground 1, Carbon, and Undercover wait for a listing of a real install. Read the Results section of [07-game-profiles.md](07-game-profiles.md).
 

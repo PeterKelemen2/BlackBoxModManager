@@ -77,7 +77,8 @@ namespace BlackboxModManager.Core.Store
 		/// manifest that names Most Wanted produces a Most Wanted mod, and the result then
 		/// carries a note. A drop-in mod names no game, so it takes the game argument.
 		/// </summary>
-		public ModImportResult Import(string source, GameINT game, string displayName = null)
+		public ModImportResult Import(string source, GameINT game, string displayName = null,
+			IProgress<ImportProgress> progress = null)
 		{
 			if (String.IsNullOrWhiteSpace(source)) throw new ArgumentException("The source is empty.", nameof(source));
 
@@ -99,11 +100,15 @@ namespace BlackboxModManager.Core.Store
 			{
 				Directory.CreateDirectory(scratch);
 
-				if (isDirectory) CopyTree(full, scratch);
-				else Unpack(full, scratch);
+				progress?.Report(new ImportProgress(ImportStage.Unpack));
+
+				if (isDirectory) CopyTree(full, scratch, progress);
+				else Unpack(full, scratch, progress);
+
+				progress?.Report(new ImportProgress(ImportStage.Inspect));
 
 				string contentRoot = ModClassifier.FindContentRoot(scratch);
-				ModContent content = ModClassifier.Classify(contentRoot);
+				ModContent content = ModClassifier.Classify(contentRoot, progress);
 
 				if (content.Files.Count == 0)
 				{
@@ -127,6 +132,8 @@ namespace BlackboxModManager.Core.Store
 					TotalBytes = content.TotalBytes,
 					Notes = notes,
 				};
+
+				progress?.Report(new ImportProgress(ImportStage.Store, 0, content.Files.Count));
 
 				InstalledMod mod = this._store.Adopt(contentRoot, manifest);
 
@@ -158,7 +165,8 @@ namespace BlackboxModManager.Core.Store
 			}
 		}
 
-		private static void Unpack(string archivePath, string scratch)
+		private static void Unpack(string archivePath, string scratch,
+			IProgress<ImportProgress> progress)
 		{
 			if (!ArchiveExtractor.LooksLikeArchive(archivePath))
 			{
@@ -168,7 +176,7 @@ namespace BlackboxModManager.Core.Store
 				return;
 			}
 
-			ArchiveExtractor.Extract(archivePath, scratch);
+			ArchiveExtractor.Extract(archivePath, scratch, progress);
 		}
 
 		/// <summary>
@@ -233,18 +241,34 @@ namespace BlackboxModManager.Core.Store
 				: Path.GetFileNameWithoutExtension(source);
 		}
 
-		private static void CopyTree(string source, string target)
+		/// <summary>
+		/// Copies a directory into the scratch directory, and it reports each file.
+		///
+		/// The walk is flat and not recursive, so the count of the files is known before the
+		/// first copy. The window needs that count to draw a bar. An empty directory of the
+		/// source still reaches the target, because the first loop creates every directory.
+		/// </summary>
+		private static void CopyTree(string source, string target,
+			IProgress<ImportProgress> progress = null)
 		{
 			Directory.CreateDirectory(target);
 
-			foreach (string file in Directory.EnumerateFiles(source))
+			foreach (string directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
 			{
-				File.Copy(file, Path.Combine(target, Path.GetFileName(file)), true);
+				Directory.CreateDirectory(Path.Combine(target, Path.GetRelativePath(source, directory)));
 			}
 
-			foreach (string child in Directory.EnumerateDirectories(source))
+			var files = new List<string>(Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories));
+			var reporter = new StageReporter(progress, ImportStage.Unpack);
+			int done = 0;
+
+			foreach (string file in files)
 			{
-				CopyTree(child, Path.Combine(target, Path.GetFileName(child)));
+				File.Copy(file, Path.Combine(target, Path.GetRelativePath(source, file)), true);
+
+				++done;
+
+				reporter.File(done, files.Count, Path.GetFileName(file));
 			}
 		}
 	}

@@ -130,3 +130,27 @@ Review this list when a symptom does not match the code you wrote.
 **What happens:** the method reads `Options[Choice].Start` and throws `Missing optional command '<name>'` when that value is -1. An `if` command always offers `do` and `else`. A script that writes a `do` block and no `else` block therefore ends the deploy whenever the condition is false.
 
 **Work around it:** the flattener of step 8 walks every branch that exists and warns when a branch has no block. The warning names the file and the line before the deploy starts.
+
+## 14. SharpCompress decodes a solid 7z once for each entry
+
+**Where:** `SharpCompress` 1.0.0, the 7z path. `Core/Store/ArchiveExtractor.ExtractOther` calls it.
+
+**What happens:** a solid 7z holds one compressed stream for a whole group of files. To read one file, a reader must decode the stream from the start of the group. SharpCompress does that decode again for every entry, so the cost of an import grows with the square of the entry count.
+
+**The measurement.** The archive `NFSMWUHUD11302024a.7z` holds 1205 entries and 1.12 GB behind 98 MB. The time to decode one entry, with no disk write:
+
+| Entry index | Time    |
+| ----------- | ------- |
+| 0           | 13 ms   |
+| 50          | 92 ms   |
+| 200         | 472 ms  |
+| 500         | 722 ms  |
+| 900         | 6740 ms |
+
+The whole archive takes more than 30 minutes. `7z.exe` writes the same 1205 files in **3.9 seconds**, so the format is not the problem.
+
+**`ExtractAllEntries` does not help.** That method returns the reader that SharpCompress builds for a solid archive. It reached entry 700 of 1205 after 532 seconds, which is the same curve.
+
+**What we did:** the application ships 7-Zip and starts `7z.exe` for a 7z and a rar. SharpCompress still reads the listing of every archive, because that read costs milliseconds and it carries the safety guard of the entry names. It also still unpacks the files when `7z.exe` is not beside the application. See [13-import-progress.md](13-import-progress.md), Parts C and D.
+
+**Act on this** if anybody removes 7-Zip from the build. The import then works and takes half an hour for an archive of this shape. No setting of SharpCompress avoids that. A fix needs a decoder that reads each solid group one time.

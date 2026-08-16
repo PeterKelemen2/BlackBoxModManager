@@ -57,6 +57,17 @@ namespace BlackboxModManager.App.ViewModels
 
 		public ObservableCollection<ModRowViewModel> Mods { get; } = new ObservableCollection<ModRowViewModel>();
 
+		/// <summary>
+		/// The imports that still run. The mod list draws one row for each of them, under the
+		/// mods, which is where the finished mod lands.
+		///
+		/// One import runs at a time, so this holds one row or none. It is a collection and
+		/// not one property, because the list binds to it and an empty collection draws
+		/// nothing with no converter.
+		/// </summary>
+		public ObservableCollection<ImportRowViewModel> Imports { get; } =
+			new ObservableCollection<ImportRowViewModel>();
+
 		public ObservableCollection<string> ProfileNames { get; } = new ObservableCollection<string>();
 
 		public ObservableCollection<string> Log { get; } = new ObservableCollection<string>();
@@ -646,19 +657,64 @@ namespace BlackboxModManager.App.ViewModels
 			await this.ImportAsync(source);
 		}
 
+		/// <summary>
+		/// Imports one archive or one directory, and it shows the work while it runs.
+		///
+		/// The row goes into <see cref="Imports"/> before the work starts, so the list shows
+		/// the mod at once. The finally block drops that row, so a failed import and a
+		/// finished import both leave the list clean.
+		///
+		/// <b>A big archive takes minutes.</b> A solid 7z of a thousand files is the worst
+		/// case, and the reason sits in docs/roadmap/98-known-upstream-defects.md, defect 14.
+		/// The row and the bar exist because of that wait.
+		/// </summary>
 		private async Task ImportAsync(string source)
 		{
 			GameINT game = this.Game;
+			var row = new ImportRowViewModel(source);
 
-			await this.RunAsync($"Import {Path.GetFileName(source)}.", report =>
+			this.Imports.Add(row);
+
+			// Progress<T> keeps the thread that builds it. This runs on the window thread, so
+			// every report of the background thread lands back here.
+			ImportStage stage = ImportStage.Unpack;
+			bool counted = false;
+
+			var progress = new Progress<ImportProgress>(step =>
 			{
-				ModImportResult result = this._importer.Import(source, game);
+				row.Apply(step);
+				this.Status = $"{row.Name} · {row.Line}";
 
-				report($"The import added \"{result.Mod.Name}\" of kind {result.Mod.Kind} " +
-					$"for {result.Mod.Game}, with {result.Content.Files.Count} files.");
+				// One log line for each step, and one for the count. The step reports many
+				// times each second, and the log must stay readable.
+				if (!counted && step.Stage == ImportStage.Unpack && step.Total > 0)
+				{
+					counted = true;
+					this.Write($"The source holds {step.Total} files.");
+				}
 
-				foreach (string note in result.Notes) report(note);
+				if (step.Stage == stage) return;
+
+				stage = step.Stage;
+				this.Write($"{ImportRowViewModel.StageText(step.Stage)}.");
 			});
+
+			try
+			{
+				await this.RunAsync($"Import {Path.GetFileName(source)}.", report =>
+				{
+					ModImportResult result = this._importer.Import(source, game, null, progress);
+
+					report($"The import added \"{result.Mod.Name}\" of kind {result.Mod.Kind} " +
+						$"for {result.Mod.Game}, with {result.Content.Files.Count} files.");
+
+					foreach (string note in result.Notes) report(note);
+				});
+			}
+			finally
+			{
+				this.Imports.Remove(row);
+			}
 
 			this.RefreshMods();
 		}

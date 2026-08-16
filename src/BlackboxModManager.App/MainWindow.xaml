@@ -187,27 +187,43 @@
               docs/roadmap/12-minimal-ui.md, Parts E and I.
             -->
             <ScrollViewer VerticalScrollBarVisibility="Auto">
-              <ItemsControl
-                x:Name="ModList"
-                AllowDrop="True"
-                DragLeave="ModList_DragLeave"
-                DragOver="ModList_DragOver"
-                Drop="ModList_Drop"
-                GiveFeedback="ModList_GiveFeedback"
-                ItemTemplate="{StaticResource ModRowTemplate}"
-                ItemsSource="{Binding Mods}"
-                PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
-                PreviewMouseMove="ModList_PreviewMouseMove"
-                PreviewMouseRightButtonDown="ModList_PreviewMouseRightButtonDown"
-                QueryContinueDrag="ModList_QueryContinueDrag" />
+              <!--
+                Two lists in one column. The mods sit above, and the imports that still run
+                sit below, which is where the finished mod lands.
+
+                The import rows stay out of ModList on purpose. ModList carries the drag,
+                the drop, and the row menu, and each one of those acts on a mod that the
+                store holds. An import has no mod yet.
+              -->
+              <StackPanel>
+                <ItemsControl
+                  x:Name="ModList"
+                  AllowDrop="True"
+                  DragLeave="ModList_DragLeave"
+                  DragOver="ModList_DragOver"
+                  Drop="ModList_Drop"
+                  GiveFeedback="ModList_GiveFeedback"
+                  ItemTemplate="{StaticResource ModRowTemplate}"
+                  ItemsSource="{Binding Mods}"
+                  PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
+                  PreviewMouseMove="ModList_PreviewMouseMove"
+                  PreviewMouseRightButtonDown="ModList_PreviewMouseRightButtonDown"
+                  QueryContinueDrag="ModList_QueryContinueDrag" />
+
+                <ItemsControl
+                  ItemTemplate="{StaticResource ImportRowTemplate}"
+                  ItemsSource="{Binding Imports}" />
+              </StackPanel>
             </ScrollViewer>
 
             <!--
               The empty state. It covers the list only while the profile holds no mod, so it
               never sits over a row and never blocks a drag.
 
-              The trigger reads Mods.Count. An ObservableCollection raises PropertyChanged for
-              Count, so the panel appears and disappears with no code and no converter.
+              The trigger reads Mods.Count and Imports.Count. An ObservableCollection raises
+              PropertyChanged for Count, so the panel appears and disappears with no code and
+              no converter. The first import into an empty profile draws a row, and this
+              panel must give way to it.
 
               The tile opens the menu of ImportButton above. One menu, one pair of answers.
             -->
@@ -216,9 +232,13 @@
                 <Style TargetType="StackPanel">
                   <Setter Property="Visibility" Value="Collapsed" />
                   <Style.Triggers>
-                    <DataTrigger Binding="{Binding Mods.Count}" Value="0">
+                    <MultiDataTrigger>
+                      <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding Mods.Count}" Value="0" />
+                        <Condition Binding="{Binding Imports.Count}" Value="0" />
+                      </MultiDataTrigger.Conditions>
                       <Setter Property="Visibility" Value="Visible" />
-                    </DataTrigger>
+                    </MultiDataTrigger>
                   </Style.Triggers>
                 </Style>
               </StackPanel.Style>

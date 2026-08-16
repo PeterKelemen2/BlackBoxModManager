@@ -45,8 +45,12 @@ namespace BlackboxModManager.Core.Store
 		/// <summary>
 		/// Extracts every entry into the target directory. It creates the target directory.
 		/// It returns the number of files that it wrote.
+		///
+		/// The progress argument takes one report for each file. <see cref="ProgressGap"/>
+		/// limits how often the report goes out.
 		/// </summary>
-		public static int Extract(string archivePath, string targetDirectory)
+		public static int Extract(string archivePath, string targetDirectory,
+			IProgress<ImportProgress> progress = null)
 		{
 			if (String.IsNullOrWhiteSpace(archivePath)) throw new ArgumentException("The archive path is empty.", nameof(archivePath));
 			if (String.IsNullOrWhiteSpace(targetDirectory)) throw new ArgumentException("The target directory is empty.", nameof(targetDirectory));
@@ -60,8 +64,8 @@ namespace BlackboxModManager.Core.Store
 			Directory.CreateDirectory(target);
 
 			return String.Equals(Path.GetExtension(archivePath), ".zip", StringComparison.OrdinalIgnoreCase)
-				? ExtractZip(archivePath, target)
-				: ExtractOther(archivePath, target);
+				? ExtractZip(archivePath, target, progress)
+				: ExtractOther(archivePath, target, progress);
 		}
 
 		/// <summary>
@@ -71,13 +75,21 @@ namespace BlackboxModManager.Core.Store
 		/// first entry that it dislikes, and it gives no way to skip one bad name in an
 		/// archive that is otherwise good.
 		/// </summary>
-		private static int ExtractZip(string archivePath, string target)
+		private static int ExtractZip(string archivePath, string target,
+			IProgress<ImportProgress> progress)
 		{
 			int written = 0;
+			var reporter = new StageReporter(progress, ImportStage.Unpack);
 
 			try
 			{
 				using ZipArchive archive = ZipFile.OpenRead(archivePath);
+
+				int total = 0;
+				foreach (ZipArchiveEntry counted in archive.Entries)
+				{
+					if (!String.IsNullOrEmpty(counted.Name)) ++total;
+				}
 
 				foreach (ZipArchiveEntry entry in archive.Entries)
 				{
@@ -88,11 +100,15 @@ namespace BlackboxModManager.Core.Store
 
 					FileTree.CreateParent(path);
 
-					using Stream source = entry.Open();
-					using FileStream destination = File.Create(path);
-					source.CopyTo(destination);
+					using (Stream source = entry.Open())
+					using (FileStream destination = File.Create(path))
+					{
+						source.CopyTo(destination);
+					}
 
 					++written;
+
+					reporter.File(written, total, entry.Name);
 				}
 			}
 			catch (ArchiveReadException)
@@ -108,13 +124,89 @@ namespace BlackboxModManager.Core.Store
 		}
 
 		/// <summary>
-		/// Reads a rar or a 7z through SharpCompress.
+		/// Reads a rar or a 7z.
+		///
+		/// The listing comes from SharpCompress, and the files come from 7-Zip. SharpCompress
+		/// reads a header in milliseconds, and it gives the guard below every entry name
+		/// before one byte reaches the disk. 7-Zip then writes the files, because SharpCompress
+		/// needs half an hour for a big solid 7z. See
+		/// docs/roadmap/98-known-upstream-defects.md, defect 14.
+		///
+		/// A build with no 7-Zip beside it reads the files through SharpCompress instead. The
+		/// result is the same, and a solid archive of many files takes minutes.
+		/// </summary>
+		private static int ExtractOther(string archivePath, string target,
+			IProgress<ImportProgress> progress)
+		{
+			int total = ReadListing(archivePath, target);
+
+			return SevenZipTool.Exists
+				? SevenZipTool.Extract(archivePath, target, total, progress)
+				: ExtractWithLibrary(archivePath, target, total, progress);
+		}
+
+		/// <summary>
+		/// Reads the listing of the archive, and it returns the number of files.
+		///
+		/// This is the guard of the whole path. It refuses an entry name that writes outside
+		/// the target directory, and it refuses an archive that needs a password. Both tests
+		/// run before any extractor writes a file.
 		///
 		/// ArchiveFactory reads the header, so a file with the wrong extension still opens.
 		/// </summary>
-		private static int ExtractOther(string archivePath, string target)
+		private static int ReadListing(string archivePath, string target)
+		{
+			int total = 0;
+
+			try
+			{
+				using IArchive archive = ArchiveFactory.Open(archivePath);
+
+				foreach (IArchiveEntry entry in archive.Entries)
+				{
+					if (entry.IsDirectory) continue;
+					if (String.IsNullOrEmpty(entry.Key)) continue;
+
+					if (entry.IsEncrypted)
+					{
+						throw new ArchiveReadException(
+							$"The archive {archivePath} needs a password. This application does not open one.",
+							archivePath);
+					}
+
+					// The result goes nowhere. The call throws for a name that leaves the
+					// target directory, and that is the point of it.
+					SafePath(archivePath, target, entry.Key);
+
+					++total;
+				}
+			}
+			catch (ArchiveReadException)
+			{
+				throw;
+			}
+			catch (SharpCompress.Common.CryptographicException ex)
+			{
+				throw new ArchiveReadException(
+					$"The archive {archivePath} needs a password. This application does not open one.",
+					archivePath, ex);
+			}
+			catch (Exception ex)
+			{
+				throw new ArchiveReadException($"The archive {archivePath} did not read. {ex.Message}", archivePath, ex);
+			}
+
+			return total;
+		}
+
+		/// <summary>
+		/// Reads a rar or a 7z through SharpCompress. This runs when 7-Zip is not there.
+		/// </summary>
+		private static int ExtractWithLibrary(string archivePath, string target, int total,
+			IProgress<ImportProgress> progress)
 		{
 			int written = 0;
+			var reporter = new StageReporter(progress, ImportStage.Unpack);
 
 			try
 			{
@@ -129,11 +221,15 @@ namespace BlackboxModManager.Core.Store
 
 					FileTree.CreateParent(path);
 
-					using Stream source = entry.OpenEntryStream();
-					using FileStream destination = File.Create(path);
-					source.CopyTo(destination);
+					using (Stream source = entry.OpenEntryStream())
+					using (FileStream destination = File.Create(path))
+					{
+						source.CopyTo(destination);
+					}
 
 					++written;
+
+					reporter.File(written, total, Path.GetFileName(entry.Key));
 				}
 			}
 			catch (ArchiveReadException)

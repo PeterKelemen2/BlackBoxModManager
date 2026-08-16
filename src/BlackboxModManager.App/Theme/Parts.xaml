@@ -191,6 +191,83 @@
   </Style>
 
   <!--
+    The bar of an import row.
+
+    The template names PART_Track and PART_Indicator. ProgressBar sets the width of the
+    indicator from those two names, and a template without them draws a bar that never
+    moves. The track clips, so the round corner of the indicator stays inside the track.
+  -->
+  <Style x:Key="ImportProgressBar" TargetType="ProgressBar">
+    <Setter Property="Height" Value="4" />
+    <Setter Property="Minimum" Value="0" />
+    <Setter Property="Maximum" Value="100" />
+    <Setter Property="Foreground" Value="{StaticResource AccentDefault}" />
+    <Setter Property="Background" Value="{StaticResource SurfacePressed}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Border Background="{TemplateBinding Background}" CornerRadius="{StaticResource RadiusSmall}">
+            <Grid x:Name="PART_Track" ClipToBounds="True">
+              <Border
+                x:Name="PART_Indicator"
+                HorizontalAlignment="Left"
+                Background="{TemplateBinding Foreground}"
+                CornerRadius="{StaticResource RadiusSmall}" />
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
+    The row of an import that still runs. It carries the accent edge, so it reads as the
+    one row of the list that is not a mod yet.
+
+    The row holds no drag handle, no toggle, and no menu. An import is not a mod until the
+    store holds it, and none of those three actions has anything to act on. The name of
+    this template is not RowBorder for the same reason. FindRowElement in
+    MainWindow.xaml.cs matches that exact name, and a match here would arm a drag on a row
+    that carries no mod.
+  -->
+  <DataTemplate x:Key="ImportRowTemplate">
+    <Border
+      MinHeight="{StaticResource ModRowHeight}"
+      Margin="0,0,0,6"
+      Padding="8,6"
+      Background="{StaticResource SurfaceRaised}"
+      BorderBrush="{StaticResource AccentDefault}"
+      BorderThickness="1"
+      CornerRadius="{StaticResource RadiusDefault}">
+      <StackPanel VerticalAlignment="Center">
+        <TextBlock
+          FontFamily="{StaticResource UiFontFamilyStrong}"
+          FontWeight="SemiBold"
+          Foreground="{StaticResource TextPrimary}"
+          Text="{Binding Name}"
+          TextWrapping="Wrap" />
+        <TextBlock
+          Style="{StaticResource Hint}"
+          Text="{Binding Line}"
+          TextTrimming="CharacterEllipsis"
+          TextWrapping="NoWrap" />
+        <ProgressBar
+          x:Name="Bar"
+          Margin="0,6,0,0"
+          Style="{StaticResource ImportProgressBar}"
+          Value="{Binding Percent, Mode=OneWay}" />
+      </StackPanel>
+    </Border>
+    <DataTemplate.Triggers>
+      <!--  A step that counts no file draws no bar. A bar at zero reads as a dead import.  -->
+      <DataTrigger Binding="{Binding HasBar}" Value="False">
+        <Setter TargetName="Bar" Property="Visibility" Value="Collapsed" />
+      </DataTrigger>
+    </DataTemplate.Triggers>
+  </DataTemplate>
+
+  <!--
     The row of the mod list. A SurfaceRaised fill, RadiusDefault corners, a BorderDefault
     edge.
 

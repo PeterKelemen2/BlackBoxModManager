@@ -37,6 +37,23 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 7-Zip. Core/Store/SevenZipTool.cs starts 7z.exe as a child process, because
+         SharpCompress decodes a solid 7z once for each entry. See
+         docs/roadmap/98-known-upstream-defects.md, defect 14.
+
+         Both files stay unmodified, and the license text travels with them. 7-Zip is under
+         the GNU LGPL, and that license asks for the notice and for an unmodified library.
+         See 7-Zip/7-Zip-License.txt.
+
+         Name each file, and never glob 7-Zip\*. The pair 7z.exe and 7z.dll must match, and
+         a glob would carry a stray file of a later copy into the build. -->
+    <Content Include="7-Zip\7z.exe" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="7-Zip\7z.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="7-Zip\7-Zip-License.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="7-Zip\7-Zip-readme.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\BlackboxModManager.Core\BlackboxModManager.Core.csproj" />
   </ItemGroup>
 

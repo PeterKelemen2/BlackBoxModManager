@@ -76,7 +76,13 @@ namespace BlackboxModManager.Core.Store
 	{
 		public const string AsiExtension = ".asi";
 
-		public static ModContent Classify(string contentRoot)
+		/// <summary>
+		/// Reads every file of the directory and decides what kind of mod they make.
+		///
+		/// This opens each file to test it, so a mod of a thousand files takes seconds. The
+		/// progress argument carries that wait to the window.
+		/// </summary>
+		public static ModContent Classify(string contentRoot, IProgress<ImportProgress> progress = null)
 		{
 			if (String.IsNullOrWhiteSpace(contentRoot)) throw new ArgumentException("The content root is empty.", nameof(contentRoot));
 
@@ -85,7 +91,9 @@ namespace BlackboxModManager.Core.Store
 			var manifests = new List<string>();
 			var asiFiles = new List<string>();
 			var notes = new List<string>();
+			var reporter = new StageReporter(progress, ImportStage.Inspect);
 			long bytes = 0;
+			int done = 0;
 
 			foreach (string relative in files)
 			{
@@ -99,6 +107,10 @@ namespace BlackboxModManager.Core.Store
 				{
 					// A length that we cannot read changes no decision.
 				}
+
+				++done;
+
+				reporter.File(done, files.Count, Path.GetFileName(relative));
 
 				if (String.Equals(Path.GetExtension(relative), AsiExtension, StringComparison.OrdinalIgnoreCase))
 				{
