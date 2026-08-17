@@ -93,7 +93,7 @@ namespace BlackboxModManager.Core.Games
 
 		/// <summary>
 		/// Tests one directory cheaply. The locator uses this to filter its candidates. A
-		/// full check needs Validate.
+		/// full check needs Validate or MatchesFully.
 		/// </summary>
 		public static bool LooksLike(GameDefinition definition, string directory)
 		{
@@ -104,6 +104,39 @@ namespace BlackboxModManager.Core.Games
 				return !String.IsNullOrWhiteSpace(directory)
 					&& Directory.Exists(directory)
 					&& File.Exists(ModPath.Resolve(directory, definition.Executable));
+			}
+			catch (Exception)
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Tests the executable and every marker, with no message and no call into Identify.
+		///
+		/// Validate calls Identify on failure to name the game that a directory really holds,
+		/// and Identify calls this method instead of Validate for that reason. Two of our
+		/// descriptors share an executable name once a Windows lookup ignores its letter case,
+		/// so Identify needs the marker check and not just LooksLike, but it must not call back
+		/// into Validate or the two methods recurse into each other forever.
+		/// </summary>
+		public static bool MatchesFully(GameDefinition definition, string directory)
+		{
+			if (!LooksLike(definition, directory)) return false;
+
+			try
+			{
+				foreach (string marker in definition.MarkerFiles)
+				{
+					if (!File.Exists(ModPath.Resolve(directory, marker))) return false;
+				}
+
+				foreach (string marker in definition.MarkerDirectories)
+				{
+					if (!Directory.Exists(ModPath.Resolve(directory, marker))) return false;
+				}
+
+				return true;
 			}
 			catch (Exception)
 			{

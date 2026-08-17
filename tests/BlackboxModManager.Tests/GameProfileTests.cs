@@ -83,9 +83,12 @@ namespace BlackboxModManager.Tests
 
 			foreach (GameDefinition definition in GameCatalog.All) games.Add(definition.Game);
 
+			Assert.Contains(GameINT.Underground1, games);
 			Assert.Contains(GameINT.Underground2, games);
 			Assert.Contains(GameINT.MostWanted, games);
+			Assert.Contains(GameINT.Carbon, games);
 			Assert.Contains(GameINT.Prostreet, games);
+			Assert.Contains(GameINT.Undercover, games);
 		}
 
 		/// <summary>
@@ -115,19 +118,37 @@ namespace BlackboxModManager.Tests
 		}
 
 		/// <summary>
-		/// Identify returns one game per directory only while no two descriptors share an
-		/// executable name. The lookup ignores letter case, so the comparison does too.
+		/// Underground 1 and Most Wanted name their executable Speed.exe and speed.exe. A
+		/// Windows lookup ignores that difference, so the two descriptors do share an
+		/// executable name. Identify must still tell a real install of one from a real
+		/// install of the other, through MarkerFiles.
 		/// </summary>
 		[Fact]
-		public void NoTwoGamesShareAnExecutableName()
+		public void IdentifyTellsApartTwoGamesThatShareAnExecutableName()
 		{
-			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			using var underground1 = new FakeInstall(GameINT.Underground1);
+			using var mostWanted = new FakeInstall(GameINT.MostWanted);
 
-			foreach (GameDefinition definition in GameCatalog.All)
-			{
-				Assert.True(seen.Add(definition.Executable),
-					$"Two games name the executable {definition.Executable}.");
-			}
+			Assert.Equal(GameINT.Underground1, Assert.Single(GameInstallLocator.Identify(underground1.Root)).Game);
+			Assert.Equal(GameINT.MostWanted, Assert.Single(GameInstallLocator.Identify(mostWanted.Root)).Game);
+		}
+
+		/// <summary>
+		/// ProStreet and Undercover name the identical executable, not only the same name
+		/// under a case-insensitive lookup. A real ProStreet install still resolves to
+		/// ProStreet alone, because Undercover's descriptor carries marker files that a real
+		/// ProStreet install does not.
+		///
+		/// The reverse is not proven here. This machine holds no ProStreet install, so
+		/// ProStreet's own descriptor still has no marker that a real Undercover install
+		/// lacks. See the Results section of 07-game-profiles.md.
+		/// </summary>
+		[Fact]
+		public void IdentifyKeepsAProStreetInstallFromReadingAsUndercover()
+		{
+			using var prostreet = new FakeInstall(GameINT.Prostreet);
+
+			Assert.Equal(GameINT.Prostreet, Assert.Single(GameInstallLocator.Identify(prostreet.Root)).Game);
 		}
 
 		[Fact]
@@ -390,13 +411,16 @@ namespace BlackboxModManager.Tests
 		/// A drop-in mod deploys and reverts on every game of the catalog.
 		///
 		/// The link engine and the staging code read a descriptor and nothing else, so this
-		/// covers the new games without a mod sample for them. A Binary mod of Most Wanted or
-		/// of ProStreet needs a real sample. See the Results section of 07-game-profiles.md.
+		/// covers the new games without a mod sample for them. A Binary mod of any game but
+		/// Underground 2 needs a real sample. See the Results section of 07-game-profiles.md.
 		/// </summary>
 		[Theory]
+		[InlineData(GameINT.Underground1)]
 		[InlineData(GameINT.MostWanted)]
+		[InlineData(GameINT.Carbon)]
 		[InlineData(GameINT.Prostreet)]
 		[InlineData(GameINT.Underground2)]
+		[InlineData(GameINT.Undercover)]
 		public void ADropInModDeploysAndRevertsOnEveryGame(GameINT game)
 		{
 			using var install = new FakeInstall(game);

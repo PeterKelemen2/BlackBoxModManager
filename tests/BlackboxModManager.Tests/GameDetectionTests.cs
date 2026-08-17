@@ -79,10 +79,14 @@ namespace BlackboxModManager.Tests
 			Assert.True(GameInstallValidator.Validate(GameINT.Underground2, game.Root).IsUsable);
 		}
 
+		/// <summary>
+		/// GameINT.None is not a target and never gets a descriptor. Every real target now
+		/// has one, so None is the only value this check can still use.
+		/// </summary>
 		[Fact]
 		public void AGameWithNoDefinitionReportsUnknown()
 		{
-			GameInstallStatus status = GameInstallValidator.Validate(GameINT.Carbon, Path.GetTempPath());
+			GameInstallStatus status = GameInstallValidator.Validate(GameINT.None, Path.GetTempPath());
 
 			Assert.Equal(GameInstallCheck.UnknownGame, status.Check);
 		}

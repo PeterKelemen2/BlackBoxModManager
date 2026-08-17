@@ -35,24 +35,24 @@ All five new games detect, import mods, deploy, and revert. That makes six games
 
 ## Results
 
-**Step 7 is part done.** The plumbing carries any number of games. The data does not exist for three of them.
+**Step 7 is part done.** The plumbing carries any number of games, and every target now has a descriptor. The manifest sample and the container deploy proof still exist for Underground 2 alone.
 
-The application now manages three games. It detects them, imports mods for them, deploys, and reverts. The window holds a game picker, and every mod in the store carries one game.
+The application now manages all six target games. It detects them, imports mods for them, deploys, and reverts. The window holds a game picker, and every mod in the store carries one game.
 
-**Three targets wait for a listing of a real install.** This machine holds no Underground 1, no Carbon, and no Undercover. The rule of this project is that every value in a descriptor comes from a listing, so those three games have no descriptor. `GameCatalog.Absent` names them, and the window says so in its first log lines.
+**No target waits for a listing anymore.** `GameCatalog.Absent` is empty. This machine holds a real install of every target, and each one gave its descriptor a listing to confirm it.
 
 ### The games
 
 | Game            | Descriptor | Executable   | Confirmed from                       | Deploy verified            |
 | --------------- | ---------- | ------------ | ------------------------------------ | -------------------------- |
 | Underground 2   | Yes        | `SPEED2.EXE` | The vanilla install of step 0.        | Drop-in and container.      |
+| Underground 1   | Yes        | `Speed.exe`  | A real install on this machine.       | Drop-in only.               |
 | Most Wanted     | Yes        | `speed.exe`  | A real install on this machine.       | Drop-in only.               |
+| Carbon          | Yes        | `NFSC.exe`   | A real install on this machine.       | Drop-in only.               |
 | ProStreet       | Yes        | `nfs.exe`    | A real install on this machine.       | Drop-in only.               |
-| Underground 1   | No         | —            | No install exists here.               | —                           |
-| Carbon          | No         | —            | No install exists here.               | —                           |
-| Undercover      | No         | —            | No install exists here.               | —                           |
+| Undercover      | Yes        | `nfs.exe`    | A real install on this machine.       | Drop-in only.               |
 
-**Drop-in means the link engine.** A test deploys an ASI mod to a Most Wanted tree and to a ProStreet tree, verifies it, and reverts it. The link engine and the staging code read a descriptor and nothing else, so that path is game-independent and now proven so.
+**Drop-in means the link engine.** A test deploys an ASI mod to each of the five non-Underground-2 game trees, verifies it, and reverts it. The link engine and the staging code read a descriptor and nothing else, so that path is game-independent and now proven so.
 
 **Container means the single pass of step 6.** Only Underground 2 has that proof. A Binary mod for another game needs a real mod sample, and we hold none. See "What is open".
 
@@ -75,7 +75,7 @@ The application now manages three games. It detects them, imports mods for them,
 
 1. **A game is supported when a descriptor exists, and never because `GameINT` holds it.** `GameCatalog.All` is the only answer to "which games does this application manage". `GameCatalog.Absent` is the only answer to "which target is missing". A test proves that every target sits in exactly one of the two lists.
 
-2. **The three descriptors name three different executables.** `SPEED2.EXE`, `speed.exe`, and `nfs.exe` differ, so `Identify` returns one game per directory. A test guards that. A fourth descriptor that repeats a name breaks the browse message, not the deploy.
+2. **Two pairs of descriptors name the same executable, once a Windows lookup ignores its letter case. This corrects the step 7 note that said no pair of games does that.** Underground 1 names `Speed.exe`. Most Wanted names `speed.exe`. ProStreet and Undercover both name `nfs.exe`, which is not even a case difference. A real install of each game confirmed both clashes. `Identify` no longer runs the cheap `LooksLike` check. It now runs `GameInstallValidator.MatchesFully`, which also checks every marker file. `Validate` calls `Identify` on a failed check to name the game that a directory really holds. `MatchesFully` must never call `Validate` in turn, or the two methods recurse into each other forever. Underground 1 and Most Wanted each needed one marker file that the other install does not hold. Underground 1 needed `GLOBAL/CHARACTERSA.BIN`. Most Wanted needed `GLOBAL/RIVALS.BIN`. Their old marker sets alone did not separate the two installs. **The ProStreet and Undercover pair is fixed in one direction only.** Undercover gained `GLOBAL/ritalin.bin`, `GLOBAL/cars_vault.BIN`, and `GLOBAL/NFSGD.BIN`, confirmed present in a real Undercover install and absent from every other real install on this machine. A real ProStreet install therefore no longer reads as Undercover. This machine holds no ProStreet install, so ProStreet's own descriptor still has no marker file that a real Undercover install lacks. A real Undercover install can still pass `Validate` as ProStreet. See "What is open".
 
 3. **The manifest decides the game of a Binary mod, and the window decides the game of a drop-in mod.** The import trusts the manifest. A manifest that names Most Wanted produces a Most Wanted mod. It does so even when the window manages Underground 2. The import then writes a note that says where the mod went.
 
@@ -97,6 +97,6 @@ A per-game key name is a value like every other value in a descriptor. A real Wi
 
 ### What is open
 
-1. **Three descriptors.** Underground 1, Carbon, and Undercover need a listing of a real install each. The listing has to give the executable name, two marker files, three marker directories, and the container file names.
-2. **Work item 6, the wider sample.** We hold five manifests and five scripts, and all ten belong to Underground 2. Until a sample of another game arrives, `ExpectedLinks` stays empty for Most Wanted and ProStreet, and step 8 has no new command to classify.
+1. **A marker file for ProStreet that a real Undercover install lacks.** This machine holds no ProStreet install. Until one gives a listing, a real Undercover install can pass `Validate` as ProStreet, because ProStreet's marker set is a subset of what a real Undercover install holds.
+2. **Work item 6, the wider sample.** We hold five manifests and five scripts, and all ten belong to Underground 2. Until a sample of another game arrives, `ExpectedLinks` stays empty for Underground 1, Most Wanted, Carbon, ProStreet, and Undercover, and step 8 has no new command to classify.
 3. **A container deploy for a game other than Underground 2.** This needs a Binary mod sample for that game. Run it against a scratch copy, and start the game afterward. No automated check can confirm that a race runs or that a car handles.

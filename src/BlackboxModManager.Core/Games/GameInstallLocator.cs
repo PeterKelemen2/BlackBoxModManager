@@ -87,8 +87,15 @@ namespace BlackboxModManager.Core.Games
 		}
 
 		/// <summary>
-		/// Returns every game that one directory can be. The list holds more than one entry
-		/// only when two games share an executable name. No pair of our descriptors does.
+		/// Returns every game that one directory can be. This runs MatchesFully, not the cheap
+		/// LooksLike, because two of our descriptors do share an executable name. Underground 1
+		/// and Most Wanted name it Speed.exe and speed.exe, and a Windows lookup ignores that
+		/// difference. MarkerFiles tells the two installs apart. A cheap executable-only check
+		/// would name both for either directory.
+		///
+		/// This must call MatchesFully and not Validate. Validate calls this method to name the
+		/// game that a failed directory really holds, and a call back into Validate here would
+		/// recurse the two methods into each other forever.
 		///
 		/// The browse dialog calls this. A user who picks a Most Wanted directory while the
 		/// window manages Underground 2 then gets a message that names the real game.
@@ -99,7 +106,7 @@ namespace BlackboxModManager.Core.Games
 
 			foreach (GameDefinition definition in GameCatalog.All)
 			{
-				if (GameInstallValidator.LooksLike(definition, directory)) found.Add(definition);
+				if (GameInstallValidator.MatchesFully(definition, directory)) found.Add(definition);
 			}
 
 			return found;

@@ -138,10 +138,57 @@ namespace BlackboxModManager.Core.Games
 
 			new GameDefinition
 			{
+				Game = GameINT.Underground1,
+				DisplayName = "Need for Speed Underground",
+
+				// Most Wanted names its executable speed.exe. A Windows lookup ignores
+				// letter case, so the two names collide there. GameInstallLocator.Identify
+				// tells the two installs apart through MarkerFiles instead. CHARACTERSA.BIN
+				// and HUDTEX.BIN sit in a real Underground 1 install and not in a real Most
+				// Wanted install. Do not drop them without another way to tell the two apart.
+				Executable = "Speed.exe",
+				MarkerFiles = new[]
+				{
+					"GLOBAL/GLOBALA.BUN", "GLOBAL/GLOBALB.BUN",
+					"GLOBAL/CHARACTERSA.BIN", "GLOBAL/HUDTEX.BIN",
+				},
+				MarkerDirectories = new[] { "CARS", "TRACKS", "FRONTEND" },
+
+				// "NFSU" comes first on purpose. "Need for Speed Underground" is also a
+				// substring of the Underground 2 folder name, and MatchesHint only tests
+				// Contains. The more specific hint keeps the rank honest.
+				DirectoryHints = new[] { "NFSU", "Need for Speed Underground" },
+				ContainerFiles = new[] { "GLOBAL/GlobalB.lzc" },
+
+				// We hold no manifest sample for this game. See ManifestLinkAudit.
+				ExpectedLinks = Array.Empty<ManifestLink>(),
+			},
+
+			new GameDefinition
+			{
+				Game = GameINT.Carbon,
+				DisplayName = "Need for Speed Carbon",
+				Executable = "NFSC.exe",
+				MarkerFiles = new[] { "GLOBAL/GLOBALA.BUN", "GLOBAL/GLOBALB.BUN" },
+				MarkerDirectories = new[] { "CARS", "TRACKS", "FRONTEND" },
+				DirectoryHints = new[] { "Need for Speed Carbon", "NFSC" },
+				ContainerFiles = new[] { "GLOBAL/GlobalB.lzc" },
+
+				// We hold no manifest sample for this game. See ManifestLinkAudit.
+				ExpectedLinks = Array.Empty<ManifestLink>(),
+			},
+
+			new GameDefinition
+			{
 				Game = GameINT.MostWanted,
 				DisplayName = "Need for Speed Most Wanted",
 				Executable = "speed.exe",
-				MarkerFiles = new[] { "GLOBAL/GLOBALA.BUN", "GLOBAL/GLOBALB.BUN" },
+
+				// GLOBALA.BUN and GLOBALB.BUN alone also sit in a real Underground 1 install,
+				// and a Windows lookup makes speed.exe and Speed.exe the same name. RIVALS.BIN
+				// is the Blacklist rival file, and it holds no counterpart in Underground 1.
+				// Keep it, or a real Underground 1 install passes as Most Wanted too.
+				MarkerFiles = new[] { "GLOBAL/GLOBALA.BUN", "GLOBAL/GLOBALB.BUN", "GLOBAL/RIVALS.BIN" },
 				MarkerDirectories = new[] { "CARS", "TRACKS", "FRONTEND" },
 				DirectoryHints = new[] { "Need for Speed Most Wanted", "NFSMW" },
 				ContainerFiles = new[] { "GLOBAL/GlobalB.lzc" },
@@ -154,10 +201,42 @@ namespace BlackboxModManager.Core.Games
 			{
 				Game = GameINT.Prostreet,
 				DisplayName = "Need for Speed ProStreet",
+
+				// Undercover names the identical executable, not only the same name under a
+				// case-insensitive lookup. This machine holds no ProStreet install, so this
+				// descriptor still has no marker file that a real Undercover install lacks.
+				// See the Underground 1 note above for the mechanism, and the Results section
+				// of 07-game-profiles.md for why this one direction is still unconfirmed.
 				Executable = "nfs.exe",
 				MarkerFiles = new[] { "GLOBAL/GLOBALA.BUN", "GLOBAL/GLOBALB.BUN" },
 				MarkerDirectories = new[] { "CARS", "TRACKS", "FRONTEND" },
 				DirectoryHints = new[] { "Need for Speed ProStreet", "NFSPS" },
+				ContainerFiles = new[] { "GLOBAL/GlobalB.lzc" },
+
+				// We hold no manifest sample for this game. See ManifestLinkAudit.
+				ExpectedLinks = Array.Empty<ManifestLink>(),
+			},
+
+			new GameDefinition
+			{
+				Game = GameINT.Undercover,
+				DisplayName = "Need for Speed Undercover",
+
+				// ProStreet names the identical executable, and a Windows lookup does not even
+				// need to ignore letter case here. ritalin.bin, cars_vault.BIN, NFSGD.BIN, and
+				// the two GLOBAL_APT_FONT files sit in a real Undercover install and hold no
+				// counterpart in Underground 1, Underground 2, Carbon, or Most Wanted. That
+				// makes them the best evidence this session has that they are Undercover-only,
+				// short of a ProStreet install to compare against directly. Keep them, or a
+				// real ProStreet install could pass as Undercover too.
+				Executable = "nfs.exe",
+				MarkerFiles = new[]
+				{
+					"GLOBAL/GLOBALA.BUN", "GLOBAL/GLOBALB.BUN",
+					"GLOBAL/ritalin.bin", "GLOBAL/cars_vault.BIN", "GLOBAL/NFSGD.BIN",
+				},
+				MarkerDirectories = new[] { "CARS", "TRACKS", "FRONTEND" },
+				DirectoryHints = new[] { "Undercover", "NFSUC" },
 				ContainerFiles = new[] { "GLOBAL/GlobalB.lzc" },
 
 				// We hold no manifest sample for this game. See ManifestLinkAudit.
