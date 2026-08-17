@@ -93,6 +93,15 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public IReadOnlyList<string> Approximate { get; }
 
+		/// <summary>
+		/// The commands that this application refuses and that Binary runs instead.
+		///
+		/// <b>None of these stops the deploy.</b> A rejection is a limit of this application,
+		/// and the mod takes the CLI route, so the limit does not apply. The list stays visible
+		/// because the user must be able to see which commands left our control.
+		/// </summary>
+		public IReadOnlyList<string> BinaryHandled { get; }
+
 		public int CheckedVariants { get; }
 
 		public int KeyedEdits { get; }
@@ -109,7 +118,7 @@ namespace BlackboxModManager.Core.Deploy
 		public ConflictReport(IReadOnlyList<ConflictEntry> conflicts, IReadOnlyList<string> unchecked_,
 			int checkedVariants, int keyedEdits, IReadOnlyList<string> warnings = null,
 			IReadOnlyList<string> rejections = null, IReadOnlyList<string> escapes = null,
-			IReadOnlyList<string> approximate = null)
+			IReadOnlyList<string> approximate = null, IReadOnlyList<string> binaryHandled = null)
 		{
 			this.Conflicts = conflicts ?? Array.Empty<ConflictEntry>();
 			this.Unchecked = unchecked_ ?? Array.Empty<string>();
@@ -117,6 +126,7 @@ namespace BlackboxModManager.Core.Deploy
 			this.Rejections = rejections ?? Array.Empty<string>();
 			this.Escapes = escapes ?? Array.Empty<string>();
 			this.Approximate = approximate ?? Array.Empty<string>();
+			this.BinaryHandled = binaryHandled ?? Array.Empty<string>();
 			this.CheckedVariants = checkedVariants;
 			this.KeyedEdits = keyedEdits;
 		}
@@ -135,6 +145,7 @@ namespace BlackboxModManager.Core.Deploy
 			if (this.Unchecked.Count > 0) tail.Add($"It could not read {this.Unchecked.Count} variants.");
 			if (this.Warnings.Count > 0) tail.Add($"It cannot compare {this.Warnings.Count} commands.");
 			if (this.Rejections.Count > 0) tail.Add($"It refuses {this.Rejections.Count} commands.");
+			if (this.BinaryHandled.Count > 0) tail.Add($"Binary runs {this.BinaryHandled.Count} commands that this application does not run.");
 			if (this.Escapes.Count > 0) tail.Add($"It found {this.Escapes.Count} paths outside staging.");
 			if (this.Approximate.Count > 0) tail.Add($"{this.Approximate.Count} variants use an 'if' command.");
 
@@ -164,10 +175,14 @@ namespace BlackboxModManager.Core.Deploy
 		///
 		/// Pass the cache of a deploy so that the command gate and this check share one resolve
 		/// of every script. With no cache this method builds its own.
+		///
+		/// Pass the route plan so that the check knows which mods Binary applies. A command that
+		/// this application refuses stops the deploy for a mod of the native route, and it
+		/// becomes a note for a mod of the CLI route. With no plan every mod counts as native.
 		/// </summary>
 		public static ConflictReport Run(IReadOnlyList<EnabledVariant> variants,
 			string stagingDirectory = null, Action<string> log = null,
-			ScriptResolutionCache cache = null)
+			ScriptResolutionCache cache = null, BinaryRoutePlan routes = null)
 		{
 			if (variants is null) throw new ArgumentNullException(nameof(variants));
 
@@ -180,10 +195,14 @@ namespace BlackboxModManager.Core.Deploy
 			var rejections = new List<string>();
 			var escapes = new List<string>();
 			var approximate = new List<string>();
+			var binaryHandled = new List<string>();
+			BinaryRoutePlan plan = routes ?? BinaryRoutePlan.Empty;
 			int keyed = 0;
 
 			foreach (EnabledVariant variant in variants)
 			{
+				bool binaryRuns = plan.Of(variant.Mod.Id) == Profiles.BinaryRoute.BinaryCli;
+
 				try
 				{
 					ResolvedScript resolved = resolver.Resolve(variant);
@@ -203,8 +222,12 @@ namespace BlackboxModManager.Core.Deploy
 
 					foreach (ResolvedEdit edit in resolved.Rejected)
 					{
-						rejections.Add($"{variant.Label}: {edit.Where}: this application does not run " +
-							$"the command \"{edit.Verb}\". {edit.Facts.Note} ({edit.Text})");
+						string line = $"{variant.Label}: {edit.Where}: this application does not run " +
+							$"the command \"{edit.Verb}\". {edit.Facts.Note} ({edit.Text})";
+
+						// Binary runs this command, so it stops nothing. Keep it visible.
+						if (binaryRuns) binaryHandled.Add(line);
+						else rejections.Add(line);
 					}
 
 					foreach ((ResolvedEdit Edit, PathEffect Path) escape in resolved.Escapes())
@@ -229,12 +252,13 @@ namespace BlackboxModManager.Core.Deploy
 			}
 
 			var report = new ConflictReport(entries, unchecked_, scripts.Count, keyed,
-				warnings, rejections, escapes, approximate);
+				warnings, rejections, escapes, approximate, binaryHandled);
 
 			write(report.Summary());
 
 			foreach (ConflictEntry entry in report.Conflicts) write($"  conflict: {entry}");
 			foreach (string line in report.Rejections) write($"  refused: {line}");
+			foreach (string line in report.BinaryHandled) write($"  Binary runs this: {line}");
 			foreach (string line in report.Escapes) write($"  outside staging: {line}");
 			foreach (string line in report.Warnings) write($"  warning: {line}");
 			foreach (string line in report.Unchecked) write($"  not checked: {line}");

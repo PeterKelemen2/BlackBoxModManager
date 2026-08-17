@@ -68,12 +68,13 @@ namespace BlackboxModManager.Core.Deploy
 					"A deploy writes only to a staging copy.");
 			}
 
-			GameINT game = context.Game.Game;
-
 			// The deploy already read the variants and resolved every script. Read them again
 			// only when a caller built the context without them.
-			IReadOnlyList<EnabledVariant> variants = context.Variants ?? VariantReader.Read(
-				context.Profile, context.Store, game, context.Log);
+			//
+			// Narrow the list to the mods that this call names. A profile can send some of its
+			// Binary mods to the CLI route, and this engine must not apply those. See
+			// BinaryVariantScope.
+			IReadOnlyList<EnabledVariant> variants = BinaryVariantScope.Of(context, mods);
 
 			if (variants.Count == 0)
 			{

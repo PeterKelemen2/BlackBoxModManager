@@ -6,6 +6,42 @@ using BlackboxModManager.Core.Mods;
 namespace BlackboxModManager.Core.Profiles
 {
 	/// <summary>
+	/// Which code applies the edits of a Binary mod.
+	///
+	/// <b>Native is the default and it stays the default.</b> It runs Nikki and Endscript in
+	/// this process, and it reports a library error directly. BinaryCli runs the Binary 2.8.3
+	/// executable of the user instead.
+	///
+	/// The CLI route exists for one reason. The command gate refuses a command that this
+	/// application does not run, and a mod that needs such a command cannot deploy at all.
+	/// Binary 2.8.3 runs the same library versions, so it runs that mod.
+	/// </summary>
+	public enum BinaryRoute
+	{
+		/// <summary>Nikki and Endscript, in this process. See ContainerDeployEngine.</summary>
+		Native = 0,
+
+		/// <summary>The Binary 2.8.3 executable, as a separate process. See BinaryCliDeployEngine.</summary>
+		BinaryCli = 1,
+	}
+
+	/// <summary>
+	/// What one mod chose, which can differ from the choice of the profile.
+	///
+	/// <b>Inherit is zero, so an older profile file reads as Inherit.</b> The profile then
+	/// decides, and the behavior of that file does not change.
+	/// </summary>
+	public enum BinaryRouteChoice
+	{
+		/// <summary>Follow <see cref="Profile.BinaryRoute"/>.</summary>
+		Inherit = 0,
+
+		Native = 1,
+
+		BinaryCli = 2,
+	}
+
+	/// <summary>
 	/// One mod inside a profile.
 	///
 	/// The entry names the mod by its store identifier. It never holds a path, because the
@@ -39,6 +75,14 @@ namespace BlackboxModManager.Core.Profiles
 		/// </summary>
 		public Dictionary<string, Dictionary<string, string>> IniSettings { get; set; } =
 			new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Which code applies this mod, when the choice of the profile does not fit.
+		///
+		/// This means nothing for an ASI mod and for a loose-file mod. Only a Binary mod reads
+		/// it. Inherit is the normal value, and the profile then decides.
+		/// </summary>
+		public BinaryRouteChoice Route { get; set; } = BinaryRouteChoice.Inherit;
 
 		public ProfileEntry() { }
 
@@ -159,6 +203,14 @@ namespace BlackboxModManager.Core.Profiles
 		public Dictionary<string, string> LoaderChoices { get; set; } =
 			new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+		/// <summary>
+		/// Which code applies every Binary mod of this profile, unless the entry of the mod
+		/// overrides it.
+		///
+		/// Native is zero, so an older profile file reads as Native and keeps its behavior.
+		/// </summary>
+		public BinaryRoute BinaryRoute { get; set; } = BinaryRoute.Native;
+
 		[JsonIgnore]
 		public int EnabledCount
 		{
@@ -182,6 +234,31 @@ namespace BlackboxModManager.Core.Profiles
 			this.Name = name;
 			this.Game = game;
 		}
+
+		/// <summary>
+		/// Which code applies one mod. The entry decides, and the profile decides when the
+		/// entry says Inherit.
+		///
+		/// <b>Read the route from here and never from the two fields.</b> One rule in one place
+		/// keeps the deploy, the fingerprint, and the window in agreement.
+		/// </summary>
+		public BinaryRoute RouteOf(ProfileEntry entry)
+		{
+			if (entry is null) return this.BinaryRoute;
+
+			return entry.Route switch
+			{
+				BinaryRouteChoice.Native => BinaryRoute.Native,
+				BinaryRouteChoice.BinaryCli => BinaryRoute.BinaryCli,
+				_ => this.BinaryRoute,
+			};
+		}
+
+		/// <summary>
+		/// Which code applies the mod with this identifier. A mod that the profile does not
+		/// hold takes the route of the profile.
+		/// </summary>
+		public BinaryRoute RouteOf(string modId) => this.RouteOf(this.Find(modId));
 
 		public ProfileEntry Find(string modId)
 		{

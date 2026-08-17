@@ -248,6 +248,12 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public IReadOnlyList<ScriptWrite> ScriptWrites { get; }
 
+		/// <summary>
+		/// Which code applied each Binary mod. This is null when the deploy enabled no Binary
+		/// mod, and the summary then says nothing about a route.
+		/// </summary>
+		public BinaryRoutePlan Routes { get; }
+
 		public int FileCount => this.Files.Count;
 
 		public DeployReport(IReadOnlyList<DeployedFile> files, IReadOnlyList<DeployOverride> overrides,
@@ -255,8 +261,11 @@ namespace BlackboxModManager.Core.Deploy
 			IReadOnlyList<ContainerWrite> containers = null,
 			IReadOnlyList<SettingsWrite> settings = null,
 			IReadOnlyList<LoaderChoice> loaders = null,
-			IReadOnlyList<ScriptWrite> scriptWrites = null)
+			IReadOnlyList<ScriptWrite> scriptWrites = null,
+			BinaryRoutePlan routes = null)
 		{
+			this.Routes = routes;
+
 			this.Files = files ?? Array.Empty<DeployedFile>();
 			this.Overrides = overrides ?? Array.Empty<DeployOverride>();
 			this.Methods = methods ?? new Dictionary<LinkKind, int>();
@@ -283,14 +292,20 @@ namespace BlackboxModManager.Core.Deploy
 				? String.Empty
 				: $" It rewrote {this.Containers.Count} containers.";
 
+			// Name the route whenever Binary ran. A user who reads a summary must be able to
+			// tell which code produced the result.
+			string route = this.Routes is null || !this.Routes.UsesCli
+				? String.Empty
+				: $" Binary applied {this.Routes.CliCount} of {this.Routes.ModIds.Count} Binary mods.";
+
 			if (parts.Count == 0)
 			{
-				return containers.Length == 0
+				return containers.Length == 0 && route.Length == 0
 					? "The deploy put no file in place."
-					: $"The deploy put no file in place.{containers}";
+					: $"The deploy put no file in place.{containers}{route}";
 			}
 
-			return $"The deploy put {this.FileCount} files in place: {String.Join(", ", parts)}.{containers}";
+			return $"The deploy put {this.FileCount} files in place: {String.Join(", ", parts)}.{containers}{route}";
 		}
 	}
 }

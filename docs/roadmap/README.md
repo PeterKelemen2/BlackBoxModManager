@@ -24,6 +24,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 12   | [12-minimal-ui.md](12-minimal-ui.md)             | Nothing. Look and input only.  |
 | 13   | [13-import-progress.md](13-import-progress.md)   | Done. See "Completed" below.   |
 | 14   | Done. See "Completed" below.                     | —                              |
+| 15   | [15-binary-cli-route.md](15-binary-cli-route.md) | Needs a real Binary run.       |
 | 90   | [90-texmod.md](90-texmod.md)                     | Nothing. Explicitly last.      |
 
 Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, 8, and 9 are done. **The success criterion of the project brief passes.**
@@ -37,6 +38,8 @@ Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6,
 **Step 14 makes a large container deploy finish.** A deploy of `NFSMWRV-1024x-Advanced` for Most Wanted pinned every core and never finished. It now takes 47 seconds and the verify passes. Read the Step 14 section under "Completed".
 
 **Step 13 makes the import show its work.** An import of a 98 MB archive took more than 30 minutes and wrote one log line. The mod list now draws a row for the import at once, with the step, the count, and a bar. The unpack runs through a bundled 7-Zip, and the same import now takes about 18 seconds. Read [13-import-progress.md](13-import-progress.md).
+
+**Step 15 adds Binary as a second route for a Binary mod.** The container engine stays the default. A profile can send its Binary mods to the Binary 2.8.3 install instead, and one mod can override the profile. This gives a mod that the command gate refuses a way to install. **The code and the tests are done, and no part of it ran against a real Binary install yet.** Read [15-binary-cli-route.md](15-binary-cli-route.md).
 
 **Step 7 is part done.** The plumbing carries any number of games, and the application now manages all six targets. The manifest sample and the container deploy proof still exist for Underground 2 alone. Read the Results section of [07-game-profiles.md](07-game-profiles.md).
 

@@ -1,5 +1,6 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using BlackboxModManager.Core.Mods;
 using BlackboxModManager.Core.Profiles;
 using BlackboxModManager.Core.Store;
 
@@ -89,6 +90,53 @@ namespace BlackboxModManager.App.ViewModels
 				this._changed();
 			}
 		}
+
+		/// <summary>
+		/// True for a mod that the route choice applies to. Only a Binary mod reads the route.
+		/// </summary>
+		public bool ShowsRoute => this.Mod.Kind == ModKind.Binary;
+
+		/// <summary>
+		/// Which code applies this mod. Inherit means that the profile decides.
+		///
+		/// The row writes into the profile entry and calls back, exactly as Enabled does.
+		/// </summary>
+		public BinaryRouteChoice Route
+		{
+			get => this._entry.Route;
+			set
+			{
+				if (this._entry.Route == value) return;
+
+				this._entry.Route = value;
+				this.OnPropertyChanged();
+				this.OnPropertyChanged(nameof(this.RouteName));
+				this.OnPropertyChanged(nameof(this.RouteSummary));
+				this._changed();
+			}
+		}
+
+		/// <summary>One short word for the row. This is what the list shows.</summary>
+		public string RouteName => this._entry.Route switch
+		{
+			BinaryRouteChoice.Native => "Container engine",
+			BinaryRouteChoice.BinaryCli => "Binary",
+			_ => "Profile default",
+		};
+
+		/// <summary>
+		/// The route as one piece of the detail line, or an empty string.
+		///
+		/// <b>A row shows this only when the mod overrides the profile.</b> Every Binary mod
+		/// follows the profile by default, and a line that repeats the default on every row
+		/// teaches the user to stop reading it.
+		///
+		/// This returns a string and not a visibility, so the template needs no converter.
+		/// </summary>
+		public string RouteSummary =>
+			this.ShowsRoute && this._entry.Route != BinaryRouteChoice.Inherit
+				? $" · {this.RouteName}"
+				: String.Empty;
 
 		public ModRowViewModel(InstalledMod mod, ProfileEntry entry, int order, Action changed)
 		{

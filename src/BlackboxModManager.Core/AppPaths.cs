@@ -54,6 +54,15 @@ namespace BlackboxModManager.Core
 		/// </summary>
 		public static string SnapshotDirectory => Path.Combine(Root, "snapshots");
 
+		/// <summary>
+		/// The scratch space of the CLI route. One subdirectory per variant of one deploy.
+		///
+		/// Binary writes EndError.log and MainLog.txt with a bare name, so it writes them into
+		/// the directory that it starts in. The route starts it here, reads those two files, and
+		/// keeps them for the user. See defect 9 for the same problem in Nikki.
+		/// </summary>
+		public static string BinaryCliDirectory => Path.Combine(Root, "binary-cli");
+
 		public static void CreateRoot()
 		{
 			Directory.CreateDirectory(Root);

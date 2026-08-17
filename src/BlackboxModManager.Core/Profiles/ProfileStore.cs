@@ -20,10 +20,18 @@ namespace BlackboxModManager.Core.Profiles
 
 		private const string Extension = ".json";
 
+		/// <summary>
+		/// The converter writes an enum as its name and not as a number.
+		///
+		/// A profile file is a file that a user reads and edits by hand. The name
+		/// <c>"BinaryCli"</c> says what it means, and the number 1 does not. The reader accepts
+		/// both forms, so a hand-edited file with a number still loads.
+		/// </summary>
 		private static readonly JsonSerializerOptions Options = new JsonSerializerOptions
 		{
 			WriteIndented = true,
 			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+			Converters = { new JsonStringEnumConverter() },
 		};
 
 		public string Root { get; }

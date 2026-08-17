@@ -49,6 +49,7 @@ namespace BlackboxModManager.Core.Profiles
 
 				text.Append("mod\u001f").Append(id).Append('\n');
 
+				AppendRoute(text, profile, entry);
 				AppendVariants(text, entry.Selections);
 				AppendIni(text, entry);
 			}
@@ -59,6 +60,22 @@ namespace BlackboxModManager.Core.Profiles
 			hash.Append(Encoding.UTF8.GetBytes(text.ToString()));
 
 			return Convert.ToHexStringLower(hash.GetCurrentHash());
+		}
+
+		/// <summary>
+		/// Adds the route of one mod, and only when that route is not the default.
+		///
+		/// <b>A default value must add nothing.</b> Every profile that predates the route field
+		/// runs the native route, and a line for it would change every stored fingerprint. The
+		/// window would then ask every user for a deploy that changes no byte.
+		/// </summary>
+		private static void AppendRoute(StringBuilder text, Profile profile, ProfileEntry entry)
+		{
+			BinaryRoute route = profile.RouteOf(entry);
+
+			if (route == BinaryRoute.Native) return;
+
+			text.Append("  route").Append(route.ToString()).Append('\n');
 		}
 
 		private static void AppendVariants(StringBuilder text, ModSelections selections)

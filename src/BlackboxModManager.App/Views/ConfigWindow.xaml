@@ -195,6 +195,28 @@
           </Grid>
         </GroupBox>
 
+        <GroupBox Padding="10" Header="Binary mods">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+              <TextBlock Text="Deploy through Binary" />
+              <TextBlock
+                Margin="0,2,0,0"
+                Style="{StaticResource Hint}"
+                Text="Run the Binary 2.8.3 install for every Binary mod of this profile, instead of the container engine of this application. Use this for a mod that the container engine refuses. Binary writes in place, so every deploy then copies the whole game directory. One mod can override this on its own row."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <ToggleButton
+              Grid.Column="1"
+              VerticalAlignment="Top"
+              IsChecked="{Binding BinaryRouteIsCli, Mode=TwoWay}"
+              Style="{StaticResource TogglePill}" />
+          </Grid>
+        </GroupBox>
+
       </StackPanel>
     </ScrollViewer>
 

@@ -91,9 +91,15 @@ namespace BlackboxModManager.Core.Deploy
 		/// <summary>
 		/// Tests every enabled variant. It throws on the first variant that fails, and the
 		/// message names the mod, the file, the line, and the command.
+		///
+		/// Set refuseUnsupported to false when another program runs the commands. The gate then
+		/// logs an unsupported command instead of a stop. <b>The escape rule never relaxes.</b>
+		/// A refused command is a limit of this application, and Binary 2.8.3 does not share
+		/// that limit. A command that writes outside the staging copy reaches the real system,
+		/// and no revert undoes it. See BinaryCliDeployEngine.
 		/// </summary>
 		public static GateResult Check(IReadOnlyList<EnabledVariant> variants, string stagingDirectory,
-			Action<string> log = null, ScriptResolutionCache cache = null)
+			Action<string> log = null, ScriptResolutionCache cache = null, bool refuseUnsupported = true)
 		{
 			if (variants is null) throw new ArgumentNullException(nameof(variants));
 
@@ -197,9 +203,17 @@ namespace BlackboxModManager.Core.Deploy
 
 			if (refused.Count > 0)
 			{
-				throw new DeployServiceException(
-					$"{refused.Count} commands need support that this application does not have, so the " +
-					$"deploy stopped before it changed anything. {String.Join(" ", refused)}");
+				if (refuseUnsupported)
+				{
+					throw new DeployServiceException(
+						$"{refused.Count} commands need support that this application does not have, so the " +
+						$"deploy stopped before it changed anything. {String.Join(" ", refused)}");
+				}
+
+				write($"{refused.Count} commands need support that this application does not have. " +
+					"Binary runs them.");
+
+				foreach (string line in refused) write($"  Binary runs this command: {line}");
 			}
 
 			write($"The command gate read {variants.Count} variants. It refused nothing and it found " +

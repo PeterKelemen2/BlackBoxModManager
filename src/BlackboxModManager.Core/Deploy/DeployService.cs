@@ -73,9 +73,12 @@ namespace BlackboxModManager.Core.Deploy
 		/// The link engine runs first. It puts drop-in files into the staging copy, and one
 		/// of those files can be a container that the container engine then loads. The
 		/// reverse order would load the container of the game and then overwrite the result.
+		///
+		/// The Binary kind goes to one router, because two engines apply it and this class
+		/// groups the mods by kind. See BinaryRouteEngine.
 		/// </summary>
 		public DeployService(ModStore store, BinaryInstall binary = null, string workRootOverride = null)
-			: this(store, new IDeployEngine[] { new LinkDeployEngine(), new ContainerDeployEngine() },
+			: this(store, new IDeployEngine[] { new LinkDeployEngine(), new BinaryRouteEngine() },
 				binary, workRootOverride) { }
 
 		public DeployService(ModStore store, IReadOnlyList<IDeployEngine> engines,
@@ -113,6 +116,18 @@ namespace BlackboxModManager.Core.Deploy
 					"Every build and every swap copies every byte.");
 			}
 
+			// Decide the route of every Binary mod before anything reads or copies a file. The
+			// staging copy depends on the answer, and every later reader must get the same
+			// answer. See BinaryRoutePlan.
+			BinaryRoutePlan routes = BinaryRoutePlan.Build(profile, this._store);
+
+			if (routes.ModIds.Count > 0)
+			{
+				write(routes.ToString());
+
+				foreach (string line in routes.Describe(this._store)) write(line);
+			}
+
 			// Read the variants and resolve every script one time. The conflict check and the
 			// command gate both need them, and each resolve reads every file of the append
 			// graph. One real mod appends 158 files.
@@ -132,7 +147,7 @@ namespace BlackboxModManager.Core.Deploy
 
 			using (timing.Measure("check the conflicts"))
 			{
-				conflicts = ConflictPreflight.Run(variants, workspace.StagingDirectory, write, scripts);
+				conflicts = ConflictPreflight.Run(variants, workspace.StagingDirectory, write, scripts, routes);
 			}
 
 			cancellation.ThrowIfCancellationRequested();
@@ -159,15 +174,28 @@ namespace BlackboxModManager.Core.Deploy
 			write("Build the staging copy.");
 			ReplicationReport staging;
 
+			// A hard link shares its content with the vanilla copy and with the live install.
+			// The container engine breaks that share for every file that it writes, because it
+			// reads the script and knows the list. Binary reads nothing to us and writes where
+			// it wants, so the only safe answer is a copy that shares nothing. See defect 16.
+			bool linkFiles = !routes.UsesCli;
+
+			if (!linkFiles)
+			{
+				write($"The staging copy holds a private copy of every file, because {routes.CliCount} " +
+					"mods deploy through Binary. Binary writes in place, and a hard link would reach " +
+					"the vanilla copy and the game.");
+			}
+
 			using (timing.Measure("build the staging copy"))
 			{
 				staging = TreeReplicator.Build(
-					workspace.VanillaDirectory, workspace.StagingDirectory, write);
+					workspace.VanillaDirectory, workspace.StagingDirectory, write, linkFiles);
 			}
 
 			var context = new DeployContext(
 				install, workspace.StagingDirectory, profile, this._store, this._binary, write, proxies,
-				workspace.VanillaDirectory, snapshot, variants, scripts, timing, cancellation);
+				workspace.VanillaDirectory, snapshot, variants, scripts, timing, cancellation, routes);
 
 			DeployReport report;
 
@@ -245,7 +273,8 @@ namespace BlackboxModManager.Core.Deploy
 
 			// The staging directory need not exist yet. The sandbox test compares paths and
 			// it reads no file.
-			return ConflictPreflight.Run(variants, this.WorkspaceOf(install).StagingDirectory, log);
+			return ConflictPreflight.Run(variants, this.WorkspaceOf(install).StagingDirectory, log,
+				null, BinaryRoutePlan.Build(profile, this._store));
 		}
 
 		/// <summary>
@@ -404,7 +433,7 @@ namespace BlackboxModManager.Core.Deploy
 			}
 
 			return new DeployReport(files, overrides, methods, note, containers, settings, loaders,
-				scriptWrites);
+				scriptWrites, context.Routes);
 		}
 
 		/// <summary>

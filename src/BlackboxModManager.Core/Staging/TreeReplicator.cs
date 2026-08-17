@@ -59,8 +59,15 @@ namespace BlackboxModManager.Core.Staging
 		///
 		/// It links where a link is safe, and it copies the rest. It never touches the
 		/// source.
+		///
+		/// Set linkFiles to false to copy every file and to share nothing. Use that for a
+		/// deploy that hands the staging copy to another program. <b>An outside program writes
+		/// where it wants, and no call here can make the right file private first.</b> A full
+		/// copy costs one write of every byte of the install, and it removes the risk. See
+		/// BinaryCliDeployEngine and defect 16.
 		/// </summary>
-		public static ReplicationReport Build(string source, string target, Action<string> log = null)
+		public static ReplicationReport Build(string source, string target, Action<string> log = null,
+			bool linkFiles = true)
 		{
 			if (String.IsNullOrWhiteSpace(source)) throw new ArgumentException("The source is empty.", nameof(source));
 			if (String.IsNullOrWhiteSpace(target)) throw new ArgumentException("The target is empty.", nameof(target));
@@ -83,11 +90,19 @@ namespace BlackboxModManager.Core.Staging
 			FileTree.Delete(to);
 			Directory.CreateDirectory(to);
 
-			LinkProbeResult probe = LinkSupport.ProbeBetween(from, to);
-			bool canLink = probe.Works(LinkKind.HardLink);
-			string note = canLink ? String.Empty : HardLinkNote(probe, from, to);
+			// The probe creates and deletes a test file. Skip it when the caller wants no link,
+			// because the answer would change nothing.
+			bool canLink = false;
+			string note = String.Empty;
 
-			if (note.Length > 0) log?.Invoke(note);
+			if (linkFiles)
+			{
+				LinkProbeResult probe = LinkSupport.ProbeBetween(from, to);
+				canLink = probe.Works(LinkKind.HardLink);
+				note = canLink ? String.Empty : HardLinkNote(probe, from, to);
+
+				if (note.Length > 0) log?.Invoke(note);
+			}
 
 			IReadOnlyList<string> files = FileTree.Files(from);
 			int linked = 0;

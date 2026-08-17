@@ -83,6 +83,17 @@ namespace BlackboxModManager.Core.Deploy
 		public DeployTiming Timing { get; }
 
 		/// <summary>
+		/// Which code applies each Binary mod. This is never null, and an empty plan means that
+		/// every mod takes the native route.
+		///
+		/// <b>The deploy builds this before it copies one file.</b> The staging copy shares its
+		/// content through hard links, and the CLI route needs a copy that shares nothing. So
+		/// the answer must exist before the copy starts, and every reader must get the same
+		/// answer. See BinaryRoutePlan.
+		/// </summary>
+		public BinaryRoutePlan Routes { get; }
+
+		/// <summary>
 		/// Stops a long deploy. An engine tests this between commands and between passes, and
 		/// never in the middle of one container save.
 		///
@@ -95,7 +106,8 @@ namespace BlackboxModManager.Core.Deploy
 			ModStore store, BinaryInstall binary = null, Action<string> log = null,
 			ProxyPlan proxies = null, string vanillaDirectory = null, VanillaSnapshot baseline = null,
 			IReadOnlyList<EnabledVariant> variants = null, ScriptResolutionCache scripts = null,
-			DeployTiming timing = null, CancellationToken cancellation = default)
+			DeployTiming timing = null, CancellationToken cancellation = default,
+			BinaryRoutePlan routes = null)
 		{
 			this.Binary = binary;
 			this.Proxies = proxies;
@@ -105,6 +117,7 @@ namespace BlackboxModManager.Core.Deploy
 			this.Scripts = scripts;
 			this.Timing = timing ?? new DeployTiming();
 			this.Cancellation = cancellation;
+			this.Routes = routes ?? BinaryRoutePlan.Empty;
 
 			this.Game = game ?? throw new ArgumentNullException(nameof(game));
 			this.Profile = profile ?? throw new ArgumentNullException(nameof(profile));
@@ -123,10 +136,14 @@ namespace BlackboxModManager.Core.Deploy
 	/// <summary>
 	/// One way to put mods into the staging copy.
 	///
-	/// Two engines exist. The link engine handles the drop-in kinds, and it is in this
-	/// step. <b>Step 6 adds the container engine.</b> That engine shares the staging copy,
-	/// the snapshot, and the revert path, and it shares no part of the link strategy. The
-	/// interface exists to keep that boundary.
+	/// The link engine handles the drop-in kinds. The container engine handles a Binary mod
+	/// through Nikki and Endscript. The CLI engine handles a Binary mod through the Binary
+	/// executable. Every engine shares the staging copy, the snapshot, and the revert path,
+	/// and each one shares no part of the strategy of the others.
+	///
+	/// <b>DeployService groups the mods by kind, so two engines must not claim one kind.</b>
+	/// The two Binary engines sit behind BinaryRouteEngine for that reason. That router splits
+	/// the mods by route and keeps the load order across both.
 	/// </summary>
 	public interface IDeployEngine
 	{

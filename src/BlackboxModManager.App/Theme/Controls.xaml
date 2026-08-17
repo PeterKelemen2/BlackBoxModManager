@@ -615,8 +615,20 @@
   </Style>
 
   <!--
-    The menu item. One template covers every role, because this application opens context
-    menus alone and never a menu bar.
+    The menu item.
+
+    <b>MenuItem needs one template for each role that the application uses.</b> WPF picks the
+    template by the Role property, and a template that holds no Popup and no items host can
+    only ever draw a leaf. An item that carries children then shows its header and opens
+    nothing at all, with no error and no warning.
+
+    Two roles reach this application. SubmenuItem is the leaf and it is the default below.
+    SubmenuHeader carries children, and the trigger at the end of the style gives it the
+    second template. This application opens context menus alone and never a menu bar, so
+    TopLevelItem and TopLevelHeader need no template.
+
+    The leaf template holds a mark column. A menu that offers a choice between three routes
+    has to show which route the mod takes now.
   -->
   <Style TargetType="MenuItem">
     <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -633,11 +645,43 @@
             Padding="{TemplateBinding Padding}"
             Background="Transparent"
             CornerRadius="{StaticResource RadiusSmall}">
-            <ContentPresenter VerticalAlignment="Center" ContentSource="Header" />
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+
+              <!--
+                The mark column keeps its width whether the mark shows or not, so the headers
+                of one menu line up. A collapsed path would let the text shift.
+              -->
+              <Path
+                x:Name="Mark"
+                Grid.Column="0"
+                Width="12"
+                Margin="0,0,6,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Data="{StaticResource IconCheck}"
+                Stroke="{StaticResource AccentDefault}"
+                StrokeEndLineCap="Round"
+                StrokeLineJoin="Round"
+                StrokeStartLineCap="Round"
+                StrokeThickness="2"
+                Visibility="Hidden" />
+
+              <ContentPresenter
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                ContentSource="Header" />
+            </Grid>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True">
               <Setter TargetName="Block" Property="Background" Value="{StaticResource SurfaceHover}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Mark" Property="Visibility" Value="Visible" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Foreground" Value="{StaticResource TextDisabled}" />
@@ -647,6 +691,98 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+    <Style.Triggers>
+      <!--
+        The item that carries children. MenuItem sets IsSubmenuOpen by itself on a hover and
+        on a click, so the popup only has to follow that property.
+      -->
+      <Trigger Property="Role" Value="SubmenuHeader">
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="MenuItem">
+              <Grid>
+                <Border
+                  x:Name="Block"
+                  Padding="{TemplateBinding Padding}"
+                  Background="Transparent"
+                  CornerRadius="{StaticResource RadiusSmall}">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!--  The same mark column as the leaf, so the headers line up.  -->
+                    <Border Grid.Column="0" Width="12" Margin="0,0,6,0" />
+
+                    <ContentPresenter
+                      Grid.Column="1"
+                      VerticalAlignment="Center"
+                      ContentSource="Header" />
+
+                    <Path
+                      Grid.Column="2"
+                      Margin="12,0,0,0"
+                      VerticalAlignment="Center"
+                      Data="{StaticResource IconChevronRight}"
+                      Stroke="{StaticResource TextSecondary}"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      StrokeStartLineCap="Round"
+                      StrokeThickness="1.5" />
+                  </Grid>
+                </Border>
+
+                <!--
+                  The child menu. The border inside carries an opaque fill, because a rounded
+                  corner does not clip the popup itself. See docs/roadmap/10-dark-theme.md.
+                -->
+                <!--
+                  <b>The name PART_Popup is not decoration.</b> MenuItem declares that template
+                  part and finds it by name to place and to close the child menu.
+
+                  IsOpen takes a Binding and not a TemplateBinding. A TemplateBinding runs one
+                  way only, and the popup closes itself when the user clicks away. That close
+                  has to reach IsSubmenuOpen, or the item keeps a stale open state and the next
+                  click does nothing.
+                -->
+                <Popup
+                  x:Name="PART_Popup"
+                  AllowsTransparency="True"
+                  Focusable="False"
+                  HorizontalOffset="-4"
+                  IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                  Placement="Right"
+                  PopupAnimation="None"
+                  VerticalOffset="-4">
+                  <Border
+                    Padding="3"
+                    Background="{StaticResource SurfaceOverlay}"
+                    BorderBrush="{StaticResource BorderDefault}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource RadiusDefault}">
+                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                  </Border>
+                </Popup>
+              </Grid>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                  <Setter TargetName="Block" Property="Background" Value="{StaticResource SurfaceHover}" />
+                </Trigger>
+                <Trigger Property="IsSubmenuOpen" Value="True">
+                  <Setter TargetName="Block" Property="Background" Value="{StaticResource SurfaceHover}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                  <Setter Property="Foreground" Value="{StaticResource TextDisabled}" />
+                  <Setter Property="Cursor" Value="Arrow" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Trigger>
+    </Style.Triggers>
   </Style>
 
   <!--

@@ -224,6 +224,50 @@ namespace BlackboxModManager.App.ViewModels
 		}
 
 		/// <summary>
+		/// Which code applies every Binary mod of the profile. A mod can override this on its
+		/// own row.
+		///
+		/// <b>This lives on the profile and not in the settings.</b> A profile fully determines
+		/// the deployed result, and the route changes the bytes that a deploy writes. So it
+		/// saves through SaveProfile.
+		/// </summary>
+		private BinaryRoute _binaryRoute;
+
+		public BinaryRoute BinaryRoute
+		{
+			get => this._binaryRoute;
+			set
+			{
+				if (this._binaryRoute == value) return;
+
+				this._binaryRoute = value;
+				this.OnPropertyChanged();
+				this.OnPropertyChanged(nameof(this.BinaryRouteIsCli));
+
+				if (this._profile is null) return;
+
+				this._profile.BinaryRoute = value;
+				this.SaveProfile();
+
+				this.Write(value == BinaryRoute.BinaryCli
+					? "The profile now deploys every Binary mod through the Binary 2.8.3 install. " +
+						"Binary writes in place, so every deploy copies the whole game directory."
+					: "The profile now deploys every Binary mod through the container engine of this " +
+						"application.");
+			}
+		}
+
+		/// <summary>
+		/// The route as one boolean, so that a toggle can bind to it. The toggle matches the
+		/// shape that the config window already uses for FullVerify.
+		/// </summary>
+		public bool BinaryRouteIsCli
+		{
+			get => this.BinaryRoute == BinaryRoute.BinaryCli;
+			set => this.BinaryRoute = value ? BinaryRoute.BinaryCli : BinaryRoute.Native;
+		}
+
+		/// <summary>
 		/// The one line of state that the status bar shows. It joins the game and the deployed
 		/// state, because step 12 took the five status lines off the main window.
 		///
@@ -386,10 +430,39 @@ namespace BlackboxModManager.App.ViewModels
 				// label now, so a button that does nothing tells the user nothing. See
 				// docs/roadmap/12-minimal-ui.md, Part F.
 				this.NotifySelectionCommands();
+				this.NotifySelectedRoute();
 
 				this.LoadVariants(value);
 				this.LoadSettings(value);
 			}
+		}
+
+		/// <summary>
+		/// Which route the context menu marks for the selected mod.
+		///
+		/// <b>The context menu binds to this view model and not to the row.</b> A ContextMenu
+		/// sits outside the visual tree of the window, so the menu takes the MainViewModel as
+		/// its own DataContext and every item binds by name. See the ModRowTemplate comment.
+		///
+		/// A mod of another kind marks nothing. Only a Binary mod reads a route.
+		/// </summary>
+		public bool SelectedModRouteIsInherit =>
+			this.SelectedMod != null && this.SelectedMod.ShowsRoute
+				&& this.SelectedMod.Route == BinaryRouteChoice.Inherit;
+
+		public bool SelectedModRouteIsNative =>
+			this.SelectedMod != null && this.SelectedMod.ShowsRoute
+				&& this.SelectedMod.Route == BinaryRouteChoice.Native;
+
+		public bool SelectedModRouteIsBinaryCli =>
+			this.SelectedMod != null && this.SelectedMod.ShowsRoute
+				&& this.SelectedMod.Route == BinaryRouteChoice.BinaryCli;
+
+		private void NotifySelectedRoute()
+		{
+			this.OnPropertyChanged(nameof(this.SelectedModRouteIsInherit));
+			this.OnPropertyChanged(nameof(this.SelectedModRouteIsNative));
+			this.OnPropertyChanged(nameof(this.SelectedModRouteIsBinaryCli));
 		}
 
 		/// <summary>
@@ -946,6 +1019,43 @@ namespace BlackboxModManager.App.ViewModels
 			}
 		}
 
+		/// <summary>
+		/// Sets which code applies the selected Binary mod.
+		///
+		/// The context menu passes the name of the choice, because a menu item cannot carry an
+		/// enum value without a converter.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(CanActOnMod))]
+		private void SetModRoute(string choice)
+		{
+			ModRowViewModel row = this.SelectedMod;
+
+			if (row is null) return;
+
+			if (!row.ShowsRoute)
+			{
+				this.Write($"The mod \"{row.Name}\" is of kind {row.Kind}. Only a Binary mod takes a route, " +
+					"because only a Binary mod runs an Endscript.");
+
+				return;
+			}
+
+			if (!Enum.TryParse(choice, out BinaryRouteChoice value))
+			{
+				this.Write($"\"{choice}\" names no route. The menu passes one of Inherit, Native, " +
+					"or BinaryCli.");
+
+				return;
+			}
+
+			row.Route = value;
+			this.NotifySelectedRoute();
+
+			this.Write(value == BinaryRouteChoice.Inherit
+				? $"The mod \"{row.Name}\" follows the choice of the profile, which is {this.BinaryRoute}."
+				: $"The mod \"{row.Name}\" deploys through {row.RouteName}.");
+		}
+
 		[RelayCommand(CanExecute = nameof(CanActOnMod))]
 		private void MoveUp() => this.MoveSelected(-1);
 
@@ -1084,6 +1194,16 @@ namespace BlackboxModManager.App.ViewModels
 		private void RefreshMods()
 		{
 			if (this._profile is null) return;
+
+			// The route belongs to the profile, so a profile switch brings a new value. Assign
+			// the field and not the property. The setter saves the profile, and this value just
+			// came out of it.
+			if (this._binaryRoute != this._profile.BinaryRoute)
+			{
+				this._binaryRoute = this._profile.BinaryRoute;
+				this.OnPropertyChanged(nameof(this.BinaryRoute));
+				this.OnPropertyChanged(nameof(this.BinaryRouteIsCli));
+			}
 
 			// Only the mods of this game. A profile of one game must never hold a mod of
 			// another game, and Reconcile drops any entry that this list does not name.

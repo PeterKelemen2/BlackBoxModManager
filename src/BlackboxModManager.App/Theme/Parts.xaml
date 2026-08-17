@@ -401,6 +401,37 @@
         <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
           <MenuItem Command="{Binding SetModGameCommand}" Header="Set the game of this mod" />
           <Separator />
+          <!--
+            The route of one Binary mod. Every item stays enabled for any mod, because a
+            CanExecute that reads the selected row would need a binding that this menu
+            cannot reach. The command reports a mod of another kind instead.
+          -->
+          <MenuItem Header="Deploy this mod with">
+            <!--
+              The mark shows which route the mod takes now. IsCheckable stays false, so a
+              click runs the command and never toggles the mark by itself. The command
+              changes the route, and the view model then raises these three properties.
+            -->
+            <MenuItem
+              Command="{Binding SetModRouteCommand}"
+              CommandParameter="Inherit"
+              Header="The choice of the profile"
+              IsCheckable="False"
+              IsChecked="{Binding SelectedModRouteIsInherit, Mode=OneWay}" />
+            <MenuItem
+              Command="{Binding SetModRouteCommand}"
+              CommandParameter="Native"
+              Header="The container engine"
+              IsCheckable="False"
+              IsChecked="{Binding SelectedModRouteIsNative, Mode=OneWay}" />
+            <MenuItem
+              Command="{Binding SetModRouteCommand}"
+              CommandParameter="BinaryCli"
+              Header="Binary 2.8.3"
+              IsCheckable="False"
+              IsChecked="{Binding SelectedModRouteIsBinaryCli, Mode=OneWay}" />
+          </MenuItem>
+          <Separator />
           <MenuItem Command="{Binding RemoveModCommand}" Header="Remove from the store" />
         </ContextMenu>
       </Border.ContextMenu>
@@ -463,6 +494,7 @@
               <Run Text="{Binding FileCount, Mode=OneWay}" />
               <Run Text=" files · " />
               <Run Text="{Binding Size, Mode=OneWay}" />
+              <Run Text="{Binding RouteSummary, Mode=OneWay}" />
             </TextBlock>
           </StackPanel>
         </Grid>
