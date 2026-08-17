@@ -252,6 +252,22 @@ namespace BlackboxModManager.App.ViewModels
 		private string _pendingMessage = String.Empty;
 
 		/// <summary>
+		/// True when the last deploy, revert, or other run failed. The action row shows the
+		/// message while this is true.
+		///
+		/// <b>The modal dialog reports the failure once, and this banner keeps reporting it.</b>
+		/// A user who closes the dialog must still see which run failed and why. RunAsync sets
+		/// this beside the dialog, not instead of it. DismissDeployError and the next run both
+		/// clear it.
+		/// </summary>
+		[ObservableProperty]
+		private bool _hasDeployError;
+
+		/// <summary>The name of the run and the message of the exception that it threw.</summary>
+		[ObservableProperty]
+		private string _deployError = String.Empty;
+
+		/// <summary>
 		/// The fingerprint of the profile that the game directory holds. A null value means
 		/// that no workspace answered the question yet.
 		/// </summary>
@@ -1909,6 +1925,11 @@ namespace BlackboxModManager.App.ViewModels
 			this.Status = title;
 			this.Write(title);
 
+			// A new run speaks for itself. The banner of an earlier failure must not linger
+			// beside a run that has not failed yet.
+			this.HasDeployError = false;
+			this.DeployError = String.Empty;
+
 			var progress = new Progress<string>(this.Write);
 			Action<string> report = line => ((IProgress<string>)progress).Report(line);
 
@@ -1922,6 +1943,12 @@ namespace BlackboxModManager.App.ViewModels
 			{
 				this.Write($"FAILED. {ex.Message}");
 				this.Status = "The last operation failed.";
+
+				// Set the banner before the dialog. The dialog is modal and blocks here until
+				// the user closes it, and the banner has to be in place under it already.
+				this.DeployError = $"{title} {ex.Message}";
+				this.HasDeployError = true;
+
 				this._ask.ShowError(ex.Message);
 			}
 			finally
@@ -1929,6 +1956,14 @@ namespace BlackboxModManager.App.ViewModels
 				this.IsBusy = false;
 				this.Work = RunningWork.None;
 			}
+		}
+
+		/// <summary>Clears the banner that RunAsync sets for a failed run.</summary>
+		[RelayCommand]
+		private void DismissDeployError()
+		{
+			this.HasDeployError = false;
+			this.DeployError = String.Empty;
 		}
 
 		private void Write(string line)

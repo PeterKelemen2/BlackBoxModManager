@@ -40,12 +40,26 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public IReadOnlyList<string> WritePaths { get; }
 
+		/// <summary>
+		/// Which variants ran a command against each entry of Containers, keyed by the
+		/// normalized path.
+		///
+		/// <b>The verify needs this for the containers that no manifest names.</b> A container
+		/// that a manifest declares gets its contributors from MergedLoad. A container that
+		/// only a script names, such as the per-car VINYLS.BIN of a vinyl mod, has no manifest
+		/// entry to read that from. This map is the only record of who touched it.
+		/// </summary>
+		public IReadOnlyDictionary<string, IReadOnlyList<string>> ContainerContributors { get; }
+
 		public GateResult(IReadOnlyList<ResolvedScript> scripts, IReadOnlyList<string> containers,
-			IReadOnlyList<string> writePaths = null)
+			IReadOnlyList<string> writePaths = null,
+			IReadOnlyDictionary<string, IReadOnlyList<string>> containerContributors = null)
 		{
 			this.Scripts = scripts ?? Array.Empty<ResolvedScript>();
 			this.Containers = containers ?? Array.Empty<string>();
 			this.WritePaths = writePaths ?? Array.Empty<string>();
+			this.ContainerContributors = containerContributors ??
+				new Dictionary<string, IReadOnlyList<string>>();
 		}
 	}
 
@@ -83,6 +97,7 @@ namespace BlackboxModManager.Core.Deploy
 			var scripts = new List<ResolvedScript>(variants.Count);
 			var containers = new List<string>();
 			var seen = new HashSet<string>(StringComparer.Ordinal);
+			var containerContributors = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 			var writePaths = new List<string>();
 			var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			int warned = 0;
@@ -117,9 +132,18 @@ namespace BlackboxModManager.Core.Deploy
 					string target = edit.Key?.TargetFile;
 
 					if (String.IsNullOrWhiteSpace(target)) continue;
-					if (!seen.Add(PathKey.Normalize(target))) continue;
 
-					containers.Add(target);
+					string key = PathKey.Normalize(target);
+
+					if (seen.Add(key)) containers.Add(target);
+
+					if (!containerContributors.TryGetValue(key, out List<string> owners))
+					{
+						owners = new List<string>();
+						containerContributors[key] = owners;
+					}
+
+					if (!owners.Contains(variant.Label)) owners.Add(variant.Label);
 				}
 
 				// Collect every path in the game directory that a filesystem command writes.
@@ -162,7 +186,13 @@ namespace BlackboxModManager.Core.Deploy
 			write($"The command gate read {variants.Count} variants. It refused nothing and it found " +
 				$"{warned} commands that the conflict check cannot compare.");
 
-			return new GateResult(scripts, containers, writePaths);
+			var readOnlyContributors = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+			foreach (KeyValuePair<string, List<string>> entry in containerContributors)
+			{
+				readOnlyContributors[entry.Key] = entry.Value;
+			}
+
+			return new GateResult(scripts, containers, writePaths, readOnlyContributors);
 		}
 
 		/// <summary>

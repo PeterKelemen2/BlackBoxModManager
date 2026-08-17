@@ -270,12 +270,7 @@ namespace BlackboxModManager.Core.Deploy
 					RunOne(context, variants[i], gate.Scripts[i], game);
 				}
 
-				var containers = new List<ContainerWrite>(merged.Files.Count);
-
-				foreach (string file in merged.Files)
-				{
-					containers.Add(new ContainerWrite(file, merged.Contributors[file]));
-				}
+				IReadOnlyList<ContainerWrite> containers = ContainerReportBuilder.Build(merged, gate);
 
 				context.Log($"The container engine applied {variants.Count} variants and rewrote " +
 					$"{containers.Count} containers.");

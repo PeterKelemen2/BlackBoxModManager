@@ -200,6 +200,8 @@ GLOBAL/GlobalMemoryFile.bin      18:24
 
 **The manifest list is never the whole list.** Any future code that writes into the staging copy must take its file list from the commands and not from the manifest.
 
+**The verify read the same short list, and failed a clean deploy.** `ContainerDeployEngine` reported only the containers of the merged load to `StagingVerifier`. It did not know about the containers that only a script names. The verify then failed every one of them as "no mod supplied it," on a deploy that changed nothing else. `ContainerReportBuilder` now reports every container that `GateResult.Containers` names, not only the manifest ones. See fact 11 of [06-binary-deployment.md](06-binary-deployment.md).
+
 **How to repair an install that this damaged.** The vanilla copy holds the modded content, so every later deploy reads modded input and reports errors that name no cause.
 
 1. Close the application.

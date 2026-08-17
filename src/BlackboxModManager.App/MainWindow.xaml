@@ -19,6 +19,7 @@
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
     <!--
@@ -636,7 +637,54 @@
       An idle button carries no spinner and no gap. The button grows by the width of the
       spinner while its operation runs. See the Spinner style in Theme/Parts.xaml.
     -->
-    <Grid Grid.Row="2" Margin="0,8,0,0">
+    <!--
+      The banner of a deploy, revert, or other run that failed. RunAsync sets this beside the
+      modal error dialog and not instead of it, so the failure stays on screen after the user
+      closes that dialog. See MainViewModel.HasDeployError.
+
+      The message sits in its own column and it trims, the same way the pending-changes
+      warning below does. Dismiss clears it, and so does the next run.
+    -->
+    <Border
+      Grid.Row="2"
+      Margin="0,8,0,0"
+      Padding="10,8"
+      Background="{StaticResource DangerSubtle}"
+      BorderBrush="{StaticResource DangerDefault}"
+      BorderThickness="1"
+      Visibility="{Binding HasDeployError, Converter={StaticResource BoolToVisible}}">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Path
+          Grid.Column="0"
+          Margin="0,0,8,0"
+          VerticalAlignment="Center"
+          Data="{StaticResource IconWarning}"
+          Stroke="{StaticResource DangerDefault}"
+          StrokeEndLineCap="Round"
+          StrokeLineJoin="Round"
+          StrokeStartLineCap="Round"
+          StrokeThickness="1.5" />
+        <TextBlock
+          Grid.Column="1"
+          VerticalAlignment="Center"
+          Foreground="{StaticResource DangerDefault}"
+          Text="{Binding DeployError}"
+          TextTrimming="CharacterEllipsis"
+          ToolTip="{Binding DeployError}" />
+        <Button
+          Grid.Column="2"
+          Margin="8,0,0,0"
+          Command="{Binding DismissDeployErrorCommand}"
+          Content="Dismiss" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="3" Margin="0,8,0,0">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -727,7 +775,7 @@
       own DataContext, because a ToolTip sits outside the visual tree in the same way that a
       ContextMenu does.
     -->
-    <StatusBar Grid.Row="3" Margin="0,8,0,0">
+    <StatusBar Grid.Row="4" Margin="0,8,0,0">
       <StatusBarItem>
         <TextBlock Text="{Binding Status}" />
       </StatusBarItem>

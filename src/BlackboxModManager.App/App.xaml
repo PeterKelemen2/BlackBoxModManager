@@ -1,7 +1,13 @@
+<!--
+  The default mode ends the application when the last window closes. A transient dialog,
+  such as the deploy error message, is a window too. Closing it then closed the whole
+  application. Only the close of the main window ends the application now.
+-->
 <Application
   x:Class="BlackboxModManager.App.App"
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  ShutdownMode="OnMainWindowClose">
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>

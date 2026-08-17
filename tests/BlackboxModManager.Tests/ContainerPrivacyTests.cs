@@ -182,6 +182,126 @@ namespace BlackboxModManager.Tests
 			Assert.Contains(warnings, line => line.Contains("It runs 3 times", StringComparison.Ordinal));
 		}
 
+		// ------------------------------------------------------------- the merged container report
+
+		/// <summary>
+		/// The manifest of the Recompiled Vinyls mod names one container, GLOBAL\GLOBALB.LZC.
+		/// Its script writes a second one that the manifest never names. Both have to reach the
+		/// report, or the verify fails the second one with "no mod supplied it." See defect 16.
+		/// </summary>
+		[Fact]
+		public void TheReportedContainersHoldBothTheManifestOneAndTheScriptOnlyOne()
+		{
+			string staging = this.Staging();
+
+			IReadOnlyList<EnabledVariant> variants = this.Build(
+				"new negate \"CARS\\FORDGT\\VINYLS.BIN\"",
+				"update_collection CARS\\FORDGT\\VINYLS.BIN VectorVinyls A B 1",
+				"delete \"CARS\\FORDGT\\VINYLS.BIN\"");
+
+			GateResult gate = CommandGate.Check(variants, staging);
+			MergedLoad merged = MergedLaunch.Build(variants, staging);
+
+			IReadOnlyList<ContainerWrite> containers = ContainerReportBuilder.Build(merged, gate);
+
+			Assert.Contains(containers,
+				write => PathKey.Normalize(write.RelativePath) == PathKey.Normalize(@"GLOBAL\GLOBALB.LZC"));
+
+			Assert.Contains(containers,
+				write => PathKey.Normalize(write.RelativePath) == PathKey.Normalize(@"CARS\FORDGT\VINYLS.BIN"));
+		}
+
+		[Fact]
+		public void TheManifestContainerKeepsItsManifestContributors()
+		{
+			string staging = this.Staging();
+
+			IReadOnlyList<EnabledVariant> variants = this.Build(
+				"update_collection GLOBAL\\GLOBALB.LZC CarTypeInfos A B 1");
+
+			GateResult gate = CommandGate.Check(variants, staging);
+			MergedLoad merged = MergedLaunch.Build(variants, staging);
+
+			IReadOnlyList<ContainerWrite> containers = ContainerReportBuilder.Build(merged, gate);
+
+			ContainerWrite globalb = Assert.Single(containers,
+				write => PathKey.Normalize(write.RelativePath) == PathKey.Normalize(@"GLOBAL\GLOBALB.LZC"));
+
+			Assert.Equal(merged.Contributors[@"GLOBAL\GLOBALB.LZC"], globalb.Contributors);
+		}
+
+		[Fact]
+		public void TheScriptOnlyContainerCarriesTheVariantThatWroteIt()
+		{
+			string staging = this.Staging();
+
+			IReadOnlyList<EnabledVariant> variants = this.Build(
+				"new negate \"CARS\\FORDGT\\VINYLS.BIN\"",
+				"delete \"CARS\\FORDGT\\VINYLS.BIN\"");
+
+			GateResult gate = CommandGate.Check(variants, staging);
+			MergedLoad merged = MergedLaunch.Build(variants, staging);
+
+			IReadOnlyList<ContainerWrite> containers = ContainerReportBuilder.Build(merged, gate);
+
+			ContainerWrite fordgt = Assert.Single(containers,
+				write => PathKey.Normalize(write.RelativePath) == PathKey.Normalize(@"CARS\FORDGT\VINYLS.BIN"));
+
+			Assert.Contains(variants[0].Label, fordgt.Contributors);
+		}
+
+		/// <summary>A container that both the manifest and the script name reaches the report once.</summary>
+		[Fact]
+		public void ADuplicateBetweenTheManifestAndTheScriptAppearsOnce()
+		{
+			string staging = this.Staging();
+
+			IReadOnlyList<EnabledVariant> variants = this.Build(
+				"update_collection GLOBAL\\GLOBALB.LZC CarTypeInfos A B 1");
+
+			GateResult gate = CommandGate.Check(variants, staging);
+			MergedLoad merged = MergedLaunch.Build(variants, staging);
+
+			IReadOnlyList<ContainerWrite> containers = ContainerReportBuilder.Build(merged, gate);
+
+			Assert.Single(containers,
+				write => PathKey.Normalize(write.RelativePath) == PathKey.Normalize(@"GLOBAL\GLOBALB.LZC"));
+		}
+
+		/// <summary>
+		/// Proves the fix end to end. The script rewrites a container that its manifest never
+		/// names, and the staging copy now differs from the vanilla snapshot for that path. The
+		/// verify has to accept it, the way it already accepts a manifest-declared container.
+		/// </summary>
+		[Fact]
+		public void TheVerifyAcceptsAContainerThatOnlyTheScriptNames()
+		{
+			string staging = this.Staging();
+			string carPath = Path.Combine(staging, "CARS", "FORDGT", "VINYLS.BIN");
+
+			Directory.CreateDirectory(Path.GetDirectoryName(carPath));
+			File.WriteAllText(carPath, "vanilla vinyls");
+
+			VanillaSnapshot snapshot = SnapshotReader.Create(staging);
+
+			IReadOnlyList<EnabledVariant> variants = this.Build(
+				"new negate \"CARS\\FORDGT\\VINYLS.BIN\"",
+				"update_collection CARS\\FORDGT\\VINYLS.BIN VectorVinyls A B 1",
+				"delete \"CARS\\FORDGT\\VINYLS.BIN\"");
+
+			GateResult gate = CommandGate.Check(variants, staging);
+			MergedLoad merged = MergedLaunch.Build(variants, staging);
+			IReadOnlyList<ContainerWrite> containers = ContainerReportBuilder.Build(merged, gate);
+
+			// The container engine would have rewritten this file. Stand in for that write.
+			File.WriteAllText(carPath, "rewritten vinyls");
+
+			var report = new DeployReport(null, null, null, null, containers);
+			VerificationResult verification = StagingVerifier.Verify(staging, snapshot, report, this._store);
+
+			Assert.True(verification.IsClean);
+		}
+
 		// ------------------------------------------------------------------------- fixtures
 
 		/// <summary>
