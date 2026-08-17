@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Games;
 using BlackboxModManager.Core.Profiles;
@@ -92,13 +93,19 @@ namespace BlackboxModManager.Core.Deploy
 		/// Applies one profile to one game install.
 		/// </summary>
 		public DeployResult Deploy(GameInstall install, Profile profile, bool fullVerify = false,
-			Action<string> log = null)
+			Action<string> log = null, CancellationToken cancellation = default)
 		{
 			if (install is null) throw new ArgumentNullException(nameof(install));
 			if (profile is null) throw new ArgumentNullException(nameof(profile));
 
 			Action<string> write = log ?? (line => { });
 			GameWorkspace workspace = this.WorkspaceOf(install);
+			var timing = new DeployTiming();
+
+			if (timing.CountsCompression)
+			{
+				write($"{DeployTiming.CompressionSwitch} is on. The native compressor counts every call.");
+			}
 
 			if (!workspace.SharesVolumeWithGame())
 			{
@@ -106,40 +113,107 @@ namespace BlackboxModManager.Core.Deploy
 					"Every build and every swap copies every byte.");
 			}
 
+			// Read the variants and resolve every script one time. The conflict check and the
+			// command gate both need them, and each resolve reads every file of the append
+			// graph. One real mod appends 158 files.
+			IReadOnlyList<EnabledVariant> variants;
+			var scripts = new ScriptResolutionCache(workspace.StagingDirectory);
+
+			using (timing.Measure("read the variants"))
+			{
+				variants = VariantReader.Read(profile, this._store, install.Game, write);
+			}
+
+			cancellation.ThrowIfCancellationRequested();
+
 			// Read the conflicts first. The check writes nothing, and a user who sees the
 			// list before the deploy can still change the load order.
-			ConflictReport conflicts = this.CheckConflicts(install, profile, write);
+			ConflictReport conflicts;
+
+			using (timing.Measure("check the conflicts"))
+			{
+				conflicts = ConflictPreflight.Run(variants, workspace.StagingDirectory, write, scripts);
+			}
+
+			cancellation.ThrowIfCancellationRequested();
 
 			// Settle the ASI loader before anything writes. A contest with no stored answer
 			// stops the deploy here, where the game directory is still untouched.
 			ProxyPlan proxies = this.PlanLoaders(profile);
 			IReadOnlyList<LoaderChoice> loaders = LoaderPreflight.Settle(proxies, write);
 
-			VanillaSnapshot snapshot = this.EnsureVanilla(workspace, write);
+			VanillaSnapshot snapshot;
 
-			CheckBaseline(workspace, snapshot, fullVerify, write);
+			using (timing.Measure("record the vanilla copy"))
+			{
+				snapshot = this.EnsureVanilla(workspace, write);
+			}
+
+			using (timing.Measure("check the baseline"))
+			{
+				CheckBaseline(workspace, snapshot, fullVerify, write);
+			}
+
+			cancellation.ThrowIfCancellationRequested();
 
 			write("Build the staging copy.");
-			ReplicationReport staging = TreeReplicator.Build(
-				workspace.VanillaDirectory, workspace.StagingDirectory, write);
+			ReplicationReport staging;
+
+			using (timing.Measure("build the staging copy"))
+			{
+				staging = TreeReplicator.Build(
+					workspace.VanillaDirectory, workspace.StagingDirectory, write);
+			}
 
 			var context = new DeployContext(
 				install, workspace.StagingDirectory, profile, this._store, this._binary, write, proxies,
-				workspace.VanillaDirectory, snapshot);
+				workspace.VanillaDirectory, snapshot, variants, scripts, timing, cancellation);
 
-			DeployReport report = this.RunEngines(context, profile, write, loaders);
+			DeployReport report;
 
-			VerificationResult verification = StagingVerifier.Verify(
-				workspace.StagingDirectory, snapshot, report, this._store, fullVerify, write);
+			try
+			{
+				using (timing.Measure("run the engines"))
+				{
+					report = this.RunEngines(context, profile, write, loaders);
+				}
+			}
+			catch (OperationCanceledException)
+			{
+				timing.Write(write);
+
+				write("The deploy stopped because the user canceled it. The game directory did not change, " +
+					"and the staging copy holds the part that ran.");
+
+				throw;
+			}
+			finally
+			{
+				write($"The scripts resolved {scripts.Misses} times and answered {scripts.Hits} " +
+					"more requests from the cache.");
+			}
+
+			VerificationResult verification;
+
+			using (timing.Measure("verify the staging copy"))
+			{
+				verification = StagingVerifier.Verify(
+					workspace.StagingDirectory, snapshot, report, this._store, fullVerify, write);
+			}
 
 			if (!verification.IsClean)
 			{
+				timing.Write(write);
+
 				throw new DeployServiceException(
 					$"The verify found {verification.Problems.Count} problems, so the swap did not run. " +
 					$"The game directory did not change. The first problem is: {verification.Problems[0]}");
 			}
 
-			GameSwap.Swap(workspace, workspace.StagingDirectory, write);
+			using (timing.Measure("swap the game directory"))
+			{
+				GameSwap.Swap(workspace, workspace.StagingDirectory, write);
+			}
 
 			workspace.WriteState(new WorkspaceState
 			{
@@ -148,6 +222,8 @@ namespace BlackboxModManager.Core.Deploy
 				DeployedFileCount = report.FileCount,
 				DeployedFingerprint = ProfileFingerprint.Of(profile),
 			});
+
+			timing.Write(write);
 
 			write(report.Summary());
 			write("The deploy finished.");
@@ -284,6 +360,7 @@ namespace BlackboxModManager.Core.Deploy
 			var methods = new Dictionary<LinkKind, int>();
 			var containers = new List<ContainerWrite>();
 			var settings = new List<SettingsWrite>();
+			var scriptWrites = new List<ScriptWrite>();
 			string note = String.Empty;
 
 			IReadOnlyList<InstalledMod> enabled = this.ResolveEnabled(profile);
@@ -314,6 +391,7 @@ namespace BlackboxModManager.Core.Deploy
 				overrides.AddRange(report.Overrides);
 				containers.AddRange(report.Containers);
 				settings.AddRange(report.Settings);
+				scriptWrites.AddRange(report.ScriptWrites);
 
 				foreach (KeyValuePair<LinkKind, int> entry in report.Methods)
 				{
@@ -325,7 +403,8 @@ namespace BlackboxModManager.Core.Deploy
 				if (note.Length == 0) note = report.MethodNote;
 			}
 
-			return new DeployReport(files, overrides, methods, note, containers, settings, loaders);
+			return new DeployReport(files, overrides, methods, note, containers, settings, loaders,
+				scriptWrites);
 		}
 
 		/// <summary>

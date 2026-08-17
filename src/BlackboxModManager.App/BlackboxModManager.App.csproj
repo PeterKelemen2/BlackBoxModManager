@@ -18,6 +18,11 @@
     <!-- Program.Main sets the culture before it starts the application. The entry point
          that WPF generates would run first, so it is not the entry point. -->
     <StartupObject>BlackboxModManager.App.Program</StartupObject>
+    <!-- A container save compresses every texture with Parallel.For, and each texture takes
+         one large object heap block. One vinyl mod runs that about 27,000 times. Workstation
+         collection is the wrong mode for that shape of work. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

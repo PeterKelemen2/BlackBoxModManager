@@ -725,6 +725,18 @@
         Grid.Column="1"
         HorizontalAlignment="Right"
         Orientation="Horizontal">
+      <!--
+        Cancel. It shows only while an operation runs. A deploy of a large container mod runs
+        for minutes, and a user with no Cancel button ends the process instead. An ended deploy
+        is what damaged a vanilla baseline before. See defect 16.
+      -->
+      <Button
+        MinWidth="90"
+        Margin="0,0,8,0"
+        ui:Kind.Value="DangerOutline"
+        Command="{Binding CancelWorkCommand}"
+        Content="Cancel"
+        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisible}}" />
       <Button
         MinWidth="100"
         ui:Kind.Value="SuccessOutline"

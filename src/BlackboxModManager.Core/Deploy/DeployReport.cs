@@ -170,6 +170,35 @@ namespace BlackboxModManager.Core.Deploy
 	}
 
 	/// <summary>
+	/// One file in the game directory that a filesystem command of a script wrote, and which is
+	/// no container.
+	///
+	/// <b>The verify needs this list.</b> The command <c>unlock_memory</c> writes a short header
+	/// over the memory files of the game, and <c>move_file</c> and <c>copy_file</c> write a
+	/// target. None of those files is in a manifest, none carries an edit key, and none matches
+	/// anything in a mod store. Without this list the verify reports each one as "differs from
+	/// the vanilla state, and no mod supplied it," and it stops a deploy that did what the mod
+	/// asked for. See defect 16.
+	/// </summary>
+	public sealed class ScriptWrite
+	{
+		/// <summary>The path inside the game directory.</summary>
+		public string RelativePath { get; }
+
+		/// <summary>The variants whose script wrote this path.</summary>
+		public IReadOnlyList<string> Contributors { get; }
+
+		public ScriptWrite(string relativePath, IReadOnlyList<string> contributors)
+		{
+			this.RelativePath = relativePath;
+			this.Contributors = contributors ?? Array.Empty<string>();
+		}
+
+		public override string ToString() =>
+			$"{this.RelativePath} for {String.Join(", ", this.Contributors)}";
+	}
+
+	/// <summary>
 	/// What one deploy did. The UI shows this, so that a user can understand a slow deploy
 	/// and a surprising result.
 	/// </summary>
@@ -213,13 +242,20 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public IReadOnlyList<LoaderChoice> Loaders { get; }
 
+		/// <summary>
+		/// The files that a filesystem command of a script wrote, and which are no containers.
+		/// This is empty when no enabled script runs such a command.
+		/// </summary>
+		public IReadOnlyList<ScriptWrite> ScriptWrites { get; }
+
 		public int FileCount => this.Files.Count;
 
 		public DeployReport(IReadOnlyList<DeployedFile> files, IReadOnlyList<DeployOverride> overrides,
 			IReadOnlyDictionary<LinkKind, int> methods, string methodNote,
 			IReadOnlyList<ContainerWrite> containers = null,
 			IReadOnlyList<SettingsWrite> settings = null,
-			IReadOnlyList<LoaderChoice> loaders = null)
+			IReadOnlyList<LoaderChoice> loaders = null,
+			IReadOnlyList<ScriptWrite> scriptWrites = null)
 		{
 			this.Files = files ?? Array.Empty<DeployedFile>();
 			this.Overrides = overrides ?? Array.Empty<DeployOverride>();
@@ -228,6 +264,7 @@ namespace BlackboxModManager.Core.Deploy
 			this.Containers = containers ?? Array.Empty<ContainerWrite>();
 			this.Settings = settings ?? Array.Empty<SettingsWrite>();
 			this.Loaders = loaders ?? Array.Empty<LoaderChoice>();
+			this.ScriptWrites = scriptWrites ?? Array.Empty<ScriptWrite>();
 		}
 
 		/// <summary>

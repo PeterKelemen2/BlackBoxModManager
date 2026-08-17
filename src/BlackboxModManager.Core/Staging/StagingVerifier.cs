@@ -66,6 +66,17 @@ namespace BlackboxModManager.Core.Staging
 				containers[PathKey.Normalize(write.RelativePath)] = write;
 			}
 
+			// A file that a filesystem command of a script wrote differs from the vanilla state
+			// on purpose too, and it matches nothing in a mod store either. The command
+			// unlock_memory writes a header over the memory files of the game, and move_file
+			// writes a target that no manifest names. See defect 16.
+			var written = new Dictionary<string, ScriptWrite>(StringComparer.OrdinalIgnoreCase);
+
+			foreach (ScriptWrite write in report.ScriptWrites)
+			{
+				written[PathKey.Normalize(write.RelativePath)] = write;
+			}
+
 			log?.Invoke(full
 				? "Verify the staging copy. The full check hashes every file."
 				: "Verify the staging copy.");
@@ -77,7 +88,8 @@ namespace BlackboxModManager.Core.Staging
 				{
 					string key = PathKey.Normalize(relative);
 
-					return deployed.ContainsKey(key) || containers.ContainsKey(key);
+					return deployed.ContainsKey(key) || containers.ContainsKey(key)
+						|| written.ContainsKey(key);
 				});
 
 			foreach (SnapshotDifference difference in differences)
@@ -165,6 +177,16 @@ namespace BlackboxModManager.Core.Staging
 						$"{String.Join(", ", write.Contributors)} edited it.");
 				}
 			}
+
+			// 4. The files of a filesystem command carry no check of their own.
+			//
+			// <b>A path in this list is a path that a script may write, not one that it did.</b>
+			// The static walk enters both branches of every <c>if</c>, and a real mod guards
+			// almost every filesystem command with one. NFSMWRV-1024x-Advanced holds 97
+			// <c>move_file</c> commands behind <c>if file_exists</c>, and the answers of the user
+			// decide how many run. So an absent file is normal here and a present file needs no
+			// comparison. The one thing that matters is that the pass above left them alone.
+			checkedFiles += written.Count;
 
 			log?.Invoke(problems.Count == 0
 				? $"The verify checked {checkedFiles} files and found no problem."

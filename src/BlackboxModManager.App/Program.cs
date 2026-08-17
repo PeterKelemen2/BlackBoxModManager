@@ -39,6 +39,16 @@ namespace BlackboxModManager.App
 				return DeployTest.Run(args[1], args[2], args[3], revert);
 			}
 
+			// The one mod deploy installs any single mod into a scratch copy of any game. It
+			// answers every question with the first option. See OneModDeployTest.
+			if (args.Length >= 5 && args[0] == OneModDeployTest.Switch)
+			{
+				bool keep = args.Length >= 6 && args[5] == "keep";
+				string answers = args.Length >= 7 ? args[6] : null;
+
+				return OneModDeployTest.Run(args[1], args[2], args[3], args[4], !keep, answers);
+			}
+
 			// This must run before the first window opens. A window keeps the render mode
 			// that it started with. See Rendering.
 			Rendering.Apply();

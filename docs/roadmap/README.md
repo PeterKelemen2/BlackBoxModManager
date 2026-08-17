@@ -23,6 +23,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 11   | [11-ui-polish.md](11-ui-polish.md)               | Nothing. Look and input only.  |
 | 12   | [12-minimal-ui.md](12-minimal-ui.md)             | Nothing. Look and input only.  |
 | 13   | [13-import-progress.md](13-import-progress.md)   | Done. See "Completed" below.   |
+| 14   | Done. See "Completed" below.                     | —                              |
 | 90   | [90-texmod.md](90-texmod.md)                     | Nothing. Explicitly last.      |
 
 Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, 8, and 9 are done. **The success criterion of the project brief passes.**
@@ -32,6 +33,8 @@ Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6,
 **Step 11 polishes what step 10 left.** It puts the last message box into a themed window, it replaces the insertion line of the drag with a ghost slot, it centers the check mark, and it adds a toggle pill. It changes no behavior either. Read [11-ui-polish.md](11-ui-polish.md).
 
 **Step 12 empties the main window.** Every path setting moves into a config window, the seven buttons of the mod toolbar become four glyphs, and the two solid action buttons take a colored edge instead of a fill. It changes no behavior either. **It is built and checked on Windows, and no part of it ran under Wine yet.** Read the Results section of [12-minimal-ui.md](12-minimal-ui.md).
+
+**Step 14 makes a large container deploy finish.** A deploy of `NFSMWRV-1024x-Advanced` for Most Wanted pinned every core and never finished. It now takes 47 seconds and the verify passes. Read the Step 14 section under "Completed".
 
 **Step 13 makes the import show its work.** An import of a 98 MB archive took more than 30 minutes and wrote one log line. The mod list now draws a row for the import at once, with the step, the count, and a bar. The unpack runs through a bundled 7-Zip, and the same import now takes about 18 seconds. Read [13-import-progress.md](13-import-progress.md).
 
@@ -192,6 +195,28 @@ Ten facts carry forward.
 8. **The volume of the mod store decides the cost of every deploy.** A hard link cannot cross a volume, and Wine leaves no usable fallback between a hard link and a copy. The default store sits inside the Wine prefix, so a game on another volume gets Copy. `Settings.ModStoreOverride` and the `Mod store` button move it, and `ModStoreRelocator` moves one mod at a time and deletes nothing before the copy exists. It refuses a target inside a game install or inside a workspace.
 9. **The window holds a `Folders` button.** It lists the game install, the workspace, the staging copy, the vanilla copy, the mod store, and the logs, with `Open` and `Copy path` on each row. A deploy that the verify stopped leaves its result in the staging copy, and that is the only place the failure is readable. `Copy path` always works, because a Wine prefix has no guaranteed file manager.
 10. **Every error dialog holds a `Copy error` button.** `Views/MessageWindow.xaml` replaced the message box, because a message box gives the user no way to copy the text. The dispatcher handler uses the same window and falls back to a message box, because a render failure can break a new WPF window. Run `BlackboxModManager.exe --dialogtest` to open the dialog on the run platform.
+
+### Step 14 — the large container deploy
+
+**Done.** A deploy of `NFSMWRV-1024x-Advanced` for Most Wanted pinned every core and never finished. The user ended the process. The same deploy now takes 47 seconds, writes 48 containers and 97 backup files, and the verify finds no problem. Read [98-known-upstream-defects.md](98-known-upstream-defects.md), defects 21, 22, and 23, for the numbers.
+
+Run it with:
+
+```
+BlackboxModManager.exe --moddeploy <scratchGameDir> <binaryDir> <modPath> MostWanted keep 1=enabled,2=enabled
+```
+
+Add `BBMM_TIME_COMPRESSION=1` to the environment for the codec table.
+
+Seven facts carry forward.
+
+1. **Binary 2.8.3 runs the libraries that we run.** `SpeedReflect/Binary` at tag `v2.8.3` pins `Modules/Endscript` at `c23cbfe`, and that Endscript pins `Modules/Nikki` at `f085d4e`. Our forks sit three trivial commits after those pins. **There is no faster algorithm to read out of Binary.** The one shipped difference is the native compressor, and a measured test proved that the x86 library of Binary 2.8.3 and our x64 rebuild give the same times and the same bytes.
+2. **`LZCompressionType.BEST` was the cost.** It runs JDLZ for every texture on every save, and JDLZ runs at 6 MB per second against 405 MB per second for HUFF. Each texture now carries the codec that the loader read for it. See defect 21.
+3. **The container bytes did not change.** A vanilla container keeps its own codec, so one load and one save writes the file that `BEST` wrote. `ContainerByteStabilityTests` needed no new baseline.
+4. **The install grows.** A new texture takes HUFF, which is fast and larger. The 45 car containers grow from 0.36 GB to 1.55 GB, and the whole install from 2.83 GB to 4.01 GB. `Texture.SourceCompression` holds the default, and `BEST` there trades about 10 minutes for about 760 MB.
+5. **`unlock_memory` stopped a clean deploy.** The verify knew about the containers that a script creates and not about the other files that a script writes. `DeployReport.ScriptWrites` closes that. See defect 16.
+6. **The deploy can be canceled now.** `EndScriptManager.BeforeCommand` is the only place where a cancel can take effect during a pass, because one call of `ProcessScript` runs all 25,737 commands of this mod. The window holds a Cancel button while any operation runs. **An ended process is what damaged a vanilla baseline before.**
+7. **A checkbox starts at "disabled".** `CheckboxCommand` declares its options as `disabled` then `enabled`, and `ApplyDefaults` takes the first. Binary starts a checkbox unchecked as well, so this matches. The window shows the toggle and the user decides.
 
 ## Reference files
 

@@ -161,13 +161,18 @@ namespace BlackboxModManager.Core.Deploy
 		/// Runs the check. Pass the staging directory so that the check can resolve every
 		/// path of a filesystem command. With no staging directory the check reports no
 		/// escaped path, and that is not a pass.
+		///
+		/// Pass the cache of a deploy so that the command gate and this check share one resolve
+		/// of every script. With no cache this method builds its own.
 		/// </summary>
 		public static ConflictReport Run(IReadOnlyList<EnabledVariant> variants,
-			string stagingDirectory = null, Action<string> log = null)
+			string stagingDirectory = null, Action<string> log = null,
+			ScriptResolutionCache cache = null)
 		{
 			if (variants is null) throw new ArgumentNullException(nameof(variants));
 
 			Action<string> write = log ?? (line => { });
+			ScriptResolutionCache resolver = cache ?? new ScriptResolutionCache(stagingDirectory);
 
 			var scripts = new List<ResolvedScript>();
 			var unchecked_ = new List<string>();
@@ -181,9 +186,7 @@ namespace BlackboxModManager.Core.Deploy
 			{
 				try
 				{
-					var roots = new SandboxRoots(stagingDirectory, variant.Variant.Manifest.ThisDir);
-
-					ResolvedScript resolved = ScriptFlattener.Resolve(variant.Variant, variant.Selection, roots);
+					ResolvedScript resolved = resolver.Resolve(variant);
 
 					// Carry the label of the mod, not the bare variant name. Two mods can
 					// hold a variant of one name, and a conflict line has to say which mod.

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using BlackboxModManager.App.Services;
 using BlackboxModManager.App.Views;
@@ -448,6 +449,41 @@ namespace BlackboxModManager.App.ViewModels
 
 		/// <summary>True while the revert runs. The revert button draws its spinner from this.</summary>
 		public bool IsReverting => this._work == RunningWork.Revert;
+
+		private CancellationTokenSource _cancellation;
+
+		/// <summary>
+		/// True while an operation runs that the user can stop.
+		///
+		/// <b>A deploy of a large container mod runs for minutes.</b> Without a Cancel button
+		/// the user ends the process, and an ended deploy is the condition that damaged a
+		/// vanilla baseline before. See defect 16.
+		/// </summary>
+		public bool CanCancel => this._cancellation != null && !this._cancellation.IsCancellationRequested;
+
+		/// <summary>Asks the running operation to stop at its next safe point.</summary>
+		[RelayCommand(CanExecute = nameof(CanCancel))]
+		private void CancelWork()
+		{
+			CancellationTokenSource source = this._cancellation;
+
+			if (source is null) return;
+
+			this.Write("Cancel asked. The operation stops at its next safe point.");
+			this.Status = "Canceling.";
+
+			try
+			{
+				source.Cancel();
+			}
+			catch (ObjectDisposedException)
+			{
+				// The operation finished between the button and this line. Nothing to stop.
+			}
+
+			this.OnPropertyChanged(nameof(this.CanCancel));
+			this.CancelWorkCommand.NotifyCanExecuteChanged();
+		}
 
 		public bool IsGameReady => this._install != null;
 
@@ -1498,9 +1534,9 @@ namespace BlackboxModManager.App.ViewModels
 			// the deploy starts, and stop when the user cancels.
 			if (!this.AskForLoaders()) return;
 
-			await this.RunAsync($"Deploy the profile \"{profile.Name}\".", report =>
+			await this.RunAsync($"Deploy the profile \"{profile.Name}\".", (report, token) =>
 			{
-				DeployResult result = this.Service().Deploy(install, profile, full, report);
+				DeployResult result = this.Service().Deploy(install, profile, full, report, token);
 
 				foreach (DeployOverride collision in result.Report.Overrides)
 				{
@@ -1913,7 +1949,17 @@ namespace BlackboxModManager.App.ViewModels
 		/// The kind names the operation for the buttons. Work carries that name while the
 		/// operation runs, and the button of a deploy or a revert draws a spinner from it.
 		/// </summary>
-		private async Task RunAsync(string title, Action<Action<string>> work,
+		private Task RunAsync(string title, Action<Action<string>> work,
+			RunningWork kind = RunningWork.Other)
+		{
+			return this.RunAsync(title, (report, token) => work(report), kind);
+		}
+
+		/// <summary>
+		/// The same, for an operation that the user can cancel. The work delegate reads the
+		/// token and throws <c>OperationCanceledException</c> at its next safe point.
+		/// </summary>
+		private async Task RunAsync(string title, Action<Action<string>, CancellationToken> work,
 			RunningWork kind = RunningWork.Other)
 		{
 			if (this.IsBusy) return;
@@ -1933,11 +1979,23 @@ namespace BlackboxModManager.App.ViewModels
 			var progress = new Progress<string>(this.Write);
 			Action<string> report = line => ((IProgress<string>)progress).Report(line);
 
+			var source = new CancellationTokenSource();
+			this._cancellation = source;
+			this.OnPropertyChanged(nameof(this.CanCancel));
+			this.CancelWorkCommand.NotifyCanExecuteChanged();
+
 			try
 			{
-				await Task.Run(() => work(report));
+				await Task.Run(() => work(report, source.Token));
 
 				this.Status = "Ready.";
+			}
+			catch (OperationCanceledException)
+			{
+				// A cancel is what the user asked for, so it is no failure. No banner and no
+				// dialog. The game directory did not change.
+				this.Write("CANCELED. The game directory did not change.");
+				this.Status = "The last operation was canceled.";
 			}
 			catch (Exception ex)
 			{
@@ -1953,8 +2011,14 @@ namespace BlackboxModManager.App.ViewModels
 			}
 			finally
 			{
+				this._cancellation = null;
+				source.Dispose();
+
 				this.IsBusy = false;
 				this.Work = RunningWork.None;
+
+				this.OnPropertyChanged(nameof(this.CanCancel));
+				this.CancelWorkCommand.NotifyCanExecuteChanged();
 			}
 		}
 

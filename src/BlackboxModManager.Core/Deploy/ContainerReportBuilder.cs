@@ -50,5 +50,46 @@ namespace BlackboxModManager.Core.Deploy
 
 			return writes;
 		}
+
+		/// <summary>
+		/// Returns one ScriptWrite for every full path in gate.WritePaths that is no container,
+		/// with the path made relative to the staging directory.
+		///
+		/// <b>A container is not the only thing that a script writes.</b> The gate resolves every
+		/// write of every filesystem command. Those files carry no edit key, so Build never sees
+		/// them, and the verify then reports each one as a change that no mod supplied. The mod
+		/// NFSMWRV-1024x-Advanced runs <c>unlock_memory all</c>, and that stopped a clean deploy
+		/// with three problems. See defect 16.
+		/// </summary>
+		public static IReadOnlyList<ScriptWrite> BuildScriptWrites(string stagingDirectory,
+			GateResult gate, IReadOnlyList<ContainerWrite> containers)
+		{
+			if (gate is null) throw new ArgumentNullException(nameof(gate));
+
+			var known = new HashSet<string>(StringComparer.Ordinal);
+
+			if (containers != null)
+			{
+				foreach (ContainerWrite write in containers) known.Add(PathKey.Normalize(write.RelativePath));
+			}
+
+			var writes = new List<ScriptWrite>(gate.WritePaths.Count);
+
+			foreach (string full in gate.WritePaths)
+			{
+				string relative = Staging.BaselineVerifier.RelativeTo(stagingDirectory, full);
+
+				// A path that resolves outside the staging copy never gets here. The gate stops
+				// the deploy for one of those before it writes.
+				if (relative is null) continue;
+
+				if (!known.Add(PathKey.Normalize(relative))) continue;
+
+				writes.Add(new ScriptWrite(relative, gate.WritePathContributors.TryGetValue(full,
+					out IReadOnlyList<string> owners) ? owners : Array.Empty<string>()));
+			}
+
+			return writes;
+		}
 	}
 }

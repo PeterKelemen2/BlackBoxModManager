@@ -51,14 +51,26 @@ namespace BlackboxModManager.Core.Deploy
 		/// </summary>
 		public IReadOnlyDictionary<string, IReadOnlyList<string>> ContainerContributors { get; }
 
+		/// <summary>
+		/// Which variants wrote each entry of WritePaths, keyed by the full path.
+		///
+		/// <b>The verify needs this for a file that no manifest and no edit key names.</b> The
+		/// command <c>unlock_memory</c> writes the memory files of the game, and this map is the
+		/// only record of which mod asked for that. See defect 16.
+		/// </summary>
+		public IReadOnlyDictionary<string, IReadOnlyList<string>> WritePathContributors { get; }
+
 		public GateResult(IReadOnlyList<ResolvedScript> scripts, IReadOnlyList<string> containers,
 			IReadOnlyList<string> writePaths = null,
-			IReadOnlyDictionary<string, IReadOnlyList<string>> containerContributors = null)
+			IReadOnlyDictionary<string, IReadOnlyList<string>> containerContributors = null,
+			IReadOnlyDictionary<string, IReadOnlyList<string>> writePathContributors = null)
 		{
 			this.Scripts = scripts ?? Array.Empty<ResolvedScript>();
 			this.Containers = containers ?? Array.Empty<string>();
 			this.WritePaths = writePaths ?? Array.Empty<string>();
 			this.ContainerContributors = containerContributors ??
+				new Dictionary<string, IReadOnlyList<string>>();
+			this.WritePathContributors = writePathContributors ??
 				new Dictionary<string, IReadOnlyList<string>>();
 		}
 	}
@@ -81,7 +93,7 @@ namespace BlackboxModManager.Core.Deploy
 		/// message names the mod, the file, the line, and the command.
 		/// </summary>
 		public static GateResult Check(IReadOnlyList<EnabledVariant> variants, string stagingDirectory,
-			Action<string> log = null)
+			Action<string> log = null, ScriptResolutionCache cache = null)
 		{
 			if (variants is null) throw new ArgumentNullException(nameof(variants));
 
@@ -91,6 +103,7 @@ namespace BlackboxModManager.Core.Deploy
 			}
 
 			Action<string> write = log ?? (line => { });
+			ScriptResolutionCache resolver = cache ?? new ScriptResolutionCache(stagingDirectory);
 
 			var refused = new List<string>();
 			var outside = new List<string>();
@@ -100,15 +113,14 @@ namespace BlackboxModManager.Core.Deploy
 			var containerContributors = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 			var writePaths = new List<string>();
 			var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var writePathContributors = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 			int warned = 0;
 
 			foreach (EnabledVariant variant in variants)
 			{
-				var roots = new SandboxRoots(stagingDirectory, variant.Variant.Manifest.ThisDir);
-
 				// A script that this call cannot read stops the deploy on its own, further
 				// down. Let the exception travel, because the engine names the variant.
-				ResolvedScript resolved = ScriptFlattener.Resolve(variant.Variant, variant.Selection, roots);
+				ResolvedScript resolved = resolver.Resolve(variant);
 
 				scripts.Add(resolved);
 
@@ -156,9 +168,16 @@ namespace BlackboxModManager.Core.Deploy
 						if (!path.Writes) continue;
 						if (path.Anchor != PathAnchor.GameDirectory) continue;
 						if (String.IsNullOrEmpty(path.Resolved)) continue;
-						if (!seenPaths.Add(path.Resolved)) continue;
 
-						writePaths.Add(path.Resolved);
+						if (seenPaths.Add(path.Resolved)) writePaths.Add(path.Resolved);
+
+						if (!writePathContributors.TryGetValue(path.Resolved, out List<string> writers))
+						{
+							writers = new List<string>();
+							writePathContributors[path.Resolved] = writers;
+						}
+
+						if (!writers.Contains(variant.Label)) writers.Add(variant.Label);
 					}
 				}
 
@@ -192,7 +211,13 @@ namespace BlackboxModManager.Core.Deploy
 				readOnlyContributors[entry.Key] = entry.Value;
 			}
 
-			return new GateResult(scripts, containers, writePaths, readOnlyContributors);
+			var readOnlyWriters = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+			foreach (KeyValuePair<string, List<string>> entry in writePathContributors)
+			{
+				readOnlyWriters[entry.Key] = entry.Value;
+			}
+
+			return new GateResult(scripts, containers, writePaths, readOnlyContributors, readOnlyWriters);
 		}
 
 		/// <summary>

@@ -70,7 +70,9 @@ namespace BlackboxModManager.Core.Deploy
 
 			GameINT game = context.Game.Game;
 
-			IReadOnlyList<EnabledVariant> variants = VariantReader.Read(
+			// The deploy already read the variants and resolved every script. Read them again
+			// only when a caller built the context without them.
+			IReadOnlyList<EnabledVariant> variants = context.Variants ?? VariantReader.Read(
 				context.Profile, context.Store, game, context.Log);
 
 			if (variants.Count == 0)
@@ -81,7 +83,8 @@ namespace BlackboxModManager.Core.Deploy
 
 			// Classify every command before anything writes. A refused command and a path
 			// outside the staging copy both stop the deploy here. See step 8.
-			GateResult gate = CommandGate.Check(variants, context.StagingDirectory, context.Log);
+			GateResult gate = CommandGate.Check(
+				variants, context.StagingDirectory, context.Log, context.Scripts);
 
 			// The union covers every container that any enabled mod loads. The engine loads
 			// one variant at a time, and it uses this union for two other jobs. It makes
@@ -93,12 +96,32 @@ namespace BlackboxModManager.Core.Deploy
 
 			context.Log($"The enabled mods name {merged.Files.Count} containers: {String.Join(", ", merged.Files)}.");
 
-			this.Prepare(context, merged, gate);
+			using (context.Timing.Measure("prepare the containers"))
+			{
+				this.Prepare(context, merged, gate);
+			}
+
+			context.Cancellation.ThrowIfCancellationRequested();
 
 			// One gate covers the statics, every load, every script, and every save.
 			using (LibraryGate.Enter())
 			{
-				return this.RunPasses(context, merged, variants, gate);
+				// A container save compresses every texture that the container holds, so the
+				// data of a texture goes straight into the native compressor. The LZF pack that
+				// the setter of Texture.Data does in between buys nothing here, and this mod
+				// pushes about 8.9 GB of texture data through it. Keep the plain buffers for the
+				// length of the passes, and put the flag back after.
+				bool packed = Nikki.Support.Shared.Class.Texture.PackDataInMemory;
+				Nikki.Support.Shared.Class.Texture.PackDataInMemory = false;
+
+				try
+				{
+					return this.RunPasses(context, merged, variants, gate);
+				}
+				finally
+				{
+					Nikki.Support.Shared.Class.Texture.PackDataInMemory = packed;
+				}
 			}
 		}
 
@@ -183,6 +206,8 @@ namespace BlackboxModManager.Core.Deploy
 			context.Log($"The staging copy holds {privateCount} private files, " +
 				"so a write cannot reach the vanilla copy or the game.");
 
+			WarnAboutLargeContainers(context, merged, gate);
+
 			if (extra > 0)
 			{
 				context.Log($"  {extra} of them are containers that a script creates and no manifest names.");
@@ -191,6 +216,46 @@ namespace BlackboxModManager.Core.Deploy
 			if (files > 0)
 			{
 				context.Log($"  {files} of them are files that a filesystem command writes.");
+			}
+		}
+
+		/// <summary>
+		/// Names every container that the save path of Nikki writes through a temporary file
+		/// beside our executable.
+		///
+		/// <b>DatabaseSaver.Invoke picks WriteFromStream</b> when the target carries no whole
+		/// file compression and its current length is over 64 MB. That method builds the new
+		/// container in the directory of the running executable and then moves it over the
+		/// target. See defect 10.
+		///
+		/// Every deploy builds the staging copy from the vanilla copy, so a container is at its
+		/// vanilla length here and no Most Wanted container reaches 64 MB. This warning names
+		/// the condition if that ever stops being true.
+		/// </summary>
+		private static void WarnAboutLargeContainers(DeployContext context, MergedLoad merged, GateResult gate)
+		{
+			const long limit = 1L << 26;
+
+			var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			var names = new List<string>();
+
+			names.AddRange(merged.Files);
+			names.AddRange(gate.Containers);
+
+			foreach (string file in names)
+			{
+				string path = ModPath.Resolve(context.StagingDirectory, file);
+
+				if (!seen.Add(Path.GetFullPath(path))) continue;
+				if (!File.Exists(path)) continue;
+
+				long length = new FileInfo(path).Length;
+
+				if (length <= limit) continue;
+
+				context.Log($"  warning: the container {file} is {length} bytes, which is over 64 MB. " +
+					"Nikki writes a container of that size through a temporary file beside the " +
+					"executable. See defect 10.");
 			}
 		}
 
@@ -267,15 +332,28 @@ namespace BlackboxModManager.Core.Deploy
 
 				for (int i = 0; i < variants.Count; ++i)
 				{
-					RunOne(context, variants[i], gate.Scripts[i], game);
+					// Between passes is a safe place to stop. Each pass ends with a save, so
+					// the staging copy holds whole containers and never a half written one.
+					context.Cancellation.ThrowIfCancellationRequested();
+
+					using (context.Timing.Measure($"pass {variants[i].Order} {variants[i].Label}"))
+					{
+						RunOne(context, variants[i], gate.Scripts[i], game);
+					}
 				}
 
 				IReadOnlyList<ContainerWrite> containers = ContainerReportBuilder.Build(merged, gate);
 
-				context.Log($"The container engine applied {variants.Count} variants and rewrote " +
-					$"{containers.Count} containers.");
+				// A container is not the only thing that a script writes. Report the files of
+				// every filesystem command too, or the verify calls each one a change that no
+				// mod supplied and it stops the swap. See defect 16.
+				IReadOnlyList<ScriptWrite> scriptWrites = ContainerReportBuilder.BuildScriptWrites(
+					context.StagingDirectory, gate, containers);
 
-				return new DeployReport(null, null, null, null, containers);
+				context.Log($"The container engine applied {variants.Count} variants, rewrote " +
+					$"{containers.Count} containers, and wrote {scriptWrites.Count} other files.");
+
+				return new DeployReport(null, null, null, null, containers, null, null, scriptWrites);
 			}
 			finally
 			{
@@ -306,6 +384,13 @@ namespace BlackboxModManager.Core.Deploy
 				$"Load {load.Files.Count} containers: {String.Join(", ", load.Files)}.");
 
 			BaseProfile profile = BaseProfile.NewProfile(game, load.Launch.Directory);
+
+			// Show the work. A vinyl mod saves one container per car, and each save compresses
+			// every texture of that container. With no line per container the window looks hung
+			// for the whole pass, and a user who ends the process instead of canceling risks the
+			// damage of defect 16.
+			profile.Progress = (action, name, elapsed) => Report(context, action, name, elapsed);
+
 			string[] loadErrors = profile.Load(load.Launch);
 
 			Fail(context, $"The load for \"{variant.Label}\" reported", loadErrors);
@@ -324,6 +409,23 @@ namespace BlackboxModManager.Core.Deploy
 			string[] saveErrors = profile.Save();
 
 			Fail(context, $"The save for \"{variant.Label}\" reported", saveErrors);
+		}
+
+		/// <summary>
+		/// Writes one line for a container that the library loaded or saved, and records the
+		/// time.
+		///
+		/// <b>The profile calls this from the task that did the work.</b> Load and Save fan the
+		/// containers out with Task.Run, so several calls can arrive at once. DeployTiming takes
+		/// a lock, and the log of the window already accepts a line from any thread.
+		/// </summary>
+		private static void Report(DeployContext context, string action, string name, int elapsed)
+		{
+			context.Timing.Container(action, name, elapsed);
+
+			// A line for every fast container turns the log into noise. One second is slow
+			// enough that the user wants to see it, and fast enough to prove that work happens.
+			if (elapsed >= 1000) context.Log($"    {action} {name}: {elapsed} ms.");
 		}
 
 		/// <summary>
@@ -360,6 +462,12 @@ namespace BlackboxModManager.Core.Deploy
 			// Pass the full path of the script. A bare file name gives an empty directory,
 			// and those commands then read from the working directory of the process.
 			var manager = new EndScriptManager(profile, commands, scriptPath);
+
+			// One call of ProcessScript runs every command up to the next selectable. This mod
+			// holds 26,279 commands and one question, so this hook is the only place where a
+			// cancel can take effect during a pass. A container save that already started still
+			// finishes, because the check sits between commands.
+			manager.BeforeCommand = () => context.Cancellation.ThrowIfCancellationRequested();
 
 			// Without CommandChase the jump targets stay unresolved and every selectable
 			// fails with a message that names nothing.
@@ -415,6 +523,12 @@ namespace BlackboxModManager.Core.Deploy
 			}
 			catch (ModSelectionException)
 			{
+				throw;
+			}
+			catch (OperationCanceledException)
+			{
+				// The user canceled. This is not a script failure, so it must not become a
+				// message that names a command.
 				throw;
 			}
 			catch (Exception ex)

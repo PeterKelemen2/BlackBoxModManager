@@ -202,6 +202,12 @@ GLOBAL/GlobalMemoryFile.bin      18:24
 
 **The verify read the same short list, and failed a clean deploy.** `ContainerDeployEngine` reported only the containers of the merged load to `StagingVerifier`. It did not know about the containers that only a script names. The verify then failed every one of them as "no mod supplied it," on a deploy that changed nothing else. `ContainerReportBuilder` now reports every container that `GateResult.Containers` names, not only the manifest ones. See fact 11 of [06-binary-deployment.md](06-binary-deployment.md).
 
+**The verify missed the files that are no containers, and it failed a clean deploy again.** `GateResult.WritePaths` covered them for `MakePrivate` and nothing carried them into the report. `unlock_memory all` therefore stopped the first full deploy of `NFSMWRV-1024x-Advanced` with three problems, and the first one read "The game file GLOBAL/GLOBALMEMORYFILE.BIN in the staging copy differs from the vanilla state, and no mod supplied it."
+
+`ContainerReportBuilder.BuildScriptWrites` now turns every entry of `WritePaths` into a `ScriptWrite`, and `GateResult.WritePathContributors` names the variant behind each one. `StagingVerifier` leaves those paths out of the drift check.
+
+**A `ScriptWrite` carries no check of its own, and it must not.** The static walk enters both branches of every `if`, and this mod guards 97 `move_file` commands with one. So a path in that list is a path that a script may write, and not one that it did. An absent file is normal.
+
 **How to repair an install that this damaged.** The vanilla copy holds the modded content, so every later deploy reads modded input and reports errors that name no cause.
 
 1. Close the application.
@@ -287,4 +293,72 @@ The same six containers from a clean install take 20,448 ms before this change a
 
 One save of `CARS\911GT2\VINYLS.BIN` fell from 46,198 ms to 15,471 ms on four cores. The six containers together fell from 51,267 ms to 17,654 ms. Every output byte stayed the same.
 
-**What is still open.** The gain is bounded by the core count. The real fix is to keep the compressed blocks that the loader read and write them back for a texture that nothing changed. That does not work as written, because the header of each texture holds the total data length before it. Adding one texture shifts that number for every later texture, so their bytes change too. A fix needs the header to move out of the compressed blob, and that changes the container format.
+**`BEST` was still the larger part of the cost, and defect 21 removed it.** Read that entry next.
+
+**What is still open.** The real fix is to keep the compressed blocks that the loader read and write them back for a texture that nothing changed. That does not work as written, because the header of each texture holds the total data length before it. Adding one texture shifts that number for every later texture, so their bytes change too. A fix needs the header to move out of the compressed blob, and that changes the container format.
+
+**That fix would not help a vinyl mod anyway.** `add_texture` adds 47 textures to each car container, and `SortTexturesByType` then shifts the data offset of most of the textures that were already there. Almost every cached block would be stale.
+
+## 21. `BEST` runs JDLZ for every texture on every save, and JDLZ is 60 times slower than HUFF
+
+**Where:** `Nikki/Support.Shared/Class/TPKBlock.GetCompressedFullData` and `GetCompressedByParts`, plus the same two methods in `Support.Undercover/Class/TPKBlock.cs`.
+
+**What happens:** every one of those call sites passed `LZCompressionType.BEST`. The native library then runs each codec that it holds and keeps the smallest result. Nikki keeps no record of which codec the loader read for a texture, and no record of which textures an edit changed, so every save recompressed every texture with every codec.
+
+**The measurement.** One 4,194,432-byte texture of the mod `NFSMWRV-1024x-Advanced`, through `BlockCompress` directly:
+
+| Codec | Time   | Output    | Rate       |
+| ----- | ------ | --------- | ---------- |
+| RAWW  | 35 ms  | 4,194,448 | 114 MB/s   |
+| JDLZ  | 635 ms | 224,534   | 6.3 MB/s   |
+| HUFF  | 9 ms   | 169,584   | 405 MB/s   |
+| COMP  | throws | —         | —          |
+| RFPK  | throws | —         | —          |
+| BEST  | 646 ms | 169,584   | 6.2 MB/s   |
+
+Three facts follow. **JDLZ is the whole cost of `BEST`.** **`COMP` and `RFPK` throw an SEH exception, so `BEST` never had five codecs to choose from.** **The x86 library that Binary 2.8.3 ships gives the same times and the same bytes**, so the x64 rebuild is not slow and there is nothing to fix in the native code.
+
+**What we did:** `Texture.SourceCompression` holds the codec that the loader read from the block of that texture, and every save writes the block again with it. `MagicHeader.SourceCompression` does the same for a container that stores textures in parts. A texture that `add_texture` creates has no block to read a codec from, so it takes the default, and the default is HUFF.
+
+**One load and one save of the six real Most Wanted containers, with no edit:**
+
+| | Save time | Compressor thread time |
+| --- | --- | --- |
+| `BEST` | 7,128 ms | 30,849 ms |
+| the codec of each texture | 1,094 ms | 2,585 ms |
+
+**Every output byte matched.** `ContainerByteStabilityTests` needs no new baseline. A vanilla container keeps the codec that it already held, so a load and a save with no edit writes the same file that `BEST` wrote.
+
+**Why the default is HUFF and not `BEST`.** One car of the vinyl mod, which adds 47 textures of 4 MB to the 2.8 MB vanilla container of the 350Z:
+
+| Default for a new texture | Save time | Container |
+| --- | --- | --- |
+| HUFF | 1,102 ms | 26.9 MB |
+| JDLZ | 12,816 ms | 10.3 MB |
+| `BEST` | 13,920 ms | 9.8 MB |
+
+Across the 45 cars that is about 50 seconds against about 10 minutes, and about 1.2 GB against about 440 MB. **The project chose speed.** A vanilla car vinyl container holds 252 textures and 244 of them are HUFF, so HUFF is also what the game already reads for this kind of data.
+
+`GetCompressedByParts` now also computes the running offsets in one pass and compresses with `Parallel.For`, in the same shape as `GetCompressedFullData`. No Most Wanted container of a real install takes that path, so the change has no test. Every container of the six reads as `CompressedFullData`.
+
+**Never pass `COMP` or `RFPK`.** Both throw, in the x64 build and in the x86 build.
+
+## 22. `BaseProfile.Delete` rewrites both hash lists on every call
+
+**Where:** `Endscript/Profiles/BaseProfile.cs`, inside `Delete`.
+
+**What happens:** `Delete` called `SaveHashList()` after it saved the container. `SaveHashList` reads the whole main hash list of the Binary install into a `HashSet`, and then it rewrites the custom hash list from `Map.BinKeys.Values`. `BinKeys` grows with every container that the pass loads, so each rewrite is larger than the one before it.
+
+`NFSMWRV-1024x-Advanced` runs 60 `delete` commands, so one deploy paid for 60 of those pairs.
+
+**What we did:** `Delete` no longer calls it. `Save()` calls `SaveHashList` as its last step, so the list still reaches disk when the pass ends. The custom hash list lives under our own application data directory and nothing outside our process reads it during a run.
+
+## 23. `CollectionMap.LoadMapFromProfile` rebuilds the whole map for one new container
+
+**Where:** `Endscript/Core/CollectionMap.cs`, plus `Endscript/Commands/NewCommand.cs` and `DeleteCommand.cs`.
+
+**What happens:** `LoadMapFromProfile` clears the dictionary and then walks every collection of every manager of every loaded container. `FastEstimateCapacity` walks the same tree a second time to size the dictionary. `NewCommand.Execute` and `DeleteCommand.Execute` both called it after every single command.
+
+`NFSMWRV-1024x-Advanced` runs 46 `new` commands and 46 `delete` commands, so it rebuilt the map 92 times over a profile that grows to tens of thousands of collections.
+
+**What we did:** `CollectionMap.AddDatabase` adds the keys of one container and `RemoveDatabase` drops them. `NewCommand` calls the first and `DeleteCommand` calls the second, before the profile drops the container. `LoadMapFromProfile` stays for the constructor.

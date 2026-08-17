@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using BlackboxModManager.Core.Asi;
 using BlackboxModManager.Core.Games;
 using BlackboxModManager.Core.Profiles;
@@ -61,14 +62,49 @@ namespace BlackboxModManager.Core.Deploy
 
 		public VanillaSnapshot Baseline { get; }
 
+		/// <summary>
+		/// The enabled variants in load order, or null when the caller read none.
+		///
+		/// <b>Read this instead of calling VariantReader.Read again.</b> That call reads every
+		/// file of the append graph of every variant, on or off. The deploy already paid for it.
+		/// An engine that finds null here reads its own list.
+		/// </summary>
+		public IReadOnlyList<EnabledVariant> Variants { get; }
+
+		/// <summary>
+		/// The resolved script of each variant, or null when the caller built no cache. The
+		/// cache belongs to <see cref="StagingDirectory"/> and to no other directory.
+		/// </summary>
+		public ScriptResolutionCache Scripts { get; }
+
+		/// <summary>
+		/// Where an engine records how long its parts took. This is never null.
+		/// </summary>
+		public DeployTiming Timing { get; }
+
+		/// <summary>
+		/// Stops a long deploy. An engine tests this between commands and between passes, and
+		/// never in the middle of one container save.
+		///
+		/// <b>A canceled deploy leaves the staging copy alone and never swaps.</b> The user who
+		/// ends the process instead of canceling risks the damage of defect 16.
+		/// </summary>
+		public CancellationToken Cancellation { get; }
+
 		public DeployContext(GameInstall game, string stagingDirectory, Profile profile,
 			ModStore store, BinaryInstall binary = null, Action<string> log = null,
-			ProxyPlan proxies = null, string vanillaDirectory = null, VanillaSnapshot baseline = null)
+			ProxyPlan proxies = null, string vanillaDirectory = null, VanillaSnapshot baseline = null,
+			IReadOnlyList<EnabledVariant> variants = null, ScriptResolutionCache scripts = null,
+			DeployTiming timing = null, CancellationToken cancellation = default)
 		{
 			this.Binary = binary;
 			this.Proxies = proxies;
 			this.VanillaDirectory = vanillaDirectory;
 			this.Baseline = baseline;
+			this.Variants = variants;
+			this.Scripts = scripts;
+			this.Timing = timing ?? new DeployTiming();
+			this.Cancellation = cancellation;
 
 			this.Game = game ?? throw new ArgumentNullException(nameof(game));
 			this.Profile = profile ?? throw new ArgumentNullException(nameof(profile));
