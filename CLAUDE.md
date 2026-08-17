@@ -41,6 +41,8 @@ Two project conventions on top of the skill:
 | `docs/roadmap/01` to `15`                   | One implementation step each, with pitfalls.      |
 | `docs/roadmap/98-known-upstream-defects.md` | Defects in the MIT libraries that we work around. |
 | `docs/roadmap/99-api-notes.md`              | Verified library signatures and call order.       |
+| `LICENSE`                                   | The MIT license of this application.              |
+| `THIRD-PARTY-NOTICES.md`                    | Every license that the build ships, and why.      |
 
 `99-api-notes.md` wins over `project_brief.md` where the two disagree. The brief describes three APIs incorrectly. Read the API notes before you write library code.
 
@@ -52,6 +54,8 @@ Do not write API detail from memory or from the brief. Read the source in `third
 
 **Never merge `third_party/CoreExtensions` forward to master.** Its branch sits on commit `1e1e687` on purpose. Master deletes `ReadNullTermUTF8` and `WriteNullTermUTF8`, which Nikki calls. A merge breaks the build with 46 errors.
 
-**Do not copy code from `SpeedReflect/Binary`.** That repository is GPL-3.0. Nikki, Endscript, and CoreExtensions are MIT. Treat the Binary repository as read-only documentation.
+**Do not copy code from `SpeedReflect/Binary`.** That repository is GPL-3.0. Nikki, Endscript, and CoreExtensions are MIT. Treat the Binary repository as read-only documentation. A call to `Binary.exe` as a separate process is acceptable, because the GPL covers distribution and linking. **Never ship any file of a Binary install**, including `Binary.exe`, the `mainkeys` hash lists, and `SpeedReflect.asi`. The user supplies that install.
+
+**Update `THIRD-PARTY-NOTICES.md` when the build starts to ship something new.** A new `PackageReference` counts, and so does any file that a `Content` entry copies to the output directory. Read the license out of the package or the release, never from memory.
 
 **Never point code at a live game install.** Apply to a staging copy, verify, then swap.

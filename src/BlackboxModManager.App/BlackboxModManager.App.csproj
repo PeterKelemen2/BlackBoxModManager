@@ -59,6 +59,32 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The license of this application and the notices of everything that it ships.
+
+         A notice that stays in the repository reaches nobody. The MIT license of the three
+         libraries asks for the copyright notice in every copy, and the 7-Zip release asks a
+         redistribution in binary form to reproduce its license information. Both files
+         therefore travel with the executable.
+
+         Link keeps the flat name in the output, because the source sits two directories up. -->
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The license of each embedded font.
+
+         A Resource goes inside the assembly, so a build carries three fonts and no license
+         text of its own. The SIL Open Font License asks a copy that bundles a font to carry
+         the copyright notice and the license. These three files close that gap.
+
+         The .ttf files stay a Resource above. A pack URI cannot read Content. -->
+    <Content Include="Fonts\Inter-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fonts\JetBrainsMono-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fonts\IBMPlexSans-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\BlackboxModManager.Core\BlackboxModManager.Core.csproj" />
   </ItemGroup>
 
