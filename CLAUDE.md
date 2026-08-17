@@ -36,6 +36,7 @@ Two project conventions on top of the skill:
 
 | File                                        | Holds                                             |
 | ------------------------------------------- | ------------------------------------------------- |
+| `README.md`                                 | What the project is, for a reader who arrives.    |
 | `project_brief.md`                          | Format research and design decisions.             |
 | `docs/roadmap/README.md`                    | The step sequence and the completed work.         |
 | `docs/roadmap/01` to `15`                   | One implementation step each, with pitfalls.      |
