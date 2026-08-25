@@ -44,8 +44,15 @@ Every deploy follows one order, and the game directory changes only at the last 
 4. Verify the staging copy against the record.
 5. Swap the staging copy into the game directory.
 
-A failure at any step leaves the game directory untouched. `Revert` puts the vanilla state
-back.
+A failure at any step leaves the game directory untouched, and `Revert` puts the vanilla state
+back. Step 5 is a rename when the workspace sits on the volume of the game, which is the
+default. A rename moves the whole directory or none of it, so a failed swap changes nothing.
+
+**A workspace on another volume is the one exception.** A rename cannot cross a volume, so the
+swap copies the game and then removes the original. A failure during that removal leaves part
+of the game directory in place. Every file exists in the `previous` directory of the workspace
+at that point, and the message names both directories. Keep the workspace on the volume of the
+game to avoid this.
 
 ### Two routes for a Binary mod
 

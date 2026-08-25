@@ -162,3 +162,24 @@ The handler now sets `e.Handled` first, appends the exception to `logs/error.log
 ### One deviation from the work list
 
 **The symbolic link goes through `File.CreateSymbolicLink`, not through a `CreateSymbolicLinkW` P/Invoke.** Work item 5.5.2 asks for direct P/Invoke for both. The hard link needs it, because the base class library has no hard link method. The symbolic link does not need it. The base class library calls `CreateSymbolicLinkW` on Windows, and the same code then works on native Linux, where the tests run. Step 3 verified the method under both Wine builds. This is the step 3 code, unchanged.
+
+### 2026-08-25: the swap deleted the live install, and it now refuses to
+
+A deploy against a real Underground 2 install under `C:\Program Files (x86)\EA GAMES` failed, and it damaged nothing only by luck. **Read this before you touch `GameSwap`.**
+
+What happened. A standard user has no right to delete under `Program Files`. The rename of the game directory failed. `GameSwap.Move` caught the failure, and its fallback copied the game and then removed the original with `Directory.Delete(path, true)`. **That walk is not atomic.** It deleted files until one denied it, and it reported `Access to the path '00000000.016' is denied`.
+
+Two properties made this worse than it reads.
+
+1. **The first move sat outside the rollback block.** The rollback covered the second move alone. So a failure in the first move restored nothing and reported nothing about the state of the install.
+2. **The blast radius depended on the order that the filesystem lists names in.** `00000000.016` sorts first on NTFS, so the delete stopped on its first attempt and the install survived whole. A denied name that sorted last would have removed the game and then thrown.
+
+`catch (IOException)` also discarded the exception, so the log never named the cause of the failed rename.
+
+The fix, in `GameSwap`.
+
+1. **`SetAside` renames and never copies when the workspace shares the volume of the game.** A rename moves everything or nothing. A same-volume rename that fails means a permission or an open handle, and neither one improves by deleting the game one file at a time. It now throws with the game directory whole, and it names elevation and open handles as the two causes.
+2. **The copy route stays for a workspace on another volume**, where a rename cannot work. A delete that stops part way there now throws a message that names both directories, because every file exists in `previous` at that point.
+3. **Both move helpers log the reason** instead of swallowing it.
+
+`GameSwapTests.AFirstMoveThatFailsDeletesNothing` locks this down. Checked against the old code, that test does not merely fail. **No exception was thrown at all**, because `DirectoryNotFoundException` derives from `IOException`. The old fallback copied the game, deleted the original, and completed the swap by consuming the live install. On a writable directory that path succeeds in full.
