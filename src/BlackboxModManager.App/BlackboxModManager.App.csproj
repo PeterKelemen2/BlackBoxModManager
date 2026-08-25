@@ -27,6 +27,15 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- The installer and the update check. vpk pack reads this build and writes Setup.exe,
+         a portable zip, and a package for the release feed.
+
+         This reference sits on the application and never on BlackboxModManager.Core. Core
+         holds no network code, and its tests run on native Linux. Keep both facts true.
+
+         Velopack also puts Update.exe beside the application. No Content entry names that
+         file, because vpk pack injects it. See THIRD-PARTY-NOTICES.md. -->
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
   <ItemGroup>

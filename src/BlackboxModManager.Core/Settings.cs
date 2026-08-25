@@ -80,6 +80,20 @@ namespace BlackboxModManager.Core
 		public bool FullVerify { get; set; }
 
 		/// <summary>
+		/// Whether the application asks GitHub for a newer release when it starts.
+		///
+		/// This field needs no migration, for the same reason that FullVerify needs none. An
+		/// older file holds no such key, and a missing key reads as false. False is what every
+		/// build before this one did, so the Version above stays at 2.
+		///
+		/// <b>False is the default on purpose.</b> The user turns this on in the config window.
+		/// A default of true would need a migration, because a missing key cannot read as true.
+		/// A mod manager that reaches the network on every start without being asked is worse
+		/// than one that needs one click.
+		/// </summary>
+		public bool CheckForUpdatesAtStart { get; set; }
+
+		/// <summary>
 		/// The mod store directory that this application uses. It falls back to the default
 		/// when the setting holds nothing.
 		/// </summary>

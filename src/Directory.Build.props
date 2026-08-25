@@ -1,0 +1,36 @@
+<Project>
+
+  <!-- The version of this application, and the one place that defines it.
+
+       This file sits in src and not in the repository root on purpose. MSBuild walks up
+       from each project directory and stops at the first Directory.Build.props that it
+       finds. A file in the root would also reach the three MIT forks under third_party,
+       and it would stamp our version onto them. THIRD-PARTY-NOTICES.md pins those three
+       by commit, so their versions must stay as their own authors set them. A file here
+       reaches BlackboxModManager.App and BlackboxModManager.Core, and nothing else.
+
+       The release workflow overrides VersionPrefix and VersionSuffix from the git tag.
+       See docs/roadmap/16-release-and-update.md. -->
+
+  <PropertyGroup>
+    <!-- The three numeric parts. -->
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <!-- The SemVer 2 prerelease label, for example alpha.1. An empty value means a stable
+         release.
+
+         Never set Version, AssemblyVersion, or FileVersion by hand here. AssemblyVersion
+         holds four numbers and it cannot hold a prerelease label. The SDK builds Version
+         from the two properties above, and it builds AssemblyVersion from the numeric part
+         alone. This is why the workflow passes the prefix and the suffix as two properties
+         and never as one Version. -->
+    <VersionSuffix></VersionSuffix>
+
+    <!-- The SDK otherwise appends a plus sign and the commit hash to
+         AssemblyInformationalVersion. AppVersion reads that attribute for display, and the
+         display code would then have to split the string. See AppVersion. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
+    <Product>BlackBox Mod Manager</Product>
+  </PropertyGroup>
+
+</Project>

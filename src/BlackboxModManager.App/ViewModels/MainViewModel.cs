@@ -18,6 +18,7 @@ using BlackboxModManager.Core.Store;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Nikki.Core;
+using Velopack;
 
 namespace BlackboxModManager.App.ViewModels
 {
@@ -128,9 +129,13 @@ namespace BlackboxModManager.App.ViewModels
 			// The field and not the property. The setter saves the settings file, and the
 			// settings file is where this value just came from.
 			this._fullVerify = this._settings.FullVerify;
+			this._checkForUpdatesAtStart = this._settings.CheckForUpdatesAtStart;
 
 			this.OpenStore();
 
+			// The version comes first. A user who reports a defect pastes this log, and the
+			// first line then names the build that produced everything below it.
+			this.Write($"This build is version {AppVersion.Display}.");
 			this.Write(Rendering.Report);
 			this.Write($"The application data directory is {AppPaths.Root}.");
 			this.Write($"The mod store is {this._store.Root}." +
@@ -222,6 +227,21 @@ namespace BlackboxModManager.App.ViewModels
 		{
 			this.SaveSettings(settings => settings.FullVerify = value);
 		}
+
+		[ObservableProperty]
+		private bool _checkForUpdatesAtStart;
+
+		/// <summary>Keeps the answer of the config window, in the same way as FullVerify.</summary>
+		partial void OnCheckForUpdatesAtStartChanged(bool value)
+		{
+			this.SaveSettings(settings => settings.CheckForUpdatesAtStart = value);
+		}
+
+		/// <summary>
+		/// The version for the status bar. This never changes while the application runs, so it
+		/// needs no ObservableProperty.
+		/// </summary>
+		public string VersionLabel => $"Version {AppVersion.Display}";
 
 		/// <summary>
 		/// Which code applies every Binary mod of the profile. A mod can override this on its
@@ -2058,6 +2078,136 @@ namespace BlackboxModManager.App.ViewModels
 			return new DeployService(this._store, this._binaryInstall, this._settings.WorkRootOverride);
 		}
 
+		// ---------------------------------------------------------------- updates
+
+		/// <summary>
+		/// The update check. It is null until the first use, because building it reads the
+		/// install state and a start must not wait for that.
+		/// </summary>
+		private UpdateService _updates;
+
+		private UpdateService Updates() => this._updates ??= new UpdateService();
+
+		/// <summary>The release that a check found and a download brought in.</summary>
+		private UpdateInfo _readyUpdate;
+
+		/// <summary>
+		/// The quiet check that a start runs. It writes one line and it downloads nothing.
+		///
+		/// <b>This never opens a dialog, and it never shows the error banner.</b> A machine with
+		/// no network reaches this on every start, and a start must not stop to report that. It
+		/// also downloads nothing, because a user who did not ask for a download must not wait
+		/// for one. The line tells them where the button is.
+		///
+		/// The window calls this after it opens. A call from the constructor would show a dialog
+		/// before a window exists to own it.
+		/// </summary>
+		public async Task CheckForUpdatesAtStartAsync()
+		{
+			if (!this.CheckForUpdatesAtStart) return;
+
+			try
+			{
+				UpdateService updates = this.Updates();
+
+				// A build with no installer cannot update itself. Say nothing at start. The
+				// button says it when the user presses it.
+				if (!updates.IsInstalled) return;
+
+				UpdateInfo update = await updates.CheckAsync();
+
+				if (update is null)
+				{
+					this.Write($"Version {AppVersion.Display} is the newest release.");
+
+					return;
+				}
+
+				this.Write($"Version {update.TargetFullRelease.Version} is available. " +
+					"Open the settings and press Check now to install it.");
+			}
+			catch (Exception ex)
+			{
+				this.Write($"The update check did not reach GitHub. {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Asks GitHub for a newer release, downloads it, and offers a restart.
+		///
+		/// The download runs inside RunTaskAsync, so the log, the cancel button, and the error
+		/// banner behave as they do for a deploy. <b>The restart runs after that, on the UI
+		/// thread.</b> ApplyAndRestart ends the process, and a call inside the background work
+		/// would kill the thread that reports the result.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(IsIdle))]
+		private async Task CheckForUpdatesAsync()
+		{
+			UpdateService updates = this.Updates();
+
+			// A build out of a publish directory has no package and no feed. Say so, and never
+			// open a dialog for it. A developer sees this line every day.
+			if (!updates.IsInstalled)
+			{
+				this.Write("This build carries no installer, so it cannot update itself. " +
+					"Install it from a release to use this button.");
+
+				return;
+			}
+
+			this._readyUpdate = null;
+
+			await this.RunTaskAsync("Check for updates.", async (report, token) =>
+			{
+				UpdateInfo update = await updates.CheckAsync();
+
+				if (update is null)
+				{
+					report($"Version {AppVersion.Display} is the newest release.");
+
+					return;
+				}
+
+				string version = update.TargetFullRelease.Version.ToString();
+
+				report($"Version {version} is available. The download starts now.");
+
+				int last = -1;
+
+				await updates.DownloadAsync(update, percent =>
+				{
+					// Report every tenth. Velopack reports each percent, and 100 lines of
+					// progress would push the rest of the log out of view.
+					if (percent < 100 && percent / 10 == last / 10) return;
+
+					last = percent;
+					report($"Downloaded {percent} percent.");
+				}, token);
+
+				report($"Version {version} is ready.");
+
+				this._readyUpdate = update;
+			});
+
+			if (this._readyUpdate is null) return;
+
+			string ready = this._readyUpdate.TargetFullRelease.Version.ToString();
+
+			if (!this._ask.Confirm(
+				$"Version {ready} is ready. Start it now?\n\n" +
+				"This application closes and opens again. Your mods, profiles, and settings stay " +
+				"as they are.",
+				"Restart"))
+			{
+				this.Write("The update waits. It applies the next time that this application starts.");
+
+				return;
+			}
+
+			// This never returns.
+			this.Updates().ApplyAndRestart(this._readyUpdate);
+		}
+
 		// ---------------------------------------------------------------- plumbing
 
 		/// <summary>
@@ -2079,7 +2229,27 @@ namespace BlackboxModManager.App.ViewModels
 		/// The same, for an operation that the user can cancel. The work delegate reads the
 		/// token and throws <c>OperationCanceledException</c> at its next safe point.
 		/// </summary>
-		private async Task RunAsync(string title, Action<Action<string>, CancellationToken> work,
+		private Task RunAsync(string title, Action<Action<string>, CancellationToken> work,
+			RunningWork kind = RunningWork.Other)
+		{
+			// Task.Run keeps the disk work off the UI thread. The work here is synchronous, so
+			// this method is the one that moves it.
+			return this.RunTaskAsync(title, (report, token) => Task.Run(() => work(report, token)),
+				kind);
+		}
+
+		/// <summary>
+		/// The same, for work that is already asynchronous. An update check waits on the
+		/// network, so it needs no thread of its own.
+		///
+		/// <b>The name differs from RunAsync on purpose, and it is not an overload.</b> An
+		/// async lambda also fits <c>Action</c>, so an overload would let
+		/// <c>async (report, token) => ...</c> bind to the method above. That produces an
+		/// async void call. The exception would then leave the try block below and reach
+		/// nobody, and the log and the banner would show a run that succeeded.
+		/// </summary>
+		private async Task RunTaskAsync(string title,
+			Func<Action<string>, CancellationToken, Task> work,
 			RunningWork kind = RunningWork.Other)
 		{
 			if (this.IsBusy) return;
@@ -2106,7 +2276,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			try
 			{
-				await Task.Run(() => work(report, source.Token));
+				await work(report, source.Token);
 
 				this.Status = "Ready.";
 			}
@@ -2184,6 +2354,7 @@ namespace BlackboxModManager.App.ViewModels
 			this.SetModStoreCommand.NotifyCanExecuteChanged();
 			this.SetWorkRootCommand.NotifyCanExecuteChanged();
 			this.ChooseLoaderCommand.NotifyCanExecuteChanged();
+			this.CheckForUpdatesCommand.NotifyCanExecuteChanged();
 		}
 	}
 }

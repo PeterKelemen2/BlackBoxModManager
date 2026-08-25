@@ -22,11 +22,12 @@ rules of this repository to them.
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) | 8.4.2 | MIT |
 | [System.IO.Hashing](https://github.com/dotnet/runtime) | 10.0.10 | MIT |
 | [SharpCompress](https://github.com/adamhathcock/sharpcompress) | 1.0.0 | MIT |
+| [Velopack](https://github.com/velopack/velopack) | 1.2.0, and the `Setup.exe` and `Update.exe` that it writes | MIT |
 | [7-Zip](https://www.7-zip.org/) | 26.02, x64 (`7z.exe`, `7z.dll`) | GNU LGPL 2.1 or later, with an unRAR restriction on some code |
 | [Inter](https://github.com/rsms/inter) | Regular and SemiBold, 18pt static | SIL Open Font License 1.1 |
 | [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | Regular | SIL Open Font License 1.1 |
 | [IBM Plex Sans](https://github.com/IBM/plex) | Regular | SIL Open Font License 1.1 |
-| [.NET runtime](https://github.com/dotnet/runtime) | net10.0, published self-contained | MIT |
+| [.NET runtime](https://github.com/dotnet/runtime) | net10.0, and a release ships no part of it | MIT |
 
 ## What this application does not ship
 
@@ -91,11 +92,31 @@ which the text above states.
 
 Copyright (c) 2025 Adam Hathcock. Licensed under the MIT license, which the text above states.
 
+### Velopack
+
+Copyright © Velopack Ltd. All rights reserved. Authors: Velopack Ltd, Caelan Sayler, and
+Kevin Bost. Licensed under the MIT license, which the text above states.
+
+Velopack builds the installer and it runs the update check. `Services/UpdateService.cs` holds
+the only call into the library.
+
+**The build ships two programs of Velopack, and no csproj entry names either one.** `vpk pack`
+injects them, so a reader who looks for a `Content` entry finds nothing. The two programs are
+`Update.exe`, which sits beside the application and applies an update, and `Setup.exe`, which
+is the installer that a release carries.
+
+The package holds no dependency on its `net10.0` target, so nothing else reaches the build
+through it.
+
 ### The .NET runtime and libraries
 
 Copyright (c) .NET Foundation and Contributors. All rights reserved. Licensed under the MIT
-license, which the text above states. A self-contained publish carries the runtime beside the
-executable.
+license, which the text above states.
+
+**A release ships no part of the runtime.** The build is framework-dependent. `Setup.exe` asks
+Microsoft for the .NET 10 Desktop Runtime and installs it, so this application redistributes
+none of those files. A developer who publishes with `--self-contained true` does carry the
+runtime, and the text above covers that copy.
 
 ## 7-Zip
 
@@ -154,10 +175,12 @@ file byte for byte.
 
 ## How to update this file
 
-Change this file when the build starts to ship something new. Two changes count.
+Change this file when the build starts to ship something new. Three changes count.
 
 1. A new `PackageReference` in `src/BlackboxModManager.App` or `src/BlackboxModManager.Core`.
 2. A new file that a `Content` entry or a `None Update` entry copies to the output directory.
+3. A new file that the packaging step puts into the release. `tools/pack.ps1` runs `vpk pack`,
+   and that program adds files of its own that no csproj entry names.
 
 Read the license out of the package or the release, and never from memory. The `.nuspec` file
 of a package holds a `license` element.

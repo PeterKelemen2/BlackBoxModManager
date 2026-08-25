@@ -16,7 +16,7 @@ namespace BlackboxModManager.Tests
 	{
 		// ------------------------------------------------------------------ append graph
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheGraphListsTheLauncherAndEveryAppendedFile()
 		{
 			string script = ModPath.Resolve(ExampleMods.Camera, @"Main\script.end");
@@ -134,7 +134,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains(EndscriptVersion.Supported.ToString(), error.Message, StringComparison.Ordinal);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheRecompiledVinylsLauncherShapeReadsItsCombobox()
 		{
 			// The shape of RecompiledVinylsMain.end: a version line, then a watermark, then a
@@ -290,7 +290,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------------ path resolution
 
-		[Fact]
+		[ExampleModsFact]
 		public void ABackslashPathFromAManifestResolvesOnThisMachine()
 		{
 			// A manifest writes "MOD\URL.end" and the file sits at "MOD/URL.end".
@@ -299,7 +299,7 @@ namespace BlackboxModManager.Tests
 			Assert.True(File.Exists(resolved));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void APathWithTheWrongLetterCaseResolves()
 		{
 			string resolved = ModPath.Resolve(ExampleMods.OneLap, @"mod\url.END");
@@ -307,7 +307,7 @@ namespace BlackboxModManager.Tests
 			Assert.True(File.Exists(resolved));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void APathThatMatchesNothingComesBackAsThePlainJoin()
 		{
 			// The caller then reports a path that the mod actually asked for.

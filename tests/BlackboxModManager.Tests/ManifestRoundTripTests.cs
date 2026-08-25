@@ -29,14 +29,14 @@ namespace BlackboxModManager.Tests
 			return data;
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheExampleModsHoldManifests()
 		{
 			// A broken path would make every theory below pass with zero cases.
 			Assert.NotEmpty(FindManifests());
 		}
 
-		[Theory]
+		[ExampleModsTheory]
 		[MemberData(nameof(Manifests))]
 		public void AManifestSurvivesADeserializeAndSerializePair(string path)
 		{
@@ -62,7 +62,7 @@ namespace BlackboxModManager.Tests
 			}
 		}
 
-		[Theory]
+		[ExampleModsTheory]
 		[MemberData(nameof(Manifests))]
 		public void AManifestKeepsOneBackslashPerSeparator(string path)
 		{
@@ -96,7 +96,7 @@ namespace BlackboxModManager.Tests
 
 		private static List<string> FindManifests()
 		{
-			string root = FindExampleMods();
+			string root = ExampleMods.Root;
 			var manifests = new List<string>();
 
 			foreach (string path in Directory.EnumerateFiles(root, "*.end", SearchOption.AllDirectories))
@@ -113,27 +113,6 @@ namespace BlackboxModManager.Tests
 			using var reader = new StreamReader(path);
 			string first = reader.ReadLine();
 			return first != null && first.StartsWith("[VERSN1]", StringComparison.Ordinal);
-		}
-
-		/// <summary>
-		/// Walks up from the test assembly to the repository root. The example mods are not
-		/// a package, and a copy into the output directory would hide a change in the source.
-		/// </summary>
-		private static string FindExampleMods()
-		{
-			var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-			while (directory != null)
-			{
-				string candidate = Path.Combine(directory.FullName, "example_mods");
-
-				if (Directory.Exists(candidate)) return candidate;
-
-				directory = directory.Parent;
-			}
-
-			throw new DirectoryNotFoundException(
-				$"No example_mods directory above {AppContext.BaseDirectory}.");
 		}
 	}
 }

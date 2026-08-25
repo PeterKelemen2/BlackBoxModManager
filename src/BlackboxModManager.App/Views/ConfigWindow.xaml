@@ -173,7 +173,10 @@
         </GroupBox>
 
         <!--  The one deploy option that is not a path.  -->
-        <GroupBox Padding="10" Header="Deploy">
+        <GroupBox
+          Margin="0,0,0,12"
+          Padding="10"
+          Header="Deploy">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -195,7 +198,10 @@
           </Grid>
         </GroupBox>
 
-        <GroupBox Padding="10" Header="Binary mods">
+        <GroupBox
+          Margin="0,0,0,12"
+          Padding="10"
+          Header="Binary mods">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -213,6 +219,62 @@
               Grid.Column="1"
               VerticalAlignment="Top"
               IsChecked="{Binding BinaryRouteIsCli, Mode=TwoWay}"
+              Style="{StaticResource TogglePill}" />
+          </Grid>
+        </GroupBox>
+
+        <!--
+          Updates. The version sits here and in the status bar, and the log names it at every
+          start. A user who reports a defect pastes that log.
+        -->
+        <GroupBox Padding="10" Header="Updates">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel
+              Grid.Row="0"
+              Grid.Column="0"
+              Margin="0,0,8,0">
+              <TextBlock Text="{Binding VersionLabel}" />
+              <TextBlock
+                Margin="0,2,0,0"
+                Style="{StaticResource Hint}"
+                Text="Ask GitHub for a newer release and install it. This application closes and opens again. Your mods, profiles, and settings live outside the install directory, so an update keeps all of them. A build that you compiled yourself carries no installer and cannot update itself."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <Button
+              Grid.Row="0"
+              Grid.Column="1"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Top"
+              Command="{Binding CheckForUpdatesCommand}"
+              Content="Check now"
+              ToolTip="Ask GitHub whether a newer release exists." />
+
+            <StackPanel
+              Grid.Row="1"
+              Grid.Column="0"
+              Margin="0,10,8,0">
+              <TextBlock Text="Check at start" />
+              <TextBlock
+                Margin="0,2,0,0"
+                Style="{StaticResource Hint}"
+                Text="Run the same check every time that this application starts. Off asks nothing and reaches no network until you press the button."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <ToggleButton
+              Grid.Row="1"
+              Grid.Column="1"
+              Margin="0,10,0,0"
+              VerticalAlignment="Top"
+              IsChecked="{Binding CheckForUpdatesAtStart, Mode=TwoWay}"
               Style="{StaticResource TogglePill}" />
           </Grid>
         </GroupBox>

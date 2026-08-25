@@ -14,7 +14,7 @@ namespace BlackboxModManager.Tests
 	{
 		// ------------------------------------------------------------------ the 1 Lap mod
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheOneLapFolderIsOnePackageWithFiveVariants()
 		{
 			// A folder with five manifests is one package with five variants. It is not
@@ -30,7 +30,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal(ExampleMods.OneLapFolder, package.Name);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheOneLapVariantsCarryTheirManifestNames()
 		{
 			ModPackage package = ModPackageReader.Read(ExampleMods.OneLap);
@@ -44,7 +44,7 @@ namespace BlackboxModManager.Tests
 				package.Variants.Select(v => v.Name).ToArray());
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void EveryOneLapVariantIsInstallableAndNamesUnderground2()
 		{
 			ModPackage package = ModPackageReader.Read(ExampleMods.OneLap);
@@ -56,7 +56,7 @@ namespace BlackboxModManager.Tests
 			});
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheOneLapVariantsAskNoQuestion()
 		{
 			ModPackage package = ModPackageReader.Read(ExampleMods.OneLap);
@@ -64,7 +64,7 @@ namespace BlackboxModManager.Tests
 			Assert.All(package.Variants, v => Assert.Empty(v.OptionSets));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheReaderFindsAManifestByItsHeaderAndNotByItsExtension()
 		{
 			// The folder holds five VERSN1 manifests and five VERSN2 scripts under MOD.
@@ -77,7 +77,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------------ the camera mod
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheCameraFolderIsOnePackageWithOneVariant()
 		{
 			ModPackage package = ModPackageReader.Read(ExampleMods.Camera);
@@ -87,7 +87,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal("Install", package.Variants[0].Name);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheCameraVariantAsksOneComboboxQuestion()
 		{
 			ModVariant variant = ModPackageReader.Read(ExampleMods.Camera).Variants[0];
@@ -101,7 +101,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal(2, set.SourceLine);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheCameraOptionNamesComeFromTheScriptInOrder()
 		{
 			// The names carry spaces and brackets. A plain split on a space would break
@@ -116,7 +116,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal(new[] { 0, 1 }, set.Options.Select(o => o.Index).ToArray());
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void FindLocatesAnOptionByName()
 		{
 			ModOptionSet set = ModPackageReader.Read(ExampleMods.Camera).Variants[0].OptionSets[0];

@@ -83,7 +83,7 @@ namespace BlackboxModManager.Tests
 
 		// ---------------------------------------------------------------- the variants
 
-		[Fact]
+		[ExampleModsFact]
 		public void OnlyTheVariantsThatTheProfileSwitchesOnApply()
 		{
 			InstalledMod mod = this.Import(ExampleMods.OneLap);
@@ -95,7 +95,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal(1, variants[0].Order);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void AVariantThatKeepsItsAnswersStaysOffWhenTheFlagIsOff()
 		{
 			InstalledMod mod = this.Import(ExampleMods.OneLap);
@@ -110,7 +110,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal("1 Lap URL Races", variants[0].Variant.Name);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void AModWithNoVariantSwitchedOnStopsTheDeploy()
 		{
 			InstalledMod mod = this.Import(ExampleMods.OneLap);
@@ -122,7 +122,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains("no variant switched on", error.Message);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void AVariantNameThatTheModNoLongerHoldsStopsTheDeploy()
 		{
 			InstalledMod mod = this.Import(ExampleMods.OneLap);
@@ -133,7 +133,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains("no longer holds it", error.Message);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheLoadOrderFollowsTheProfileEntryOrder()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -158,7 +158,7 @@ namespace BlackboxModManager.Tests
 		/// Both example mods declare GLOBAL\GLOBALB.LZC. The union must hold it once.
 		/// A second entry makes AddNew throw, or it builds two containers for one file.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void TheUnionHoldsOneEntryPerContainer()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -179,7 +179,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal(3, merged.Contributors[@"GLOBAL\GLOBALB.LZC"].Count);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheUnionKeepsTheSpellingOfTheManifest()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -192,7 +192,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains(@"GLOBAL\GLOBALB.LZC", merged.Files);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheMergedManifestPointsAtTheStagingCopy()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -214,7 +214,7 @@ namespace BlackboxModManager.Tests
 		/// directory. The merged manifest stores the resolved path, because one synthetic
 		/// manifest cannot hold the ThisDir of several mods.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void TheUnionResolvesEveryLinkToAFullPath()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -237,7 +237,7 @@ namespace BlackboxModManager.Tests
 		/// LANGUAGES\Labels.bin of them. Every loader in Nikki returns for a file that does
 		/// not exist, so the deploy leaves the link out and says so once.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void AMissingLinkFileProducesANoteAndNotAFailure()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -257,7 +257,7 @@ namespace BlackboxModManager.Tests
 		/// <summary>
 		/// Two variants of one mod name the same links. The note has to appear once.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void ASkippedLinkProducesOneNoteForEveryVariant()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -284,7 +284,7 @@ namespace BlackboxModManager.Tests
 		/// field the same value. That is not a conflict, and reporting it would teach a user
 		/// to ignore the list.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void TwoVariantsThatAgreeProduceNoConflict()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -301,7 +301,7 @@ namespace BlackboxModManager.Tests
 		/// The two example mods edit different managers, CarTypeInfos against GCareers, so
 		/// the success criterion of the brief needs this to report nothing.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void TheTwoExampleModsDoNotConflict()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -323,7 +323,7 @@ namespace BlackboxModManager.Tests
 		/// The later variant in the load order wins, because every mod applies to one loaded
 		/// profile in order and the last write wins.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void TheLaterVariantWinsAConflict()
 		{
 			InstalledMod camera = this.Import(ExampleMods.Camera);
@@ -350,7 +350,7 @@ namespace BlackboxModManager.Tests
 			Assert.All(report.Conflicts, entry => Assert.Contains(camera.Name, entry.Loser));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheConflictCheckNeverThrowsForAVariantThatItCannotRead()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -371,7 +371,7 @@ namespace BlackboxModManager.Tests
 		/// The gate sits inside the deploy engine and not only in the preflight. A caller that
 		/// skips the preflight must not be able to skip the rule.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void TheGateStopsAModThatUsesARefusedCommand()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -385,7 +385,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains("stop_errors", error.Message, StringComparison.Ordinal);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheGateStopsAModThatWritesOutsideStaging()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
@@ -399,7 +399,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains("outside the staging copy", error.Message, StringComparison.Ordinal);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheGateLetsTheExampleModsThrough()
 		{
 			InstalledMod lap = this.Import(ExampleMods.OneLap);
