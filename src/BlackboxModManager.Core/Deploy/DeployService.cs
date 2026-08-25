@@ -116,6 +116,11 @@ namespace BlackboxModManager.Core.Deploy
 					"Every build and every swap copies every byte.");
 			}
 
+			// Ask for the rights before anything reads or copies a file. The swap is the only
+			// step that needs them and it is the last step, so without this check a deploy does
+			// every minute of its work and then fails. See AccessPreflight.
+			AccessPreflight.Check(workspace, write);
+
 			// Decide the route of every Binary mod before anything reads or copies a file. The
 			// staging copy depends on the answer, and every later reader must get the same
 			// answer. See BinaryRoutePlan.
@@ -293,6 +298,9 @@ namespace BlackboxModManager.Core.Deploy
 					$"The workspace {workspace.Root} holds no vanilla copy, so a revert has nothing to restore. " +
 					"This application has never deployed to this install.");
 			}
+
+			// A revert swaps too, so it needs the same rights as a deploy.
+			AccessPreflight.Check(workspace, write);
 
 			// Build the replacement first. A revert must never move the vanilla copy
 			// itself, because a failure would then leave no baseline.

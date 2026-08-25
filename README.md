@@ -74,6 +74,12 @@ route for each profile, and override it for one mod when you need to.
    them. Download Binary from [SpeedReflect/Binary](https://github.com/SpeedReflect/Binary).
 3. **A game install.** Point the application at one, and it finds the rest.
 
+**A game under `C:\Program Files` or `C:\Program Files (x86)` needs administrator rights.** A
+deploy replaces the game directory, and Windows gives a normal account no right to do that
+there. The application tests for the right before it starts and offers to restart itself as
+administrator. A game anywhere else needs no such restart, so a library outside Program Files
+is the easier setup.
+
 **This project ships no part of Binary.** You install Binary yourself, and you name the
 directory in the config window. The application reads the hash lists from that directory and
 copies none of them.

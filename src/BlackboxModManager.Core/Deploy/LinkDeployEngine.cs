@@ -220,8 +220,15 @@ namespace BlackboxModManager.Core.Deploy
 			{
 				if (entry.Kind == LinkKind.HardLink && !entry.Works)
 				{
+					// Name the volume only when the two paths really sit on different ones.
+					// This sentence used to appear whatever the error was, and it pointed a
+					// user at a second drive that the machine does not have.
+					string cause = FileTree.SameVolume(mod.ContentRoot, probe.Directory)
+						? "Both paths sit on one volume, so the cause is not a volume boundary."
+						: "A hard link cannot cross a volume, and these two paths sit on different volumes.";
+
 					return $"a hard link from the mod store does not work, so the deploy uses {probe.Best}. " +
-						$"{entry.Error} A hard link cannot cross a volume. " +
+						$"{entry.Error} {cause} " +
 						$"The mod store is at {mod.ContentRoot}.";
 				}
 			}

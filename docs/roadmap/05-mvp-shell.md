@@ -183,3 +183,25 @@ The fix, in `GameSwap`.
 3. **Both move helpers log the reason** instead of swallowing it.
 
 `GameSwapTests.AFirstMoveThatFailsDeletesNothing` locks this down. Checked against the old code, that test does not merely fail. **No exception was thrown at all**, because `DirectoryNotFoundException` derives from `IOException`. The old fallback copied the game, deleted the original, and completed the swap by consuming the live install. On a writable directory that path succeeds in full.
+
+### 2026-08-25: the three follow-up items, done
+
+The defect above left three things to build. All three are in.
+
+**1. `AccessPreflight` asks for the rights first.** `DeployService.Deploy` and `DeployService.Revert` both call it before they read or copy a file. It creates one file in each directory and removes it again, and it throws `AccessException` for the first directory that refuses.
+
+It checks three directories, and the second one surprises people.
+
+- The parent of the game directory. **The swap puts the new game directory there.** A game under Program Files fails here first.
+- The game directory. The swap renames it.
+- The workspace. A deploy writes gigabytes into it.
+
+**It never renames the game directory as a test.** A rename that worked and then failed to go back would break the install, which is the thing this class exists to prevent.
+
+`AccessPreflightTests.ADeployStopsBeforeItBuildsTheStagingCopy` checks the property that matters. A denied game directory now leaves no staging copy and no vanilla snapshot, so the deploy spent no time at all. The failure it replaces arrived after 1,560 files and a full verify.
+
+**2. `FileTree.SameVolume` decides whether a message may name a volume.** `TreeReplicator.HardLinkNote` and `LinkDeployEngine.Explain` both used to append "A hard link cannot cross a volume" whatever the real error was. The reporter of this defect read that line and went looking for a second volume on a machine with one drive. Both now say either that the paths sit on different volumes, or that a volume boundary is not the cause. `GameWorkspace.SharesVolumeWithGame` calls the same helper, so one rule has one name.
+
+**3. The window offers a restart as administrator.** `MainViewModel.ConfirmAccess` runs before a deploy and before a revert, on the UI thread. It writes the reason to the log, then offers the restart. `Elevation.Restart` uses the `runas` verb, and `MainWindow` closes the application after the new process starts. A user who answers No to the prompt of Windows gets one log line, because that is a choice and not a failure. A run that is already elevated and still refused gets a different message, because a second elevation would change nothing.
+
+**Never put `requestedExecutionLevel` in the application manifest.** `Elevation` records the two reasons. An elevated process takes no drop from a normal Explorer window. The drag and drop import of step 13 would then go quiet, with no message. An elevated run also leaves files that a later normal run cannot write. A game outside Program Files needs no elevation at all.

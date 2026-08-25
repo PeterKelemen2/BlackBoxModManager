@@ -41,5 +41,16 @@ namespace BlackboxModManager.App.Services
 		void ShowError(string message);
 
 		void ShowMessage(string message);
+
+		/// <summary>
+		/// Starts this application again with administrator rights and closes this one.
+		///
+		/// It returns false when the restart did not happen, and <paramref name="error"/> then
+		/// says why. A user who answers No to the prompt of Windows produces that answer, and
+		/// that is a choice and not a failure.
+		///
+		/// The window owns this, because only the window can close the application.
+		/// </summary>
+		bool RestartAsAdministrator(out string error);
 	}
 }

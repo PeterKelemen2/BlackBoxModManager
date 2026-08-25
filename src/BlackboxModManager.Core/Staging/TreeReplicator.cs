@@ -181,8 +181,16 @@ namespace BlackboxModManager.Core.Staging
 			{
 				if (entry.Kind == LinkKind.HardLink && !entry.Works)
 				{
+					// Name the volume only when the two paths really sit on different ones. This
+					// sentence used to appear whatever the error was. A user read it after an
+					// access denial and went looking for a second drive. See
+					// docs/roadmap/05-mvp-shell.md.
+					string cause = FileTree.SameVolume(from, to)
+						? "Both paths sit on one volume, so the cause is not a volume boundary."
+						: "A hard link cannot cross a volume, and these two paths sit on different volumes.";
+
 					return $"A hard link from {from} to {to} does not work, so the copy writes every byte. " +
-						$"{entry.Error} A hard link cannot cross a volume.";
+						$"{entry.Error} {cause}";
 				}
 			}
 

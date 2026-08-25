@@ -109,6 +109,35 @@ namespace BlackboxModManager.Core.Files
 		}
 
 		/// <summary>
+		/// Tests whether two paths sit on one volume.
+		///
+		/// <b>Say this only when it is true.</b> A hard link cannot cross a volume and a rename
+		/// cannot either, so a volume boundary explains several failures. It explains none of
+		/// the others. A message that named a volume boundary for an access denial sent a user
+		/// hunting for a second drive on a machine with one. See
+		/// docs/roadmap/05-mvp-shell.md.
+		///
+		/// An unreadable path reports false, which is the answer that makes a caller take the
+		/// slow and safe route.
+		/// </summary>
+		public static bool SameVolume(string first, string second)
+		{
+			try
+			{
+				string a = Path.GetPathRoot(Path.GetFullPath(first));
+				string b = Path.GetPathRoot(Path.GetFullPath(second));
+
+				if (String.IsNullOrEmpty(a) || String.IsNullOrEmpty(b)) return false;
+
+				return String.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+			}
+			catch (Exception)
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Tests whether one path is the other path, or sits inside it.
 		///
 		/// Call this before every destructive operation. A staging directory inside the

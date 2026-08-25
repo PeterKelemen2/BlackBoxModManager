@@ -123,4 +123,29 @@ Measured after the change, with no `example_mods`: **0 failed, 382 passed, 53 sk
 
 ## Results
 
-Empty. Fill this after three runs. Tag the first release. Install it on Windows. Then update from one alpha to the next.
+### 2026-08-25: the installer works, and the runtime installs
+
+A dispatch run packed version `0.1.0-alpha.1`, and the `Setup.exe` of that run installed on Windows.
+
+**`--framework net10.0-x64-desktop` is correct.** `vpk` accepted the value, and `Setup.exe` fetched and installed the .NET 10 Desktop Runtime on a machine that had no .NET 10. **The largest risk of this step is closed.** The Velopack documentation still lists 5.0 to 9.0 only, so leave the note above in place for the next reader.
+
+The application then started and ran. A deploy of one mod into Underground 2 finished.
+
+Still open after this run.
+
+- **No tag has gone out.** The release workflow ran through `workflow_dispatch`, which uploads nothing.
+- **`Setup.exe` and `Update.exe` under Wine stay unverified.**
+- **No update from one release to the next has run.** That needs a second tag.
+
+### What the first install found, and it was not about the release
+
+The deploy failed the first time, and the cause sat in `GameSwap` and not in this step. The game lived under `C:\Program Files (x86)\EA GAMES`, the swap could not rename that directory, and the fallback started to delete the live install. Read the dated section at the end of [05-mvp-shell.md](05-mvp-shell.md).
+
+Two facts belong here, because they change what a release has to say to a user.
+
+1. **A game under `Program Files` needs elevation for a deploy.** A run as administrator finished the same deploy with no error. The application now tests for the rights first and offers the restart, so a user meets a reason and a fix rather than a failure.
+2. **Do not solve that with `requestedExecutionLevel` in a manifest.** An elevated process takes no drop from a non-elevated Explorer window. The drag and drop import of step 13 would then stop working, with no message. An elevated run also leaves files that a later normal run cannot write. `AccessPreflight` plus the "Restart as administrator" action is the route that this project took.
+
+**A release therefore has to say where to install a game.** The README now names Program Files as the case that needs administrator rights.
+
+Fill the rest after the first tag and the first update.

@@ -581,6 +581,17 @@ namespace BlackboxModManager.App
 
 		public void ShowMessage(string message) => Dialogs.ShowMessage(this.Owner_(), message);
 
+		public bool RestartAsAdministrator(out string error)
+		{
+			if (!Elevation.Restart(out error)) return false;
+
+			// The new process is starting. Close this one, so that two windows never read the
+			// same workspace at the same time.
+			Application.Current.Shutdown();
+
+			return true;
+		}
+
 		// ---------------------------------------------------------------- The bar and the menus
 
 		/// <summary>

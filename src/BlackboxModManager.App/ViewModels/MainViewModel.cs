@@ -1674,6 +1674,9 @@ namespace BlackboxModManager.App.ViewModels
 			// the deploy starts, and stop when the user cancels.
 			if (!this.AskForLoaders()) return;
 
+			// The swap is the last step and it is the only one that needs the rights. Ask now.
+			if (!this.ConfirmAccess(install)) return;
+
 			await this.RunAsync($"Deploy the profile \"{profile.Name}\".", (report, token) =>
 			{
 				DeployResult result = this.Service().Deploy(install, profile, full, report, token);
@@ -1711,6 +1714,9 @@ namespace BlackboxModManager.App.ViewModels
 			if (!this._ask.Confirm("Put the vanilla state back into the game directory?",
 				"Revert", destructive: true)) return;
 
+			// A revert swaps too, so it needs the same rights as a deploy.
+			if (!this.ConfirmAccess(install)) return;
+
 			await this.RunAsync("Revert to vanilla.",
 				report => this.Service().Revert(install, report), RunningWork.Revert);
 
@@ -1718,6 +1724,64 @@ namespace BlackboxModManager.App.ViewModels
 		}
 
 		private bool CanDeploy() => this.IsIdle && this.IsGameReady && this._profile != null;
+
+		/// <summary>
+		/// Tests the rights that a swap needs, and offers a restart as administrator when they
+		/// are absent. It returns false when the caller must not start.
+		///
+		/// This runs before the operation and not inside it. A deploy that starts without the
+		/// rights copies every file of the game, verifies the copy, and fails on the last step.
+		/// The dialog also needs the UI thread, and the work of a deploy does not run on it.
+		/// </summary>
+		private bool ConfirmAccess(GameInstall install)
+		{
+			AccessException problem;
+
+			try
+			{
+				problem = AccessPreflight.Test(this.Service().WorkspaceOf(install));
+			}
+			catch (Exception ex)
+			{
+				// The check itself must never block the operation. The operation reports the
+				// real failure if there is one.
+				this.Write($"The permission check did not run. {ex.Message}");
+
+				return true;
+			}
+
+			if (problem is null) return true;
+
+			this.Write($"The account cannot write in {problem.Directory}, so the deploy did not start.");
+
+			// Already elevated and still refused. A second elevation changes nothing, so say
+			// what the user has to do instead.
+			if (Elevation.IsAdministrator())
+			{
+				this._ask.ShowError(
+					$"This application already runs as administrator, and {problem.Directory} still " +
+					"refuses a write. Check the permissions of that directory, or move the game out " +
+					"of Program Files. The game directory did not change.");
+
+				return false;
+			}
+
+			if (!this._ask.Confirm(
+				$"{problem.Message}{Environment.NewLine}{Environment.NewLine}" +
+				"Restart this application as administrator now?",
+				"Restart as administrator"))
+			{
+				this.Write("The deploy needs administrator rights. Nothing changed.");
+
+				return false;
+			}
+
+			if (this._ask.RestartAsAdministrator(out string error)) return false;
+
+			this.Write($"The restart as administrator did not happen. {error}");
+
+			return false;
+		}
 
 		// ---------------------------------------------------------------- the mod store
 

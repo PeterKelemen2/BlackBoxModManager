@@ -122,17 +122,7 @@ namespace BlackboxModManager.Core.Staging
 		/// </summary>
 		public bool SharesVolumeWithGame()
 		{
-			try
-			{
-				string a = Path.GetPathRoot(Path.GetFullPath(this.Root));
-				string b = Path.GetPathRoot(Path.GetFullPath(this.Install.Root));
-
-				return String.Equals(a, b, StringComparison.OrdinalIgnoreCase);
-			}
-			catch (Exception)
-			{
-				return false;
-			}
+			return FileTree.SameVolume(this.Root, this.Install.Root);
 		}
 
 		public WorkspaceState ReadState()
