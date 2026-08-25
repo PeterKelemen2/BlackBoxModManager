@@ -91,3 +91,18 @@ A native Linux run of the same probe reports the opposite for paths: case sensit
 The pitfall on `IncludeNativeLibrariesForSelfExtract` says the DLL "must exist as a real file next to the host at run time". That is not what happens. A single-file publish extracts the native libraries to a temporary directory, and the P/Invoke resolves them from there. The file is not beside the executable and the call still works.
 
 The flag is still mandatory. The wording was wrong, and a harness check built on that wording rejected a good build. **Test the resolution, not the file.** `NativeLibrary.TryLoad` against the Nikki assembly answers the real question.
+
+### 2026-08-25: a release is no longer self-contained
+
+Step 16 added the installer and the update check. It changed the shape that users run, so the pitfall above no longer describes a release.
+
+The pitfall reads: **"Self-contained publishing is the point. Linux users must not need `winetricks dotnet` inside their game prefix. A framework-dependent build forces exactly that."** That sentence stays, because it records what step 3 found. Four facts now sit beside it.
+
+1. **A release is framework-dependent, by decision.** The download is small, and `tools/pack.ps1` builds it.
+2. **On Windows, `Setup.exe` installs the .NET 10 Desktop Runtime.** Velopack takes the `--framework net10.0-x64-desktop` argument and closes the gap there.
+3. **Under Wine it does not close the gap, and this is the cost of the decision.** A Wine user installs that runtime into the prefix, or publishes self-contained from source. `tools/run-app.sh` still does the second one, so the zero-configuration path of step 3 remains available to a developer. **It is no longer what a release gives.**
+4. **Whether `Setup.exe` and `Update.exe` run under Wine at all is unverified.** Both are native programs of Velopack, and neither one uses WPF. Step 16 owns that check.
+
+One part is verified already. The managed side of Velopack runs under Wine. `BlackboxModManager.exe --veloapp-install 0.1.0` ran under Wine 11.16, opened no window, exited 0, and wrote its lines to `update.log`.
+
+Also note that `PublishSingleFile` left the build. Velopack wants a directory of loose files and it writes the single distributable itself, so `IncludeNativeLibrariesForSelfExtract` no longer applies to a release. `LZCompressLib.dll` sits beside the host as a normal file, which is the simplest case for the P/Invoke.

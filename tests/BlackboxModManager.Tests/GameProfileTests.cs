@@ -300,7 +300,7 @@ namespace BlackboxModManager.Tests
 		/// The manifest decides. Both example mods name Underground 2, so an import that asks
 		/// for Most Wanted still produces an Underground 2 mod, plus a note.
 		/// </summary>
-		[Fact]
+		[ExampleModsFact]
 		public void TheImportTakesTheGameFromTheManifest()
 		{
 			ModStore store = Store(out string root);
@@ -387,7 +387,7 @@ namespace BlackboxModManager.Tests
 			}
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void AssignRefusesABinaryMod()
 		{
 			ModStore store = Store(out string root);
@@ -455,7 +455,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------ the link audit
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheExampleModsMatchTheExpectedLinkSetOfUnderground2()
 		{
 			GameDefinition definition = GameCatalog.Demand(GameINT.Underground2);

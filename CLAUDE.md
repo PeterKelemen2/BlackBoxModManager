@@ -39,7 +39,7 @@ Two project conventions on top of the skill:
 | `README.md`                                 | What the project is, for a reader who arrives.    |
 | `project_brief.md`                          | Format research and design decisions.             |
 | `docs/roadmap/README.md`                    | The step sequence and the completed work.         |
-| `docs/roadmap/01` to `15`                   | One implementation step each, with pitfalls.      |
+| `docs/roadmap/01` to `16`                   | One implementation step each, with pitfalls.      |
 | `docs/roadmap/98-known-upstream-defects.md` | Defects in the MIT libraries that we work around. |
 | `docs/roadmap/99-api-notes.md`              | Verified library signatures and call order.       |
 | `LICENSE`                                   | The MIT license of this application.              |

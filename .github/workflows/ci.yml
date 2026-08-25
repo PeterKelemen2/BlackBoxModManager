@@ -1,0 +1,76 @@
+# Builds the solution and runs the tests on every push and every pull request.
+#
+# The runner is Windows for one reason. The application is a WPF program, so Windows is the
+# platform that the users have. A Linux runner can build it with EnableWindowsTargeting, and
+# it cannot run it.
+#
+# The tests that need the example mods report as skipped here. The repository tracks no
+# example mod, so no runner has that data. See tests/BlackboxModManager.Tests/ExampleMods.cs.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the run that is still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # A path inside the workspace. The home directory of the runner changes between images,
+  # and actions/cache needs a path that it can find.
+  NUGET_PACKAGES: ${{ github.workspace }}\.nuget\packages
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # The submodules are mandatory. BlackboxModManager.Core has one ProjectReference to
+      # Endscript, and Endscript reaches Nikki and CoreExtensions. The restore fails without
+      # them, and the error names a missing project file.
+      #
+      # This checks out the commit that the repository pins, and never the branch tip. A run
+      # therefore cannot move CoreExtensions past the commit that it must stay on. See
+      # CLAUDE.md.
+      - name: Check out the repository and the submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # global.json pins the SDK, so the runner and the developer machine agree.
+      - name: Set up the .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The built-in cache of actions/setup-dotnet needs a packages.lock.json, and this
+      # repository has none. This step caches the same directory by hand.
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.slnx', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore BlackboxModManager.slnx
+
+      # Never add TreatWarningsAsErrors or -warnaserror here. The three forks under
+      # third_party emit about 21 warnings, and step 0 of the roadmap records why they stay.
+      - name: Build
+        run: dotnet build BlackboxModManager.slnx -c Release --no-restore
+
+      # The configuration must match the build above, because --no-build reuses that output.
+      - name: Test
+        run: dotnet test BlackboxModManager.slnx -c Release --no-build

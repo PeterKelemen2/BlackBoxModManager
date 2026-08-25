@@ -1,0 +1,141 @@
+# Builds a release and publishes it to the releases page of this repository.
+#
+# A push of a tag that starts with v starts this. The tag carries the version:
+#
+#   git tag v0.1.0-alpha.1
+#   git push origin v0.1.0-alpha.1
+#
+# The tag must be SemVer 2 after the v. A version with a prerelease label, such as
+# 0.1.0-alpha.1, becomes a prerelease on GitHub. A user of an alpha then sees the next alpha,
+# and a user of a stable release never does. See UpdateService.
+#
+# The workflow_dispatch route is for a test of this file. It takes the version as an input,
+# and it uploads nothing.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The SemVer 2 version, with no leading v. This route uploads nothing.'
+        required: true
+
+# vpk upload github creates the release with the token below, and a create needs write.
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_PACKAGES: ${{ github.workspace }}\.nuget\packages
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      # The submodules are mandatory. See .github/workflows/ci.yml for the reason.
+      - name: Check out the repository and the submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up the .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache the NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.slnx', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # Read the version and reject a tag of the wrong shape now.
+      #
+      # A build takes minutes, and vpk refuses a version that is not SemVer 2. Fail in the
+      # first seconds instead, with a message that names the shape.
+      - name: Read the version from the tag
+        id: version
+        shell: pwsh
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $version = '${{ inputs.version }}'
+          } else {
+            $version = '${{ github.ref_name }}' -replace '^v', ''
+          }
+
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            Write-Host "::error::The version '$version' is not SemVer 2. Tag v1.2.3 or v1.2.3-alpha.1."
+            exit 1
+          }
+
+          # A label such as alpha.1 makes this a prerelease.
+          $pre = if ($version -match '-') { 'true' } else { 'false' }
+
+          "version=$version"  | Out-File $env:GITHUB_OUTPUT -Append
+          "prerelease=$pre"   | Out-File $env:GITHUB_OUTPUT -Append
+
+          Write-Host "Version $version. Prerelease: $pre."
+
+      # This step is a gate and not the release build. It carries no version, because
+      # tools/pack.ps1 publishes again with the right one. The script owns the split of the
+      # version into a prefix and a suffix, and it is the only place that does it.
+      #
+      # A failing test must stop a release before vpk writes anything.
+      - name: Build
+        run: dotnet build BlackboxModManager.slnx -c Release
+
+      # The tests that need the example mods report as skipped. The repository tracks none of
+      # them. See tests/BlackboxModManager.Tests/ExampleMods.cs.
+      - name: Test
+        run: dotnet test BlackboxModManager.slnx -c Release --no-build
+
+      # This installs before the pack step, because tools/pack.ps1 calls vpk.
+      #
+      # It also installs after setup-dotnet. A global tool installed before that step would
+      # build against the SDK that the image ships and not the one that global.json pins.
+      - name: Install the Velopack CLI
+        run: dotnet tool install -g vpk
+
+      # A global tool lands in a directory that is not always on the PATH of the next step.
+      # Fail here with a clear message instead of inside the script.
+      - name: Check the Velopack CLI
+        run: vpk pack --help
+
+      # Publishes, checks every license-obliged file, then runs vpk pack.
+      - name: Publish and pack
+        shell: pwsh
+        run: ./tools/pack.ps1 -Version ${{ steps.version.outputs.version }}
+
+      # Keep the packages whatever happens next. A failed upload then costs no rebuild, and a
+      # dispatch run leaves something to inspect.
+      - name: Keep the packages as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.version.outputs.version }}
+          path: artifacts/releases
+
+      # Only a tag publishes. A dispatch run stops above, so this file can be tested without
+      # a release appearing on the repository.
+      - name: Upload the release to GitHub
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $arguments = @(
+            'upload', 'github'
+            '--outputDir', 'artifacts/releases'
+            '--repoUrl', '${{ github.server_url }}/${{ github.repository }}'
+            '--token', '${{ secrets.GITHUB_TOKEN }}'
+            '--tag', '${{ github.ref_name }}'
+            '--releaseName', 'BlackBox Mod Manager ${{ steps.version.outputs.version }}'
+            '--publish'
+          )
+
+          if ('${{ steps.version.outputs.prerelease }}' -eq 'true') { $arguments += '--pre' }
+
+          vpk @arguments

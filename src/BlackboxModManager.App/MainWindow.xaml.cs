@@ -30,6 +30,31 @@ namespace BlackboxModManager.App
 
 			// Keep the last log line in view. A deploy writes while the user watches.
 			((INotifyCollectionChanged)this._model.Log).CollectionChanged += this.OnLogChanged;
+
+			this.Loaded += this.OnLoaded;
+		}
+
+		/// <summary>
+		/// Runs the update check of the start, if the settings ask for it.
+		///
+		/// This waits for Loaded and does not run in the constructor. The check writes to the
+		/// log, and the log has to exist on screen to carry the line.
+		/// </summary>
+		private async void OnLoaded(object sender, RoutedEventArgs e)
+		{
+			// One check for each start. Loaded fires again when the window comes back into the
+			// tree, and a second check would ask GitHub twice.
+			this.Loaded -= this.OnLoaded;
+
+			try
+			{
+				await this._model.CheckForUpdatesAtStartAsync();
+			}
+			catch (Exception)
+			{
+				// An async void method that throws ends the process. The method above catches
+				// every failure of its own, so this only covers a failure before it starts.
+			}
 		}
 
 		private bool _scrollQueued;

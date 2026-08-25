@@ -791,24 +791,40 @@
       <StatusBarItem>
         <TextBlock Text="{Binding Status}" />
       </StatusBarItem>
+      <!--
+        The state and the version share the right side.
+
+        Both sit in one item on purpose. A third StatusBarItem would depend on how the panel of
+        a StatusBar arranges its children, and the state has to keep the right edge. One item
+        holding a row settles the order here instead.
+
+        The log also names the version at every start. This line is for the user who wants to
+        read it without opening anything.
+      -->
       <StatusBarItem HorizontalContentAlignment="Right">
-        <TextBlock Text="{Binding StateSummary}" TextTrimming="CharacterEllipsis">
-          <TextBlock.ToolTip>
-            <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-              <StackPanel MaxWidth="420">
-                <TextBlock Text="{Binding GamePath}" TextWrapping="Wrap" />
-                <TextBlock
-                  Margin="0,4,0,0"
-                  Text="{Binding BinaryStatus}"
-                  TextWrapping="Wrap" />
-                <TextBlock
-                  Margin="0,4,0,0"
-                  Text="{Binding ModStoreStatus}"
-                  TextWrapping="Wrap" />
-              </StackPanel>
-            </ToolTip>
-          </TextBlock.ToolTip>
-        </TextBlock>
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="{Binding StateSummary}" TextTrimming="CharacterEllipsis">
+            <TextBlock.ToolTip>
+              <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                <StackPanel MaxWidth="420">
+                  <TextBlock Text="{Binding GamePath}" TextWrapping="Wrap" />
+                  <TextBlock
+                    Margin="0,4,0,0"
+                    Text="{Binding BinaryStatus}"
+                    TextWrapping="Wrap" />
+                  <TextBlock
+                    Margin="0,4,0,0"
+                    Text="{Binding ModStoreStatus}"
+                    TextWrapping="Wrap" />
+                </StackPanel>
+              </ToolTip>
+            </TextBlock.ToolTip>
+          </TextBlock>
+          <TextBlock
+            Margin="12,0,0,0"
+            Style="{StaticResource Hint}"
+            Text="{Binding VersionLabel}" />
+        </StackPanel>
       </StatusBarItem>
     </StatusBar>
   </Grid>

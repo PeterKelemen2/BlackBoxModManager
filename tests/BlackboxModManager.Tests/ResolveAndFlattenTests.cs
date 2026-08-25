@@ -19,7 +19,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------------ flatten, no question
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheUrlVariantFlattensToItsFiftyOneCommands()
 		{
 			ResolvedScript resolved = ScriptFlattener.Resolve(OneLap("1 Lap URL Races"), (VariantSelection)null);
@@ -30,7 +30,7 @@ namespace BlackboxModManager.Tests
 			Assert.Empty(resolved.Notes);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void EveryUrlEditCarriesAConflictKey()
 		{
 			ResolvedScript resolved = ScriptFlattener.Resolve(OneLap("1 Lap URL Races"), (VariantSelection)null);
@@ -38,7 +38,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal(51, resolved.KeyedEdits.Count());
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void AKeyHoldsTheTargetFileAndTheNamePathButNotTheValue()
 		{
 			// update_incareer GLOBAL\GLOBALB.LZC GCareers Main GCareerRaces S4_URL_1 Stages STAGE1 NumberOfLaps 1
@@ -54,7 +54,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------------ flatten, one question
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheCameraVariantWithNoStoredAnswerTakesTheFirstOptionAndSaysSo()
 		{
 			// A deploy must never block on a prompt.
@@ -67,7 +67,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains("No selection is stored", note.Reason, StringComparison.Ordinal);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheCameraBranchesFlattenToTheirOwnCommandsAndNothingElse()
 		{
 			// The parsed script holds 1198 commands across both branches. A resolved run
@@ -84,7 +84,7 @@ namespace BlackboxModManager.Tests
 			Assert.All(restore.Edits, e => Assert.Equal("[0]_Restore_Camera_Settings.end", e.SourceFile));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void AStoredAnswerResolvesWithNoPrompt()
 		{
 			ModVariant variant = Camera();
@@ -97,7 +97,7 @@ namespace BlackboxModManager.Tests
 			Assert.Empty(resolved.Notes);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void ApplyDefaultsFillsTheFirstOptionOfEveryUnansweredQuestion()
 		{
 			ModVariant variant = Camera();
@@ -108,7 +108,7 @@ namespace BlackboxModManager.Tests
 			Assert.Equal("Install Camera Mod [NFSMW TO U2]", selections.For(variant.Name).Answer(0));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void ApplyDefaultsLeavesAnExistingAnswerAlone()
 		{
 			ModVariant variant = Camera();
@@ -122,7 +122,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------------ selection failures
 
-		[Fact]
+		[ExampleModsFact]
 		public void AnAnswerThatNoLongerExistsFailsAndNamesTheModAndTheOptions()
 		{
 			// This is what a mod update that renames an option must produce. A stored index
@@ -139,7 +139,7 @@ namespace BlackboxModManager.Tests
 			Assert.Contains("Restore original camera settings", error.Message, StringComparison.Ordinal);
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void AnAnswerIsMatchedByNameAndNotByPosition()
 		{
 			// Index 1 of the question is "Restore original camera settings". Store the name
@@ -159,7 +159,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------------ values
 
-		[Fact]
+		[ExampleModsFact]
 		public void AFloatKeepsItsOriginalText()
 		{
 			// A default ToString round trip corrupts -0.19500002 and 2.746582.
@@ -205,7 +205,7 @@ namespace BlackboxModManager.Tests
 
 		// ------------------------------------------------------------------ conflicts
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheAllVariantAndTheUrlVariantAgreeAndProduceNoConflict()
 		{
 			// ALL is the union of the other four. A user may legitimately enable ALL and
@@ -216,7 +216,7 @@ namespace BlackboxModManager.Tests
 			Assert.Empty(ConflictDetector.Find(new[] { all, url }));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheAllVariantReallyDoesCoverTheUrlVariant()
 		{
 			// Guards the test above. Without this, an empty overlap would also pass.
@@ -228,7 +228,7 @@ namespace BlackboxModManager.Tests
 			Assert.All(url.KeyedEdits, e => Assert.Contains(e.Key, allKeys));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void TheTwoCameraBranchesDisagreeAndProduceConflicts()
 		{
 			ModVariant variant = Camera();
@@ -242,7 +242,7 @@ namespace BlackboxModManager.Tests
 			Assert.All(conflicts, c => Assert.NotEqual(c.LeftValue, c.RightValue));
 		}
 
-		[Fact]
+		[ExampleModsFact]
 		public void OneVariantNeverConflictsWithItself()
 		{
 			ResolvedScript url = ScriptFlattener.Resolve(OneLap("1 Lap URL Races"), (VariantSelection)null);
