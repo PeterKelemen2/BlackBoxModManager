@@ -65,6 +65,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $root 'src\BlackboxModManager.App\BlackboxModManager.App.csproj'
+$icon = Join-Path $root 'src\BlackboxModManager.App\Assets\icon.ico'
 
 if (-not $PackDir) { $PackDir = Join-Path $root 'artifacts\pack' }
 if (-not $OutputDir) { $OutputDir = Join-Path $root 'artifacts\releases' }
@@ -228,8 +229,9 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 # --channel stays out. The default for a Windows build is win, and UpdateService reads that
 # same default. Naming it in one place and not the other is how a feed goes silently empty.
 #
-# --icon stays out. The repository holds no .ico file, the flag is optional, and an icon is a
-# new binary asset with a license question that THIRD-PARTY-NOTICES.md would have to answer.
+# --icon points at the application's own icon. Setup.exe, the shortcuts, and the
+# Add/Remove Programs entry then carry it, instead of the Velopack default. The file is
+# original artwork of this project, so it raises no THIRD-PARTY-NOTICES.md question.
 #
 # --framework makes Setup.exe install the runtime, because this build is framework-dependent.
 # **The value net10.0-x64-desktop is not in the Velopack documentation, which lists 5.0 to
@@ -246,6 +248,7 @@ $pack = @(
 	'--outputDir', $OutputDir
 	'--runtime', 'win-x64'
 	'--framework', 'net10.0-x64-desktop'
+	'--icon', $icon
 )
 
 Write-Host 'Run vpk pack.'
