@@ -71,8 +71,8 @@ namespace BlackboxModManager.App.Views
 			}
 			catch (Exception ex)
 			{
-				this.CopyState.Text = "The clipboard refused the text. Another program holds it. " +
-					$"Select the message and press Control C. {ex.Message}";
+				this.CopyState.Text = "The clipboard refused the text. Select the message " +
+					$"and press Control C. {ex.Message}";
 
 				this.Body.SelectAll();
 				this.Body.Focus();

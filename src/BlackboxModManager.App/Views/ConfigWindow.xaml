@@ -96,7 +96,7 @@
                 HorizontalAlignment="Stretch"
                 Command="{Binding DetectGameCommand}"
                 Content="Detect"
-                ToolTip="Search the common install directories. One dialog then lists every result." />
+                ToolTip="Search the common install directories." />
               <Button
                 Margin="0"
                 HorizontalAlignment="Stretch"
@@ -148,7 +148,7 @@
               <TextBlock
                 Margin="0,4,0,0"
                 Style="{StaticResource Hint}"
-                Text="This application reads the hash lists of that install. It ships no file of it."
+                Text="Only the hash lists of that install are read."
                 TextWrapping="Wrap" />
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Top">
@@ -206,7 +206,7 @@
               <TextBlock
                 Margin="0,4,0,0"
                 Style="{StaticResource Hint}"
-                Text="A hard link cannot cross a volume. A store on the volume of the game makes every deploy cost almost no disk space. A store anywhere else makes every deploy copy every byte of every mod. A change offers to move the mods that the store holds today."
+                Text="Hard links do not cross volumes. Keep the store on the volume of the game, or every deploy copies every byte."
                 TextWrapping="Wrap" />
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Top">
@@ -225,7 +225,7 @@
                 HorizontalAlignment="Stretch"
                 Command="{Binding UseDefaultModStoreCommand}"
                 Content="Use the default place"
-                ToolTip="Put the mod store back under the application data of this application.">
+                ToolTip="Move it back under the application data directory.">
                 <Button.Style>
                   <Style BasedOn="{StaticResource {x:Type Button}}" TargetType="Button">
                     <Setter Property="Visibility" Value="Visible" />
@@ -289,7 +289,7 @@
               <TextBlock
                 Margin="0,4,0,0"
                 Style="{StaticResource Hint}"
-                Text="A deploy builds the staging copy here and then swaps it with the game directory. Both steps are cheap only on the volume of the game. Move this only when that volume has no free space. The workspace holds the vanilla copy, so revert to vanilla before you move it."
+                Text="A deploy builds here, then swaps the result into the game directory. Keep it on the volume of the game. The vanilla copy lives here, so revert before you move it."
                 TextWrapping="Wrap" />
               <Button
                 Margin="0,8,0,0"
@@ -361,7 +361,7 @@
               <TextBlock
                 Margin="0,2,0,0"
                 Style="{StaticResource Hint}"
-                Text="Hash every file of the staging copy after a deploy builds it. This is slow and exact. Off checks the name and the length alone."
+                Text="Hash every staged file after a deploy. Exact, but slow. Off compares name and length."
                 TextWrapping="Wrap" />
             </StackPanel>
             <ToggleButton
@@ -386,7 +386,7 @@
               <TextBlock
                 Margin="0,2,0,0"
                 Style="{StaticResource Hint}"
-                Text="Run the Binary 2.8.3 install for every Binary mod of this profile, instead of the container engine of this application. Use this for a mod that the container engine refuses. Binary writes in place, so every deploy then copies the whole game directory. One mod can override this on its own row."
+                Text="Route Binary mods through the Binary 2.8.3 install instead of the container engine. Binary writes in place, so every deploy copies the whole game directory. A mod can override this on its own row."
                 TextWrapping="Wrap" />
             </StackPanel>
             <ToggleButton
@@ -420,7 +420,7 @@
               <TextBlock
                 Margin="0,2,0,0"
                 Style="{StaticResource Hint}"
-                Text="Ask GitHub for a newer release and install it. This application closes and opens again. Your mods, profiles, and settings live outside the install directory, so an update keeps all of them. A build that you compiled yourself carries no installer and cannot update itself."
+                Text="Get the newest release from GitHub and install it. The application restarts, and your mods, profiles, and settings survive."
                 TextWrapping="Wrap" />
             </StackPanel>
             <Button
@@ -430,7 +430,7 @@
               VerticalAlignment="Top"
               Command="{Binding CheckForUpdatesCommand}"
               Content="Check now"
-              ToolTip="Ask GitHub whether a newer release exists." />
+              ToolTip="Look for a newer release." />
 
             <StackPanel
               Grid.Row="1"
@@ -440,7 +440,7 @@
               <TextBlock
                 Margin="0,2,0,0"
                 Style="{StaticResource Hint}"
-                Text="Run the same check every time that this application starts. Off asks nothing and reaches no network until you press the button."
+                Text="Run that check at every start. Off reaches no network until you press the button."
                 TextWrapping="Wrap" />
             </StackPanel>
             <ToggleButton

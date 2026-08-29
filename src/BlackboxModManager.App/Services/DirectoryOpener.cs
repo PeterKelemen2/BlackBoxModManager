@@ -28,7 +28,7 @@ namespace BlackboxModManager.App.Services
 		{
 			if (String.IsNullOrEmpty(path) || !Directory.Exists(path))
 			{
-				return $"The directory {path} does not exist, so there is nothing to open.";
+				return $"The directory {path} does not exist yet.";
 			}
 
 			try

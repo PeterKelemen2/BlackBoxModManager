@@ -390,7 +390,7 @@ namespace BlackboxModManager.App.ViewModels
 			if (this._deployedFingerprint is null)
 			{
 				this.HasPendingChanges = true;
-				this.PendingMessage = "The game directory does not report what it holds. Deploy to make it match.";
+				this.PendingMessage = "The game directory does not report what it holds. Deploy to be sure.";
 
 				return;
 			}
@@ -401,14 +401,14 @@ namespace BlackboxModManager.App.ViewModels
 			this.HasPendingChanges = !same;
 			this.PendingMessage = same
 				? String.Empty
-				: "The game directory does not hold these changes yet. Deploy to apply them.";
+				: "Changes not deployed yet.";
 		}
 
 		[ObservableProperty]
-		private string _detailsHeader = "Select a mod to see what it offers.";
+		private string _detailsHeader = "Select a mod.";
 
 		[ObservableProperty]
-		private string _settingsHeader = "Select a mod to see its options.";
+		private string _settingsHeader = "Select a mod.";
 
 		[ObservableProperty]
 		private string _loaderHeader = String.Empty;
@@ -457,8 +457,8 @@ namespace BlackboxModManager.App.ViewModels
 			}
 			catch (Exception ex)
 			{
-				this.SettingsReport = "The clipboard refused the text. Another program holds it. " +
-					$"Select the path above and press Control C. {ex.Message}";
+				this.SettingsReport = "The clipboard refused the text. Select the path above " +
+					$"and press Control C. {ex.Message}";
 			}
 		}
 
@@ -757,8 +757,7 @@ namespace BlackboxModManager.App.ViewModels
 			if (candidates.Count == 0)
 			{
 				this._ask.ShowMessage(
-					$"This machine holds no directory that looks like {definition.DisplayName}. " +
-					"Use Browse to give the path.");
+					$"No directory here looks like {definition.DisplayName}. Use Browse instead.");
 				return;
 			}
 
@@ -774,8 +773,7 @@ namespace BlackboxModManager.App.ViewModels
 			// that it does. Step 9, fact 6, records the same rule for the ASI loader.
 			string answer = this._ask.PickChoice(
 				$"Which directory holds {definition.DisplayName}?\n\n" +
-				"Every row is a suggestion. This application checked the name of each directory " +
-				"and nothing else.",
+				"These are guesses, matched on the directory name alone.",
 				choices);
 
 			if (String.IsNullOrEmpty(answer))
@@ -862,7 +860,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			this.BinaryStatus = resolution.IsUsable
 				? $"Binary {resolution.Install.Version} is ready."
-				: resolution.Status.Message + " A Binary mod needs it. A drop-in mod does not.";
+				: resolution.Status.Message + " Only Binary mods need it.";
 		}
 
 		/// <summary>
@@ -889,9 +887,9 @@ namespace BlackboxModManager.App.ViewModels
 				WorkspaceState state = workspace.ReadState();
 
 				this.DeployedState = state.IsVanilla
-					? "The game directory holds the vanilla state."
-					: $"The game directory holds the profile \"{state.DeployedProfile}\", " +
-						$"with {state.DeployedFileCount} files from mods.";
+					? "Vanilla."
+					: $"Profile \"{state.DeployedProfile}\" deployed, " +
+						$"{state.DeployedFileCount} files from mods.";
 
 				// A vanilla directory holds the result of a profile that enables nothing. Name
 				// that fingerprint, so an all-off profile against a vanilla game reports no
@@ -1447,14 +1445,14 @@ namespace BlackboxModManager.App.ViewModels
 
 			if (row is null)
 			{
-				this.DetailsHeader = "Select a mod to see what it offers.";
+				this.DetailsHeader = "Select a mod.";
 				return;
 			}
 
 			if (row.Mod.Kind != ModKind.Binary)
 			{
-				this.DetailsHeader = $"\"{row.Name}\" is a {row.Kind} mod. It holds {row.FileCount} files " +
-					"and it asks no question. The link engine puts its files in place.";
+				this.DetailsHeader = $"\"{row.Name}\" is a {row.Kind} mod with {row.FileCount} files. " +
+					"It asks nothing.";
 				return;
 			}
 
@@ -1488,7 +1486,7 @@ namespace BlackboxModManager.App.ViewModels
 
 				this.DetailsHeader = this.Variants.Count == 1
 					? $"\"{row.Name}\" holds one variant. Switch it on to apply it."
-					: $"\"{row.Name}\" holds {this.Variants.Count} variants. Switch on any number of them.";
+					: $"\"{row.Name}\" holds {this.Variants.Count} variants. Switch on any number.";
 			}
 			catch (Exception ex)
 			{
@@ -1518,7 +1516,7 @@ namespace BlackboxModManager.App.ViewModels
 		private void LoadSettings(ModRowViewModel row)
 		{
 			this.SettingsFiles.Clear();
-			this.SettingsHeader = "Select a mod to see its options.";
+			this.SettingsHeader = "Select a mod.";
 
 			if (row is null) return;
 
@@ -1541,8 +1539,8 @@ namespace BlackboxModManager.App.ViewModels
 
 				if (this.SettingsFiles.Count == 0)
 				{
-					this.SettingsHeader = $"\"{row.Name}\" ships no .ini file, so it has no options " +
-						"that this window can change.";
+					this.SettingsHeader = $"\"{row.Name}\" ships no .ini file, so there is nothing " +
+						"to change here.";
 					return;
 				}
 
@@ -1562,10 +1560,9 @@ namespace BlackboxModManager.App.ViewModels
 		private string OptionsHeader(ModRowViewModel row, int answered)
 		{
 			return answered == 0
-				? $"\"{row.Name}\" ships {this.SettingsFiles.Count} .ini files. " +
-					"Every value is the one that the mod ships."
+				? $"\"{row.Name}\" ships {this.SettingsFiles.Count} .ini files, all at their shipped values."
 				: $"\"{row.Name}\" ships {this.SettingsFiles.Count} .ini files. " +
-					$"The profile changes {answered} options. A change needs a new deploy.";
+					$"{answered} options changed. Deploy to apply them.";
 		}
 
 		private void OnSettingChanged()
@@ -1618,9 +1615,8 @@ namespace BlackboxModManager.App.ViewModels
 				this.LoaderNeedsAnswer = !plan.IsSettled;
 
 				this.LoaderHeader = plan.IsSettled
-					? $"{this.Loaders.Count} loader files. Every one of them has a supplier."
-					: "A loader file has more than one supplier and the profile names none of them. " +
-						"Choose one, then deploy. This application never picks a loader for you.";
+					? $"{this.Loaders.Count} loader files, each with one supplier."
+					: "More than one mod supplies a loader file. Choose one, then deploy.";
 			}
 			catch (Exception ex)
 			{
@@ -1687,9 +1683,8 @@ namespace BlackboxModManager.App.ViewModels
 
 			string answer = this._ask.PickChoice(
 				$"Which mod supplies {row.ProxyName}?\n\n" +
-				"This file is the ASI loader. One of them runs the plugins of every mod. A version " +
-				"that forwards wrongly breaks sound or input rather than a plugin, so this " +
-				"application never chooses for you.",
+				"This file runs the plugins of every mod. A version that forwards wrongly " +
+				"breaks sound or input, so the choice stays yours.",
 				row.Choices(), row.SupplierId);
 
 			// Null means that the user cancelled. An empty string means "ask me again".
@@ -1845,14 +1840,14 @@ namespace BlackboxModManager.App.ViewModels
 				foreach (string line in report.Approximate)
 				{
 					lines.Add($"The mod \"{line}\" uses an 'if' command. The check walked both " +
-						"branches, so a conflict against it is possible and not certain.");
+						"branches, so a conflict against it is possible, not certain.");
 				}
 
 				if (report.Conflicts.Count > 0)
 				{
 					lines.Add("The last mod in the load order wins a field conflict. " +
-						"Move a mod to change the winner. An existence conflict makes a command fail, " +
-						"and load order does not settle it.");
+						"Move a mod to change the winner. Load order does not settle an " +
+						"existence conflict.");
 				}
 			}
 			catch (Exception ex)
@@ -1941,8 +1936,8 @@ namespace BlackboxModManager.App.ViewModels
 			this.ModStorePath = this._store.Root;
 
 			this.ModStoreStatus = this._settings.ModStoreIsDefault
-				? "This is the default place."
-				: "The settings name this place.";
+				? "The default place."
+				: "Set in the settings.";
 
 			this.OnPropertyChanged(nameof(this.ModStoreIsDefault));
 			this.UseDefaultModStoreCommand.NotifyCanExecuteChanged();
@@ -2010,8 +2005,8 @@ namespace BlackboxModManager.App.ViewModels
 				bool move = this._ask.Confirm(
 					$"The store at {current.Root} holds {count} mods.\n\n" +
 					$"Move them to {target}?\n\n" +
-					"Choose No to leave them where they are and read the new directory instead. " +
-					"The profiles name a mod by its identifier, so they survive either answer.",
+					"No leaves them where they are and reads the new directory instead. " +
+					"Your profiles survive either answer.",
 					"Move them");
 
 				if (move)
@@ -2077,7 +2072,7 @@ namespace BlackboxModManager.App.ViewModels
 
 				if (probe.Best == LinkKind.HardLink)
 				{
-					this.Status = "The mod store shares the volume of the game. A deploy uses hard links.";
+					this.Status = "The store sits on the volume of the game. Deploys use hard links.";
 					return;
 				}
 
@@ -2124,8 +2119,8 @@ namespace BlackboxModManager.App.ViewModels
 			{
 				this.WorkspacePath = isDefault ? String.Empty : this._settings.WorkRootOverride;
 				this.WorkspaceStatus = isDefault
-					? "The workspace goes beside the game install. Set the game install to see the path."
-					: "The settings name this place. Set the game install to see the full path.";
+					? "Goes beside the game install. Set the game install to see the path."
+					: "Set in the settings. Set the game install to see the full path.";
 
 				return;
 			}
@@ -2134,10 +2129,8 @@ namespace BlackboxModManager.App.ViewModels
 			{
 				this.WorkspacePath = this.Service().WorkspaceOf(this._install).Root;
 				this.WorkspaceStatus = isDefault
-					? "The workspace sits beside the game install. This is the default, and it is " +
-						"the fast place."
-					: "The settings name this place. A workspace off the volume of the game makes " +
-						"every deploy copy every byte.";
+					? "Beside the game install. This is the default, and the fast place."
+					: "Set in the settings. Off the volume of the game, every deploy copies every byte.";
 			}
 			catch (Exception ex)
 			{
@@ -2234,9 +2227,8 @@ namespace BlackboxModManager.App.ViewModels
 			if (state.IsVanilla) return true;
 
 			this._ask.ShowError(
-				$"The game directory holds the profile \"{state.DeployedProfile}\". " +
-				"The workspace holds the only vanilla copy of this install. " +
-				"Revert to vanilla first, then move the workspace.");
+				$"The game directory holds the profile \"{state.DeployedProfile}\", and the " +
+				"workspace holds the only vanilla copy. Revert first, then move the workspace.");
 
 			return false;
 		}
@@ -2265,7 +2257,7 @@ namespace BlackboxModManager.App.ViewModels
 
 				rows.Add(new FolderRow("Staging copy",
 					"What the next swap puts into the game directory. A deploy that the verify " +
-					"stopped leaves the result here, and nothing reached the game.",
+					"stopped leaves its result here.",
 					workspace.StagingDirectory));
 
 				rows.Add(new FolderRow("Vanilla copy",
@@ -2275,10 +2267,10 @@ namespace BlackboxModManager.App.ViewModels
 			else
 			{
 				rows.Add(new FolderRow("Staging copy",
-					"No game install is set, so there is no workspace and no staging copy.", null));
+					"No game install is set, so there is no staging copy.", null));
 
 				rows.Add(new FolderRow("Vanilla copy",
-					"No game install is set, so there is no workspace and no vanilla copy.", null));
+					"No game install is set, so there is no vanilla copy.", null));
 			}
 
 			rows.Add(new FolderRow("Application data",
@@ -2416,8 +2408,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			if (!this._ask.Confirm(
 				$"Version {ready} is ready. Start it now?\n\n" +
-				"This application closes and opens again. Your mods, profiles, and settings stay " +
-				"as they are.",
+				"The application restarts. Your mods, profiles, and settings stay as they are.",
 				"Restart"))
 			{
 				this.Write("The update waits. It applies the next time that this application starts.");

@@ -102,8 +102,8 @@ namespace BlackboxModManager.App.Views
 			}
 			catch (Exception ex)
 			{
-				this.Report.Text = "The clipboard refused the text. Another program holds it. " +
-					$"Select the path above and press Control C. {ex.Message}";
+				this.Report.Text = "The clipboard refused the text. Select the path above " +
+					$"and press Control C. {ex.Message}";
 			}
 		}
 	}

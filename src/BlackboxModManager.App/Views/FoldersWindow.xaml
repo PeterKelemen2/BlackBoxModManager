@@ -20,7 +20,7 @@
     <TextBlock
       Grid.Row="0"
       Margin="0,0,0,10"
-      Text="The directories that this application writes for itself. The settings window owns the ones that you can change. Open shows a directory in the file manager of the platform. Copy path puts the path on the clipboard, which always works."
+      Text="The directories that this application writes for itself. The ones you can change live in Settings."
       TextWrapping="Wrap" />
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">

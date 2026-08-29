@@ -48,8 +48,7 @@ namespace BlackboxModManager.App.ViewModels
 
 				return this._contest.Reason.Length > 0
 					? this._contest.Reason
-					: $"{this.CandidateCount} mods supply this file and the profile names none of them. " +
-						"Choose one, then deploy.";
+					: $"{this.CandidateCount} mods supply this file. Choose one, then deploy.";
 			}
 		}
 
@@ -58,16 +57,14 @@ namespace BlackboxModManager.App.ViewModels
 		{
 			get
 			{
-				if (this.CandidateCount == 1) return "One mod supplies this file. There is nothing to choose.";
+				if (this.CandidateCount == 1) return "One supplier. Nothing to choose.";
 
 				if (this._contest.AllSameFile)
 				{
-					return $"{this.CandidateCount} mods supply this file and every copy is the same file. " +
-						"The choice changes nothing.";
+					return $"{this.CandidateCount} suppliers, every copy identical. The choice changes nothing.";
 				}
 
-				return $"{this.CandidateCount} mods supply this file and the copies differ. " +
-					"A change needs a new deploy.";
+				return $"{this.CandidateCount} suppliers, and the copies differ. A change needs a new deploy.";
 			}
 		}
 
@@ -85,7 +82,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			// The way back. An empty key clears the stored answer, and the next deploy asks.
 			choices.Add(new Views.UserChoice(String.Empty, "Ask me again",
-				"Clear the stored answer. The next deploy stops and asks for one."));
+				"Clear the answer. The next deploy asks again."));
 
 			return choices;
 		}
