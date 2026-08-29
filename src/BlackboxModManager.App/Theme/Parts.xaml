@@ -255,8 +255,8 @@
     The drag handle of the mod row. Three short dashes, drawn with Path geometry.
 
     The style sets no cursor. A path answers a hit test only where it paints, so the cursor
-    over these three 1.5 pixel lines changed on every 2.5 pixel gap between them. The row
-    carries the cursor now, and DragHandleArea below carries the hit area.
+    over these three 1.5 pixel lines changed on every 2.5 pixel gap between them.
+    DragHandleArea below carries both the hit area and the cursor.
   -->
   <Style x:Key="DragHandle" TargetType="Path">
     <Setter Property="Data" Value="M 0,0 L 10,0 M 0,4 L 10,4 M 0,8 L 10,8" />
@@ -274,11 +274,17 @@
     The hit area around the handle. A transparent fill answers a hit test and a null fill
     does not, so this border makes the whole block of the icon one target. The icon is 10 by
     8 pixels and the target is 26 wide and the full height of the row.
+
+    <b>The move cursor sits here and no longer on RowBorder.</b> The row shows the move cursor
+    across its whole width until step 17, Part F, and the handle then named one grip while the
+    row gave another. A press anywhere on the row still starts a drag. The cursor was the part
+    that misled, so only the cursor moved.
   -->
   <Style x:Key="DragHandleArea" TargetType="Border">
     <Setter Property="Width" Value="26" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="Cursor" Value="SizeAll" />
   </Style>
 
   <!--
@@ -378,7 +384,6 @@
       Margin="0,0,0,6"
       Padding="8,6"
       Background="{StaticResource SurfaceRaised}"
-      Cursor="SizeAll"
       BorderBrush="{StaticResource BorderDefault}"
       BorderThickness="1"
       CornerRadius="{StaticResource RadiusDefault}"
@@ -460,7 +465,7 @@
           </Grid.ColumnDefinitions>
 
           <Border Grid.Column="0" Style="{StaticResource DragHandleArea}">
-            <Path Style="{StaticResource DragHandle}" />
+            <Path x:Name="Handle" Style="{StaticResource DragHandle}" />
           </Border>
 
           <ToggleButton
@@ -504,6 +509,13 @@
       <DataTrigger Binding="{Binding IsSelected}" Value="True">
         <Setter TargetName="RowBorder" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
       </DataTrigger>
+      <!--
+        The handle reads brighter while the pointer is on the row. It is the only mark that
+        says the list takes a drag at all. See step 17, Part F.
+      -->
+      <Trigger SourceName="RowBorder" Property="IsMouseOver" Value="True">
+        <Setter TargetName="Handle" Property="Stroke" Value="{StaticResource TextPrimary}" />
+      </Trigger>
       <!--
         The ghost recesses to the window fill and shows the dashed outline. It sets no
         Opacity. Step 10 banned opacity as a color tool, because the software rasterizer

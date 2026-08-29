@@ -19,7 +19,7 @@ namespace BlackboxModManager.App.Views
 		{
 			this.InitializeComponent();
 
-			this.Title = title ?? "Blackbox Mod Manager";
+			this.Title = title ?? "BlackBox Mod Manager";
 			this.Heading.Text = heading ?? String.Empty;
 			this.Heading.Visibility = String.IsNullOrEmpty(heading) ? Visibility.Collapsed : Visibility.Visible;
 

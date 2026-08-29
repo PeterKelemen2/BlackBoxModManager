@@ -3,7 +3,7 @@
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="clr-namespace:BlackboxModManager.App.Theme"
-  Title="Blackbox Mod Manager"
+  Title="BlackBox Mod Manager"
   Icon="Assets/icon.ico"
   Width="1040"
   Height="700"
@@ -106,8 +106,17 @@
 
     <!--  The mods and the log.  -->
     <Grid Grid.Row="1">
+      <!--
+        The splitter keeps its place across a restart. MainWindow.xaml.cs writes the width of
+        the first column into the settings file on Closing and reads it back on start. The two
+        MinWidth values already stop a column of no width. See
+        docs/roadmap/17-ui-consistency.md, Part K.
+      -->
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="3*" MinWidth="360" />
+        <ColumnDefinition
+          x:Name="ModListColumn"
+          Width="3*"
+          MinWidth="360" />
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="2*" MinWidth="240" />
       </Grid.ColumnDefinitions>
@@ -177,91 +186,123 @@
             </StackPanel>
           </Grid>
 
-          <Grid Grid.Row="1">
-            <!--
-              The DataGrid of step 9 became a row list in step 10, so that a row can carry a
-              drag handle and a drop can reorder it. Step 11 replaced the insertion line with a
-              ghost slot. See docs/roadmap/11-ui-polish.md, Part B. The event handlers live in
-              MainWindow.xaml.cs, on this ItemsControl, because the row template of
-              Theme/Parts.xaml has no code-behind of its own.
+          <!--
+            The whole mod panel is the drop target, and the keyboard reaches the panel here.
 
-              Step 12 added the right button handler and the drop of a file from outside. See
-              docs/roadmap/12-minimal-ui.md, Parts E and I.
-            -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <b>Background must not be null.</b> A null background answers no hit test, and the
+            drop then reaches nothing. AllowDrop sat on ModList alone until step 17, Part E,
+            and the default template of an ItemsControl paints no background. So an empty
+            profile took no drop at all, and the space below the last row took none either.
+            DragHandleArea in Theme/Parts.xaml records the same rule.
+
+            The border draws one AccentDefault pixel while a file drag is over the panel. That
+            costs the software rasterizer nothing.
+
+            Focusable and the KeyDown handler give the list the four keys of step 17, Part G.
+            The mod list is an ItemsControl, which brings no selection and no key handling of
+            its own. A ListBox would bring both, and its item container and its mouse handling
+            would fight the drag of step 11.
+          -->
+          <Border
+            x:Name="ModPanel"
+            Grid.Row="1"
+            AllowDrop="True"
+            Background="Transparent"
+            BorderBrush="Transparent"
+            BorderThickness="1"
+            CornerRadius="{StaticResource RadiusDefault}"
+            DragLeave="ModPanel_DragLeave"
+            DragOver="ModPanel_DragOver"
+            Drop="ModPanel_Drop"
+            Focusable="True"
+            FocusVisualStyle="{x:Null}"
+            GiveFeedback="ModList_GiveFeedback"
+            KeyDown="ModPanel_KeyDown"
+            PreviewMouseLeftButtonDown="ModPanel_PreviewMouseLeftButtonDown"
+            QueryContinueDrag="ModList_QueryContinueDrag">
+            <Grid>
               <!--
-                Two lists in one column. The mods sit above, and the imports that still run
-                sit below, which is where the finished mod lands.
-
-                The import rows stay out of ModList on purpose. ModList carries the drag,
-                the drop, and the row menu, and each one of those acts on a mod that the
-                store holds. An import has no mod yet.
+                The DataGrid of step 9 became a row list in step 10, so that a row can carry a
+                drag handle and a drop can reorder it. Step 11 replaced the insertion line with a
+                ghost slot. See docs/roadmap/11-ui-polish.md, Part B. The event handlers live in
+                MainWindow.xaml.cs, because the row template of Theme/Parts.xaml has no
+                code-behind of its own.
+  
+                Step 12 added the right button handler and the drop of a file from outside. See
+                docs/roadmap/12-minimal-ui.md, Parts E and I.
+  
+                The three mouse handlers stay on this ItemsControl. All three read a row, and a
+                press outside a row must still start no drag.
               -->
-              <StackPanel>
-                <ItemsControl
-                  x:Name="ModList"
-                  AllowDrop="True"
-                  DragLeave="ModList_DragLeave"
-                  DragOver="ModList_DragOver"
-                  Drop="ModList_Drop"
-                  GiveFeedback="ModList_GiveFeedback"
-                  ItemTemplate="{StaticResource ModRowTemplate}"
-                  ItemsSource="{Binding Mods}"
-                  PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
-                  PreviewMouseMove="ModList_PreviewMouseMove"
-                  PreviewMouseRightButtonDown="ModList_PreviewMouseRightButtonDown"
-                  QueryContinueDrag="ModList_QueryContinueDrag" />
-
-                <ItemsControl
-                  ItemTemplate="{StaticResource ImportRowTemplate}"
-                  ItemsSource="{Binding Imports}" />
+              <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <!--
+                  Two lists in one column. The mods sit above, and the imports that still run
+                  sit below, which is where the finished mod lands.
+  
+                  The import rows stay out of ModList on purpose. ModList carries the drag,
+                  the drop, and the row menu, and each one of those acts on a mod that the
+                  store holds. An import has no mod yet.
+                -->
+                <StackPanel>
+                  <ItemsControl
+                    x:Name="ModList"
+                    ItemTemplate="{StaticResource ModRowTemplate}"
+                    ItemsSource="{Binding Mods}"
+                    PreviewMouseLeftButtonDown="ModList_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="ModList_PreviewMouseMove"
+                    PreviewMouseRightButtonDown="ModList_PreviewMouseRightButtonDown" />
+  
+                  <ItemsControl
+                    ItemTemplate="{StaticResource ImportRowTemplate}"
+                    ItemsSource="{Binding Imports}" />
+                </StackPanel>
+              </ScrollViewer>
+  
+              <!--
+                The empty state. It covers the list only while the profile holds no mod, so it
+                never sits over a row and never blocks a drag.
+  
+                The trigger reads Mods.Count and Imports.Count. An ObservableCollection raises
+                PropertyChanged for Count, so the panel appears and disappears with no code and
+                no converter. The first import into an empty profile draws a row, and this
+                panel must give way to it.
+  
+                The tile opens the menu of ImportButton above. One menu, one pair of answers.
+              -->
+              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel.Style>
+                  <Style TargetType="StackPanel">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                      <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                          <Condition Binding="{Binding Mods.Count}" Value="0" />
+                          <Condition Binding="{Binding Imports.Count}" Value="0" />
+                        </MultiDataTrigger.Conditions>
+                        <Setter Property="Visibility" Value="Visible" />
+                      </MultiDataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </StackPanel.Style>
+                <Button
+                  HorizontalAlignment="Center"
+                  Click="OnOpenImportMenu"
+                  Style="{StaticResource AddModButton}"
+                  ToolTip="Add a mod. Choose an archive or a directory, or drop one on this list." />
+                <TextBlock
+                  Margin="0,14,0,0"
+                  HorizontalAlignment="Center"
+                  Style="{StaticResource Heading}"
+                  Text="Add a mod" />
+                <TextBlock
+                  MaxWidth="260"
+                  HorizontalAlignment="Center"
+                  Style="{StaticResource Hint}"
+                  Text="The mods deploy in this order. A later mod overrides an earlier one."
+                  TextAlignment="Center" />
               </StackPanel>
-            </ScrollViewer>
-
-            <!--
-              The empty state. It covers the list only while the profile holds no mod, so it
-              never sits over a row and never blocks a drag.
-
-              The trigger reads Mods.Count and Imports.Count. An ObservableCollection raises
-              PropertyChanged for Count, so the panel appears and disappears with no code and
-              no converter. The first import into an empty profile draws a row, and this
-              panel must give way to it.
-
-              The tile opens the menu of ImportButton above. One menu, one pair of answers.
-            -->
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-              <StackPanel.Style>
-                <Style TargetType="StackPanel">
-                  <Setter Property="Visibility" Value="Collapsed" />
-                  <Style.Triggers>
-                    <MultiDataTrigger>
-                      <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding Mods.Count}" Value="0" />
-                        <Condition Binding="{Binding Imports.Count}" Value="0" />
-                      </MultiDataTrigger.Conditions>
-                      <Setter Property="Visibility" Value="Visible" />
-                    </MultiDataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </StackPanel.Style>
-              <Button
-                HorizontalAlignment="Center"
-                Click="OnOpenImportMenu"
-                Style="{StaticResource AddModButton}"
-                ToolTip="Add a mod. Choose an archive or a directory, or drop one on this list." />
-              <TextBlock
-                Margin="0,14,0,0"
-                HorizontalAlignment="Center"
-                Style="{StaticResource Heading}"
-                Text="Add a mod" />
-              <TextBlock
-                MaxWidth="260"
-                HorizontalAlignment="Center"
-                Style="{StaticResource Hint}"
-                Text="The mods deploy in this order. A later mod overrides an earlier one."
-                TextAlignment="Center" />
-            </StackPanel>
-          </Grid>
+            </Grid>
+          </Border>
         </Grid>
       </GroupBox>
 
@@ -270,6 +311,15 @@
         Width="6"
         HorizontalAlignment="Stretch" />
 
+      <!--
+        The tab strip holds two kinds of tab. Mod and Mod options follow the selected mod.
+        Loader, Conflicts, and Log describe the whole profile. The order groups the two kinds,
+        and Log goes last because it belongs to no mod and to no profile. See
+        docs/roadmap/17-ui-consistency.md, Part I.
+
+        Two headers carry state. Conflicts shows a count, and Loader shows a dot while a
+        loader contest has no answer. Both draw Path geometry and no glyph font.
+      -->
       <TabControl Grid.Column="2">
         <!--  The variants of a Binary mod, and the questions that its script asks.  -->
         <TabItem Header="Mod">
@@ -359,8 +409,15 @@
           </Grid>
         </TabItem>
 
-        <!--  The settings of the selected ASI mod. One group per section, one row per key.  -->
-        <TabItem Header="Settings">
+        <!--
+          The options of the selected ASI mod. One group per section, one row per key.
+
+          <b>The header is "Mod options" and never "Settings".</b> The window that the gear
+          button opens is Settings, and that window holds the paths of the application. The
+          two shared one name until step 17, Part B. The types below keep the old name,
+          because SettingsFileViewModel names a file format and not a window.
+        -->
+        <TabItem Header="Mod options">
           <Grid Margin="6">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
@@ -500,7 +557,31 @@
           The ASI loader. The game directory holds one file at each loader path, and
           several mods ship one each. This application never chooses for the user.
         -->
-        <TabItem Header="Loader">
+        <TabItem>
+          <TabItem.Header>
+            <!--
+              The dot marks a loader contest that no answer settles. A settled profile and an
+              open one drew the same header until step 17, Part I.
+
+              <b>The text binds the Foreground of the TabItem.</b> The TabItem template sets
+              three foregrounds, one for resting, one for hover, and one for selected. A
+              header of plain text inherits all three. A TextBlock does not, because the
+              implicit TextBlock style of Theme/Typography.xaml pins TextPrimary. The dot
+              keeps WarningDefault in every state, because it is a warning.
+            -->
+            <StackPanel Orientation="Horizontal">
+              <TextBlock
+                VerticalAlignment="Center"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"
+                Text="Loader" />
+              <Path
+                Margin="6,0,0,0"
+                VerticalAlignment="Center"
+                Data="{StaticResource IconDot}"
+                Fill="{StaticResource WarningDefault}"
+                Visibility="{Binding LoaderNeedsAnswer, Converter={StaticResource BoolToVisible}}" />
+            </StackPanel>
+          </TabItem.Header>
           <Grid Margin="6">
             <Grid.RowDefinitions>
               <RowDefinition Height="Auto" />
@@ -550,6 +631,76 @@
           </Grid>
         </TabItem>
 
+        <TabItem>
+          <TabItem.Header>
+            <!--
+              The count says how many conflicts the last check found. A profile with three
+              conflicts and a profile with none drew the same header until step 17, Part I.
+            -->
+            <StackPanel Orientation="Horizontal">
+              <TextBlock
+                VerticalAlignment="Center"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"
+                Text="Conflicts" />
+              <TextBlock
+                Margin="4,0,0,0"
+                VerticalAlignment="Center"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"
+                Visibility="{Binding HasConflicts, Converter={StaticResource BoolToVisible}}">
+                <Run Text="(" /><Run Text="{Binding ConflictCount, Mode=OneWay}" /><Run Text=")" />
+              </TextBlock>
+            </StackPanel>
+          </TabItem.Header>
+          <Grid Margin="6">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!--
+              The header line and the recovery button. The check already runs after every
+              change that can produce a conflict, so this button is not the action of the
+              panel. It reads the mod store from disk again, which is the way back for a user
+              who edited a mod folder outside this application. See step 17, Part J.
+            -->
+            <Grid Grid.Row="0" Margin="0,0,0,6">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <TextBlock
+                Grid.Column="0"
+                Margin="0,0,8,0"
+                VerticalAlignment="Center"
+                Style="{StaticResource Hint}"
+                Text="{Binding ConflictsCheckedAt}"
+                TextWrapping="Wrap" />
+              <Button
+                Grid.Column="1"
+                Margin="0"
+                VerticalAlignment="Top"
+                ui:Kind.Value="Quiet"
+                Command="{Binding RefreshConflictsCommand}"
+                Content="Check again"
+                ToolTip="Read the mods again. Use this after you change a mod folder outside this application." />
+            </Grid>
+
+            <!--  A conflict line wraps for the same reason as a log line.  -->
+            <ListBox
+              Grid.Row="1"
+              HorizontalContentAlignment="Stretch"
+              BorderThickness="0"
+              ItemsSource="{Binding Conflicts}"
+              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Style="{StaticResource ConflictLine}" Text="{Binding}" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Grid>
+        </TabItem>
+
         <!--
           Name no font family in this window. A family that the machine does not hold
           ends in MS.Internal.Invariant.FailFast, which kills the process with no dialog
@@ -595,34 +746,6 @@
               </DataTemplate>
             </ListBox.ItemTemplate>
           </ListBox>
-        </TabItem>
-
-        <TabItem Header="Conflicts">
-          <Grid Margin="6">
-            <Grid.RowDefinitions>
-              <RowDefinition Height="*" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <!--  A conflict line wraps for the same reason as a log line.  -->
-            <ListBox
-              Grid.Row="0"
-              HorizontalContentAlignment="Stretch"
-              BorderThickness="0"
-              ItemsSource="{Binding Conflicts}"
-              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-              <ListBox.ItemTemplate>
-                <DataTemplate>
-                  <TextBlock Style="{StaticResource ConflictLine}" Text="{Binding}" />
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
-            <Button
-              Grid.Row="1"
-              Margin="0,6,0,0"
-              HorizontalAlignment="Left"
-              Command="{Binding RefreshConflictsCommand}"
-              Content="Check again" />
-          </Grid>
         </TabItem>
       </TabControl>
     </Grid>
@@ -806,16 +929,25 @@
         <StackPanel Orientation="Horizontal">
           <TextBlock Text="{Binding StateSummary}" TextTrimming="CharacterEllipsis">
             <TextBlock.ToolTip>
+              <!--
+                The four paths. The tooltip read two status lines until step 17, Part C, and
+                those two lines then lost the path that they carried. It binds to the path
+                properties now, so it keeps naming a directory.
+              -->
               <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                 <StackPanel MaxWidth="420">
                   <TextBlock Text="{Binding GamePath}" TextWrapping="Wrap" />
                   <TextBlock
                     Margin="0,4,0,0"
-                    Text="{Binding BinaryStatus}"
+                    Text="{Binding BinaryPath}"
                     TextWrapping="Wrap" />
                   <TextBlock
                     Margin="0,4,0,0"
-                    Text="{Binding ModStoreStatus}"
+                    Text="{Binding ModStorePath}"
+                    TextWrapping="Wrap" />
+                  <TextBlock
+                    Margin="0,4,0,0"
+                    Text="{Binding WorkspacePath}"
                     TextWrapping="Wrap" />
                 </StackPanel>
               </ToolTip>

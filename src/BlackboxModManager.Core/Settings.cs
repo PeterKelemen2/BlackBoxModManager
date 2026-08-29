@@ -94,6 +94,35 @@ namespace BlackboxModManager.Core
 		public bool CheckForUpdatesAtStart { get; set; }
 
 		/// <summary>
+		/// The directory that the last folder import read. The next folder import starts the
+		/// picker there.
+		///
+		/// This is null until one import succeeds. A stored path can go stale, so the picker
+		/// tolerates a directory that no longer exists.
+		/// </summary>
+		public string LastImportDirectory { get; set; }
+
+		/// <summary>
+		/// The width of the main window at the last close, in device independent pixels.
+		///
+		/// Null means "use the default". Every window field below reads the same way, so a
+		/// settings file of an older build needs no migration.
+		///
+		/// <b>These four fields belong to the machine and never to a profile.</b> A profile
+		/// fully determines the deployed result, and a window size changes no deployed byte.
+		/// </summary>
+		public double? WindowWidth { get; set; }
+
+		/// <summary>The height of the main window at the last close.</summary>
+		public double? WindowHeight { get; set; }
+
+		/// <summary>Whether the main window was maximized at the last close.</summary>
+		public bool WindowMaximized { get; set; }
+
+		/// <summary>The width of the mod list column, which the splitter sets.</summary>
+		public double? ModListWidth { get; set; }
+
+		/// <summary>
 		/// The mod store directory that this application uses. It falls back to the default
 		/// when the setting holds nothing.
 		/// </summary>

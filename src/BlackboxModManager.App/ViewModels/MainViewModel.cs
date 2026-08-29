@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using BlackboxModManager.App.Services;
 using BlackboxModManager.App.Views;
 using BlackboxModManager.Core;
@@ -204,11 +205,37 @@ namespace BlackboxModManager.App.ViewModels
 		[ObservableProperty]
 		private string _gameStatus = String.Empty;
 
+		// ------------------------------------------------------------ the four paths
+		//
+		// Every path setting of the settings window draws the same three lines. The status
+		// line says what the state is. The path box holds the path and nothing else. The hint
+		// line says what the choice costs. Step 17, Part C, made all four match.
+		//
+		// A group whose path is empty hides its box and grays its two buttons. An empty box
+		// with a border of no width reads as a layout defect.
+
 		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(HasGamePath))]
 		private string _gamePath = String.Empty;
+
+		public bool HasGamePath => this.GamePath.Length > 0;
 
 		[ObservableProperty]
 		private string _binaryStatus = String.Empty;
+
+		/// <summary>The Binary 2.8.3 install directory, with no sentence around it.</summary>
+		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(HasBinaryPath))]
+		private string _binaryPath = String.Empty;
+
+		public bool HasBinaryPath => this.BinaryPath.Length > 0;
+
+		/// <summary>The mod store directory, with no sentence around it.</summary>
+		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(HasModStorePath))]
+		private string _modStorePath = String.Empty;
+
+		public bool HasModStorePath => this.ModStorePath.Length > 0;
 
 		[ObservableProperty]
 		private string _deployedState = String.Empty;
@@ -381,13 +408,59 @@ namespace BlackboxModManager.App.ViewModels
 		private string _detailsHeader = "Select a mod to see what it offers.";
 
 		[ObservableProperty]
-		private string _settingsHeader = "Select a mod to see its settings.";
+		private string _settingsHeader = "Select a mod to see its options.";
 
 		[ObservableProperty]
 		private string _loaderHeader = String.Empty;
 
+		/// <summary>
+		/// True while one loader file has more than one supplier and the profile names none of
+		/// them. The Loader tab draws a mark while this is true. See step 17, Part I.
+		/// </summary>
+		[ObservableProperty]
+		private bool _loaderNeedsAnswer;
+
 		[ObservableProperty]
 		private string _modStoreStatus = String.Empty;
+
+		/// <summary>
+		/// The one line that a path button of the settings window writes. Open and Copy path
+		/// both report here, because that window shows no status bar.
+		/// </summary>
+		[ObservableProperty]
+		private string _settingsReport = String.Empty;
+
+		/// <summary>
+		/// Shows one directory in the file manager of the platform.
+		///
+		/// <b>Copy path must keep working when this fails.</b> A Wine prefix has no guaranteed
+		/// file manager. See step 9, fact 9, and <see cref="DirectoryOpener"/>.
+		/// </summary>
+		[RelayCommand]
+		private void OpenDirectory(string path)
+		{
+			this.SettingsReport = DirectoryOpener.Open(path);
+		}
+
+		/// <summary>Puts one path on the clipboard. This works when Open does not.</summary>
+		[RelayCommand]
+		private void CopyPath(string path)
+		{
+			if (String.IsNullOrEmpty(path)) return;
+
+			try
+			{
+				// The second argument keeps the text on the clipboard after this process ends.
+				Clipboard.SetDataObject(path, true);
+
+				this.SettingsReport = $"Copied {path}";
+			}
+			catch (Exception ex)
+			{
+				this.SettingsReport = "The clipboard refused the text. Another program holds it. " +
+					$"Select the path above and press Control C. {ex.Message}";
+			}
+		}
 
 		private GameDefinition _selectedGame;
 
@@ -497,7 +570,49 @@ namespace BlackboxModManager.App.ViewModels
 			this.MoveUpCommand.NotifyCanExecuteChanged();
 			this.MoveDownCommand.NotifyCanExecuteChanged();
 			this.SetModGameCommand.NotifyCanExecuteChanged();
+
+			// SetModRoute reached neither notify list until step 17, M2. The context menu worked
+			// by luck: the DataContext binding of that menu resolves on each open, and the
+			// command re-read its state then.
+			this.SetModRouteCommand.NotifyCanExecuteChanged();
 		}
+
+		/// <summary>
+		/// Moves the selection by one row and stops at each end. The Up key and the Down key
+		/// of the mod panel call this. See step 17, Part G.
+		///
+		/// The mod list is an <c>ItemsControl</c>, which has no selection of its own. A
+		/// <c>ListBox</c> would bring one, and its item container and its mouse handling would
+		/// both fight the drag of step 11.
+		/// </summary>
+		public void MoveSelection(int offset)
+		{
+			if (this.Mods.Count == 0) return;
+
+			int index = this.SelectedMod is null ? -1 : this.Mods.IndexOf(this.SelectedMod);
+
+			// No selection yet. Down takes the first row and Up takes the last one.
+			if (index < 0)
+			{
+				this.SelectedMod = offset >= 0 ? this.Mods[0] : this.Mods[this.Mods.Count - 1];
+				return;
+			}
+
+			int wanted = index + offset;
+
+			if (wanted < 0 || wanted >= this.Mods.Count) return;
+
+			this.SelectedMod = this.Mods[wanted];
+		}
+
+		/// <summary>
+		/// Drops the selection.
+		///
+		/// <b>Nothing cleared the selection before step 17, Part G.</b> <c>CanActOnMod</c>
+		/// therefore reported true forever after the first click, and the three toolbar buttons
+		/// that gray out on no selection grayed out once and never again.
+		/// </summary>
+		public void ClearSelection() => this.SelectedMod = null;
 
 		private bool _busy;
 
@@ -619,11 +734,20 @@ namespace BlackboxModManager.App.ViewModels
 			this.Write($"The game install is {status.Root}.");
 		}
 
+		/// <summary>
+		/// Searches the common install directories and asks the user to pick one result.
+		///
+		/// <b>One dialog lists every candidate.</b> The search asked one question for each
+		/// candidate until step 17, Part H. Three candidates then meant three modal dialogs,
+		/// and a user who answered No to all of them got no message and no log line.
+		/// </summary>
 		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private async Task DetectGameAsync()
 		{
 			GameDefinition definition = GameCatalog.Demand(this.Game);
+
 			this.Status = "Look for the game.";
+			this.Write($"Look for an install of {definition.DisplayName}.");
 
 			IReadOnlyList<string> candidates = await Task.Run(
 				() => GameInstallLocator.FindCandidates(definition));
@@ -638,31 +762,49 @@ namespace BlackboxModManager.App.ViewModels
 				return;
 			}
 
-			// Every result is a suggestion. The user confirms one.
+			var choices = new List<UserChoice>(candidates.Count);
+
 			foreach (string candidate in candidates)
 			{
-				if (!this._ask.Confirm($"Is this the install?\n\n{candidate}")) continue;
+				choices.Add(new UserChoice(candidate, Path.GetFileName(
+					Path.TrimEndingDirectorySeparator(candidate)), candidate));
+			}
 
-				GameInstallStatus status = this._games.Store(this.Game, candidate);
+			// Pass no current key. The locator ranks nothing, and the dialog must not suggest
+			// that it does. Step 9, fact 6, records the same rule for the ASI loader.
+			string answer = this._ask.PickChoice(
+				$"Which directory holds {definition.DisplayName}?\n\n" +
+				"Every row is a suggestion. This application checked the name of each directory " +
+				"and nothing else.",
+				choices);
 
-				if (!status.IsUsable)
-				{
-					this._ask.ShowError(status.Message);
-					return;
-				}
+			if (String.IsNullOrEmpty(answer))
+			{
+				this.Write("The search found " +
+					$"{candidates.Count} directories. You chose none of them, so nothing changed.");
 
-				this.ReloadSettings();
-
-				this.RefreshGame();
-				this.Write($"The game install is {status.Root}.");
 				return;
 			}
+
+			GameInstallStatus status = this._games.Store(this.Game, answer);
+
+			if (!status.IsUsable)
+			{
+				this._ask.ShowError(status.Message);
+				return;
+			}
+
+			this.ReloadSettings();
+
+			this.RefreshGame();
+			this.Write($"The game install is {status.Root}.");
 		}
 
 		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private void SetBinary()
 		{
-			string path = this._ask.PickDirectory("Choose the directory of the Binary 2.8.3 install.");
+			string path = this._ask.PickDirectory(
+				"Choose the directory of the Binary 2.8.3 install.", this.BinaryPath);
 
 			if (path is null) return;
 
@@ -714,8 +856,12 @@ namespace BlackboxModManager.App.ViewModels
 
 			this._binaryInstall = resolution.Install;
 
+			// The path leaves the status line and goes into the box of its own group. Step 17,
+			// Part C, gave all four path settings the same shape.
+			this.BinaryPath = resolution.IsUsable ? resolution.Install.Root : String.Empty;
+
 			this.BinaryStatus = resolution.IsUsable
-				? $"Binary {resolution.Install.Version} at {resolution.Install.Root}."
+				? $"Binary {resolution.Install.Version} is ready."
 				: resolution.Status.Message + " A Binary mod needs it. A drop-in mod does not.";
 		}
 
@@ -885,7 +1031,9 @@ namespace BlackboxModManager.App.ViewModels
 		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private async Task ImportFolderAsync()
 		{
-			string path = this._ask.PickDirectory("Choose the directory of a mod.");
+			// The picker starts where the last import read. See step 17, M3.
+			string path = this._ask.PickDirectory(
+				"Choose the directory of a mod.", this._settings.LastImportDirectory);
 
 			if (path != null) await this.ImportAsync(path);
 		}
@@ -989,6 +1137,20 @@ namespace BlackboxModManager.App.ViewModels
 			{
 				this._profile.Ensure(added).Enabled = true;
 				this.SaveProfile();
+			}
+
+			// The next folder import starts beside this one. A failed import writes nothing,
+			// so the picker keeps the place that worked last.
+			if (added != null)
+			{
+				string parent = Directory.Exists(source)
+					? Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(source)))
+					: Path.GetDirectoryName(Path.GetFullPath(source));
+
+				if (!String.IsNullOrEmpty(parent))
+				{
+					this.SaveSettings(settings => settings.LastImportDirectory = parent);
+				}
 			}
 
 			this.RefreshMods();
@@ -1346,13 +1508,17 @@ namespace BlackboxModManager.App.ViewModels
 		/// <summary>
 		/// Reads the settings files of one mod and builds one panel for each of them.
 		///
-		/// A Binary mod has no settings panel. Its answers live in its script, and the Mod tab
+		/// A Binary mod has no panel here. Its answers live in its script, and the Mod tab
 		/// shows those.
+		///
+		/// <b>The tab is "Mod options" and the window is "Settings".</b> The two shared the
+		/// name Settings until step 17, Part B. The types keep the old name, because
+		/// <c>AsiSettingsFile</c> names a file format and not a window.
 		/// </summary>
 		private void LoadSettings(ModRowViewModel row)
 		{
 			this.SettingsFiles.Clear();
-			this.SettingsHeader = "Select a mod to see its settings.";
+			this.SettingsHeader = "Select a mod to see its options.";
 
 			if (row is null) return;
 
@@ -1375,24 +1541,31 @@ namespace BlackboxModManager.App.ViewModels
 
 				if (this.SettingsFiles.Count == 0)
 				{
-					this.SettingsHeader = $"\"{row.Name}\" ships no .ini file, so it has no settings " +
+					this.SettingsHeader = $"\"{row.Name}\" ships no .ini file, so it has no options " +
 						"that this window can change.";
 					return;
 				}
 
-				int answered = entry.IniAnswerCount;
-
-				this.SettingsHeader = answered == 0
-					? $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
-						"Every value is the one that the mod ships."
-					: $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
-						$"The profile changes {answered} options. A change needs a new deploy.";
+				this.SettingsHeader = this.OptionsHeader(row, entry.IniAnswerCount);
 			}
 			catch (Exception ex)
 			{
-				this.SettingsHeader = $"The settings of \"{row.Name}\" did not read. {ex.Message}";
+				this.SettingsHeader = $"The options of \"{row.Name}\" did not read. {ex.Message}";
 				this.Write($"{row.Name}: {ex.Message}");
 			}
+		}
+
+		/// <summary>
+		/// The header line of the Mod options tab. Two callers write it, so the words live
+		/// here once.
+		/// </summary>
+		private string OptionsHeader(ModRowViewModel row, int answered)
+		{
+			return answered == 0
+				? $"\"{row.Name}\" ships {this.SettingsFiles.Count} .ini files. " +
+					"Every value is the one that the mod ships."
+				: $"\"{row.Name}\" ships {this.SettingsFiles.Count} .ini files. " +
+					$"The profile changes {answered} options. A change needs a new deploy.";
 		}
 
 		private void OnSettingChanged()
@@ -1405,11 +1578,7 @@ namespace BlackboxModManager.App.ViewModels
 
 			int answered = this._profile?.Find(row.Id)?.IniAnswerCount ?? 0;
 
-			this.SettingsHeader = answered == 0
-				? $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
-					"Every value is the one that the mod ships."
-				: $"\"{row.Name}\" ships {this.SettingsFiles.Count} settings files. " +
-					$"The profile changes {answered} options. A change needs a new deploy.";
+			this.SettingsHeader = this.OptionsHeader(row, answered);
 
 			this.Status = answered == 0
 				? "The settings match the mod."
@@ -1426,6 +1595,7 @@ namespace BlackboxModManager.App.ViewModels
 		{
 			this.Loaders.Clear();
 			this.LoaderHeader = String.Empty;
+			this.LoaderNeedsAnswer = false;
 
 			if (this._profile is null) return;
 
@@ -1442,6 +1612,10 @@ namespace BlackboxModManager.App.ViewModels
 					this.LoaderHeader = "No enabled mod ships an ASI loader.";
 					return;
 				}
+
+				// The tab strip draws a mark from this. A settled contest and an open one drew
+				// the same header until step 17, Part I.
+				this.LoaderNeedsAnswer = !plan.IsSettled;
 
 				this.LoaderHeader = plan.IsSettled
 					? $"{this.Loaders.Count} loader files. Every one of them has a supplier."
@@ -1557,6 +1731,23 @@ namespace BlackboxModManager.App.ViewModels
 		private int _conflictRun;
 
 		/// <summary>
+		/// How many conflicts the last check found. The Conflicts tab header shows this as a
+		/// suffix while it is above zero. See step 17, Part I.
+		/// </summary>
+		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(HasConflicts))]
+		private int _conflictCount;
+
+		public bool HasConflicts => this.ConflictCount > 0;
+
+		/// <summary>
+		/// When the last check ran, as the user reads it. The Check again button needs a state
+		/// to refresh, and this line is that state. See step 17, Part J.
+		/// </summary>
+		[ObservableProperty]
+		private string _conflictsCheckedAt = "The check has not run yet.";
+
+		/// <summary>
 		/// Reads the conflicts on a background thread and shows the result.
 		///
 		/// <b>The check is slow enough to freeze the window.</b> It reads every mod folder and
@@ -1571,6 +1762,7 @@ namespace BlackboxModManager.App.ViewModels
 			int run = ++this._conflictRun;
 
 			this.Conflicts.Clear();
+			this.ConflictCount = 0;
 
 			if (this._install is null || this._profile is null) return;
 
@@ -1591,16 +1783,19 @@ namespace BlackboxModManager.App.ViewModels
 			this.Conflicts.Add("Check the mods for conflicts.");
 
 			IReadOnlyList<string> lines;
+			int found;
 
 			try
 			{
-				lines = await Task.Run(() => Describe(service, install, snapshot)).ConfigureAwait(true);
+				(lines, found) = await Task.Run(() => Describe(service, install, snapshot))
+					.ConfigureAwait(true);
 			}
 			catch (Exception ex)
 			{
 				// A selection that is half finished is normal while the user works. Report
 				// it in the panel and never as a dialog.
 				lines = new[] { ex.Message };
+				found = 0;
 			}
 
 			// A later click started another check. That one writes the panel.
@@ -1609,20 +1804,29 @@ namespace BlackboxModManager.App.ViewModels
 			this.Conflicts.Clear();
 
 			foreach (string line in lines) this.Conflicts.Add(line);
+
+			this.ConflictCount = found;
+			this.ConflictsCheckedAt = $"The check ran at {DateTime.Now:HH:mm:ss}.";
 		}
 
 		/// <summary>
 		/// Runs the conflict check and turns the report into the lines of the panel. This runs
 		/// on a background thread, so it touches nothing that the window owns.
+		///
+		/// The count comes back beside the lines, because the Conflicts tab header shows it.
+		/// See step 17, Part I.
 		/// </summary>
-		private static IReadOnlyList<string> Describe(DeployService service, GameInstall install,
-			Profile profile)
+		private static (IReadOnlyList<string> Lines, int Count) Describe(DeployService service,
+			GameInstall install, Profile profile)
 		{
 			var lines = new List<string>();
+			int count = 0;
 
 			try
 			{
 				ConflictReport report = service.CheckConflicts(install, profile);
+
+				count = report.Conflicts.Count;
 
 				lines.Add(report.Summary());
 
@@ -1658,7 +1862,7 @@ namespace BlackboxModManager.App.ViewModels
 				lines.Add(ex.Message);
 			}
 
-			return lines;
+			return (lines, count);
 		}
 
 		// ---------------------------------------------------------------- deploy
@@ -1732,10 +1936,23 @@ namespace BlackboxModManager.App.ViewModels
 			this._store = new ModStore(this._settings.ResolveModStore());
 			this._importer = new ModImporter(this._store, AppPaths.ImportDirectory);
 
+			// The path leaves the status line and goes into the box of its own group. See step
+			// 17, Part C.
+			this.ModStorePath = this._store.Root;
+
 			this.ModStoreStatus = this._settings.ModStoreIsDefault
-				? $"The mod store is at the default place: {this._store.Root}"
-				: $"The mod store is at {this._store.Root}";
+				? "This is the default place."
+				: "The settings name this place.";
+
+			this.OnPropertyChanged(nameof(this.ModStoreIsDefault));
+			this.UseDefaultModStoreCommand.NotifyCanExecuteChanged();
 		}
+
+		/// <summary>
+		/// True while the mod store sits at the default place. The settings window hides the
+		/// "Use the default place" button while this is true.
+		/// </summary>
+		public bool ModStoreIsDefault => this._settings.ModStoreIsDefault;
 
 		/// <summary>
 		/// Moves the mod store, or points this application at a store that already exists.
@@ -1744,40 +1961,27 @@ namespace BlackboxModManager.App.ViewModels
 		/// cross a volume, so a store on the volume of the game gets hard links and a store
 		/// anywhere else falls through to Copy. A user who keeps a large library on another
 		/// volume than the game pays that on every deploy.
+		///
+		/// <b>One press opens the picker.</b> A choice window stood in front of the picker
+		/// until step 17, Part D, so a user who wanted another directory answered two dialogs.
+		/// The default place is a button of its own now.
 		/// </summary>
 		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private void SetModStore()
 		{
-			var choices = new List<UserChoice>
-			{
-				new UserChoice("pick", "Choose another directory",
-					"Pick a directory. This application then offers to move the mods that the store " +
-					"holds today."),
-			};
-
-			if (!this._settings.ModStoreIsDefault)
-			{
-				choices.Add(new UserChoice("default", "Use the default place",
-					$"Go back to {AppPaths.ModsDirectory}."));
-			}
-
-			string answer = this._ask.PickChoice(
-				$"The mod store is at {this._store.Root}.\n\n" +
-				"A hard link cannot cross a volume. A store on the volume of the game makes every " +
-				"deploy cost almost no disk space. A store anywhere else makes every deploy copy " +
-				"every byte of every mod.",
-				choices);
-
-			if (answer is null) return;
-
-			string target = answer == "default"
-				? AppPaths.ModsDirectory
-				: this._ask.PickDirectory("Choose the directory for the mod store.", this._store.Root);
+			string target = this._ask.PickDirectory(
+				"Choose the directory for the mod store.", this._store.Root);
 
 			if (String.IsNullOrWhiteSpace(target)) return;
 
 			this.MoveStore(target);
 		}
+
+		/// <summary>Puts the mod store back under our own application data.</summary>
+		[RelayCommand(CanExecute = nameof(CanUseDefaultModStore))]
+		private void UseDefaultModStore() => this.MoveStore(AppPaths.ModsDirectory);
+
+		private bool CanUseDefaultModStore() => this.IsIdle && !this.ModStoreIsDefault;
 
 		private void MoveStore(string target)
 		{
@@ -1894,7 +2098,16 @@ namespace BlackboxModManager.App.ViewModels
 
 		/// <summary>The directory that holds the vanilla copy and the staging copy.</summary>
 		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(HasWorkspacePath))]
 		private string _workspacePath = String.Empty;
+
+		public bool HasWorkspacePath => this.WorkspacePath.Length > 0;
+
+		/// <summary>
+		/// True while the workspace sits beside the game install. The settings window hides the
+		/// "Use the default place" button while this is true.
+		/// </summary>
+		public bool WorkspaceIsDefault => String.IsNullOrWhiteSpace(this._settings.WorkRootOverride);
 
 		/// <summary>One line that says where the workspace sits and why the place matters.</summary>
 		[ObservableProperty]
@@ -1902,7 +2115,10 @@ namespace BlackboxModManager.App.ViewModels
 
 		private void RefreshWorkspace()
 		{
-			bool isDefault = String.IsNullOrWhiteSpace(this._settings.WorkRootOverride);
+			bool isDefault = this.WorkspaceIsDefault;
+
+			this.OnPropertyChanged(nameof(this.WorkspaceIsDefault));
+			this.UseDefaultWorkRootCommand.NotifyCanExecuteChanged();
 
 			if (this._install is null)
 			{
@@ -1940,41 +2156,44 @@ namespace BlackboxModManager.App.ViewModels
 		///
 		/// The old directory stays on disk. This application deletes nothing that it did not
 		/// write in the same operation, and the vanilla copy is the last way back.
+		///
+		/// <b>One press opens the picker.</b> A choice window stood in front of the picker
+		/// until step 17, Part D. The default place is a button of its own now.
 		/// </summary>
 		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private void SetWorkRoot()
 		{
 			if (!this.WorkspaceIsSafeToMove()) return;
 
-			var choices = new List<UserChoice>
-			{
-				new UserChoice("pick", "Choose another directory",
-					"Pick a directory. The next deploy builds a new workspace there."),
-			};
+			string target = this._ask.PickDirectory(
+				"Choose the directory for the workspace.", this.WorkspacePath);
 
-			if (!String.IsNullOrWhiteSpace(this._settings.WorkRootOverride))
-			{
-				choices.Add(new UserChoice("default", "Use the default place",
-					"Put the workspace beside the game install again."));
-			}
+			if (String.IsNullOrWhiteSpace(target)) return;
 
-			string answer = this._ask.PickChoice(
-				(this.WorkspacePath.Length > 0
-					? $"The workspace is at {this.WorkspacePath}.\n\n"
-					: String.Empty) +
-				"A deploy builds the staging copy here and then swaps it with the game directory. " +
-				"Both steps are cheap only on the volume of the game. Move this only when that " +
-				"volume has no free space.",
-				choices);
+			this.ApplyWorkRoot(target);
+		}
 
-			if (answer is null) return;
+		/// <summary>
+		/// Puts the workspace beside the game install again.
+		///
+		/// <b>The guard runs here as well.</b> The workspace holds the only vanilla copy, and
+		/// this command moves it in the same way that <see cref="SetWorkRoot"/> does.
+		/// </summary>
+		[RelayCommand(CanExecute = nameof(CanUseDefaultWorkRoot))]
+		private void UseDefaultWorkRoot()
+		{
+			if (!this.WorkspaceIsSafeToMove()) return;
 
-			string target = answer == "default"
-				? null
-				: this._ask.PickDirectory("Choose the directory for the workspace.", this.WorkspacePath);
+			this.ApplyWorkRoot(null);
+		}
 
-			if (answer != "default" && String.IsNullOrWhiteSpace(target)) return;
+		private bool CanUseDefaultWorkRoot() => this.IsIdle && !this.WorkspaceIsDefault;
 
+		/// <summary>
+		/// Stores the new place and reports the move. A null target means the default place.
+		/// </summary>
+		private void ApplyWorkRoot(string target)
+		{
 			string previous = this.WorkspacePath;
 
 			this.SaveSettings(settings => settings.WorkRootOverride = target);
@@ -2023,48 +2242,50 @@ namespace BlackboxModManager.App.ViewModels
 		}
 
 		/// <summary>
-		/// Lists every directory of this application, so that the user can look at one.
+		/// Lists the directories that a user can look at but cannot change.
 		///
 		/// The staging directory is the one that a user asks for. A deploy that the verify
 		/// stopped leaves it in place, and the failure is only readable from inside it.
+		///
+		/// <b>One directory gets one row in one window.</b> This list held the game install,
+		/// the workspace, and the mod store until step 17, Part A. The settings window owns
+		/// those three, because a user can change all three there.
+		///
+		/// <c>CanExecute</c> reads <c>IsIdle</c>, because the code below reads the store and
+		/// calls <c>WorkspaceOf</c>. A running deploy changes both.
 		/// </summary>
-		[RelayCommand]
+		[RelayCommand(CanExecute = nameof(IsIdle))]
 		private void ShowFolders()
 		{
-			var rows = new List<FolderRow>
+			var rows = new List<FolderRow>();
+
+			if (this._install != null)
 			{
-				new FolderRow("Application data", "Settings, profiles, the mod store, and the logs.",
-					AppPaths.Root),
-				new FolderRow("Mod store",
-					"One directory per imported mod. A deploy reads from here. The volume of this " +
-					"directory decides whether a deploy can use hard links.",
-					this._store.Root),
-				new FolderRow("Logs", "The deploy report and the error log.", AppPaths.LogDirectory),
-			};
+				GameWorkspace workspace = this.Service().WorkspaceOf(this._install);
 
-			if (this._install is null)
+				rows.Add(new FolderRow("Staging copy",
+					"What the next swap puts into the game directory. A deploy that the verify " +
+					"stopped leaves the result here, and nothing reached the game.",
+					workspace.StagingDirectory));
+
+				rows.Add(new FolderRow("Vanilla copy",
+					"The pristine state of the install. A revert restores this.",
+					workspace.VanillaDirectory));
+			}
+			else
 			{
-				rows.Add(new FolderRow("Game install", "No game install is set, so there is no workspace.", null));
+				rows.Add(new FolderRow("Staging copy",
+					"No game install is set, so there is no workspace and no staging copy.", null));
 
-				this._ask.ShowFolders(rows);
-
-				return;
+				rows.Add(new FolderRow("Vanilla copy",
+					"No game install is set, so there is no workspace and no vanilla copy.", null));
 			}
 
-			GameWorkspace workspace = this.Service().WorkspaceOf(this._install);
+			rows.Add(new FolderRow("Application data",
+				"The settings file, the profiles, and the logs.", AppPaths.Root));
 
-			rows.Insert(0, new FolderRow("Game install",
-				"The live directory. Only the swap of a deploy changes this.", this._install.Root));
-
-			rows.Insert(1, new FolderRow("Workspace",
-				"The vanilla copy, the staging copy, and the state of this game.", workspace.Root));
-
-			rows.Insert(2, new FolderRow("Staging copy",
-				"What the next swap puts into the game directory. A deploy that the verify stopped " +
-				"leaves the result here, and nothing reached the game.", workspace.StagingDirectory));
-
-			rows.Insert(3, new FolderRow("Vanilla copy",
-				"The pristine state of the install. A revert restores this.", workspace.VanillaDirectory));
+			rows.Add(new FolderRow("Logs", "The deploy report and the error log.",
+				AppPaths.LogDirectory));
 
 			this._ask.ShowFolders(rows);
 		}
@@ -2349,12 +2570,18 @@ namespace BlackboxModManager.App.ViewModels
 			this.DeployCommand.NotifyCanExecuteChanged();
 			this.RevertCommand.NotifyCanExecuteChanged();
 
-			// The config window of step 12 shows these three, so their buttons have to gray out
+			// The config window of step 12 shows these, so their buttons have to gray out
 			// during a long operation like every other button does.
 			this.SetModStoreCommand.NotifyCanExecuteChanged();
+			this.UseDefaultModStoreCommand.NotifyCanExecuteChanged();
 			this.SetWorkRootCommand.NotifyCanExecuteChanged();
+			this.UseDefaultWorkRootCommand.NotifyCanExecuteChanged();
 			this.ChooseLoaderCommand.NotifyCanExecuteChanged();
 			this.CheckForUpdatesCommand.NotifyCanExecuteChanged();
+
+			// ShowFolders reads the store and calls WorkspaceOf. A running deploy changes both.
+			// See step 17, M1.
+			this.ShowFoldersCommand.NotifyCanExecuteChanged();
 		}
 	}
 }

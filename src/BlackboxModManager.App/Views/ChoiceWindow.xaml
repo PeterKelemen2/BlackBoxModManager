@@ -2,7 +2,7 @@
   x:Class="BlackboxModManager.App.Views.ChoiceWindow"
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-  Title="Blackbox Mod Manager"
+  Title="BlackBox Mod Manager"
   Width="620"
   Height="380"
   MinWidth="420"

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using BlackboxModManager.App.Services;
 
 namespace BlackboxModManager.App.Views
 {
@@ -55,7 +55,10 @@ namespace BlackboxModManager.App.Views
 	}
 
 	/// <summary>
-	/// Lists every directory of this application and opens one.
+	/// Lists the directories that a user can look at but cannot change, and opens one.
+	///
+	/// <b>The settings window owns every directory that a user can change.</b> Step 17, Part A,
+	/// split the two lists. One directory gets one row in one window.
 	///
 	/// <b>Copy path always works and Open does not.</b> A window application under Wine has no
 	/// guaranteed file manager, and the shell handler of the platform can be absent. So every
@@ -83,49 +86,7 @@ namespace BlackboxModManager.App.Views
 		{
 			if ((sender as Button)?.Tag is not FolderRow row) return;
 
-			this.Report.Text = Open(row.Path);
-		}
-
-		/// <summary>
-		/// Opens one directory in the file manager of the platform.
-		///
-		/// It tries the shell handler first, then <c>explorer.exe</c>. Wine ships that program
-		/// and it may still refuse a path. The result says which one worked, or that neither
-		/// did, and it never throws.
-		/// </summary>
-		private static string Open(string path)
-		{
-			if (String.IsNullOrEmpty(path) || !Directory.Exists(path))
-			{
-				return $"The directory {path} does not exist, so there is nothing to open.";
-			}
-
-			try
-			{
-				// A directory with UseShellExecute opens the file manager of the platform.
-				Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
-
-				return $"Asked the platform to open {path}.";
-			}
-			catch (Exception first)
-			{
-				try
-				{
-					// Wine ships explorer.exe. It is the fallback on a prefix whose shell
-					// associations are empty.
-					Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"")
-					{
-						UseShellExecute = false,
-					});
-
-					return $"Asked explorer.exe to open {path}.";
-				}
-				catch (Exception second)
-				{
-					return "Neither the shell nor explorer.exe opened the directory. " +
-						$"Use Copy path instead. {first.Message} {second.Message}";
-				}
-			}
+			this.Report.Text = DirectoryOpener.Open(row.Path);
 		}
 
 		private void OnCopy(object sender, RoutedEventArgs e)

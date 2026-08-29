@@ -83,14 +83,28 @@ namespace BlackboxModManager.App.Services
 		/// gives the user no way to copy the text, and an error of this application names a
 		/// path, a mod, a script line, or a message from one of the three libraries.
 		/// </summary>
+		/// <remarks>
+		/// <b>The title bar names the application and the heading names the failure.</b> Both
+		/// took the same string until step 17, Part L, so every error dialog printed the same
+		/// sentence twice.
+		/// </remarks>
 		public static void ShowError(Window owner, string message, string title = "The operation failed.")
 		{
-			MessageWindow.Show(owner, title, title, message, "Copy error");
+			MessageWindow.Show(owner, ApplicationName, title, message, "Copy error");
 		}
 
-		public static void ShowMessage(Window owner, string message, string title = "Blackbox Mod Manager")
+		public static void ShowMessage(Window owner, string message, string title = ApplicationName)
 		{
 			MessageWindow.Show(owner, title, null, message, "Copy text");
 		}
+
+		/// <summary>
+		/// The name of this application, as a user reads it. The two words are separate,
+		/// because the games come from EA Black Box.
+		///
+		/// <b>The namespace and the assembly keep the one-word spelling.</b> That name is an
+		/// identifier, and this project renames no identifier for a text fix.
+		/// </summary>
+		public const string ApplicationName = "BlackBox Mod Manager";
 	}
 }

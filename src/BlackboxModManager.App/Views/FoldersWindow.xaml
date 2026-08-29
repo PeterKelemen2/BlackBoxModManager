@@ -2,7 +2,7 @@
   x:Class="BlackboxModManager.App.Views.FoldersWindow"
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-  Title="Folders"
+  Title="Other directories"
   Width="820"
   Height="460"
   MinWidth="520"
@@ -20,7 +20,7 @@
     <TextBlock
       Grid.Row="0"
       Margin="0,0,0,10"
-      Text="Every directory that this application reads or writes. Open opens the directory in the file manager of the platform. Copy path puts the path on the clipboard, which always works."
+      Text="The directories that this application writes for itself. The settings window owns the ones that you can change. Open shows a directory in the file manager of the platform. Copy path puts the path on the clipboard, which always works."
       TextWrapping="Wrap" />
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -39,10 +39,14 @@
                     Style="{StaticResource Hint}"
                     Text="{Binding Purpose}"
                     TextWrapping="Wrap" />
-                  <!--  The path is selectable, so a user can copy part of it by hand.  -->
+                  <!--
+                    The path is selectable, so a user can copy part of it by hand. The
+                    padding matches the path box of the settings window. Both windows draw a
+                    path the same way.
+                  -->
                   <TextBox
                     Margin="0,2,0,0"
-                    Padding="0"
+                    Padding="6,4"
                     Background="Transparent"
                     BorderThickness="0"
                     IsReadOnly="True"

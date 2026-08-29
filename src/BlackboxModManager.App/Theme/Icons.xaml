@@ -100,6 +100,28 @@
   </Geometry>
 
   <!--
+    Open a directory in the file manager. A back plate, a tab, and a front plate.
+
+    Every line is straight. A folder glyph of this size draws its tab with a curve in most
+    icon sets, and a curve of one pixel lands below one pixel on the software rasterizer of
+    Wine. Straight lines carry the same meaning here. See docs/roadmap/12-minimal-ui.md,
+    Part A.
+  -->
+  <Geometry x:Key="IconFolder" po:Freeze="True">
+    M 0.75,10.25 L 0.75,1.75 L 4.75,1.75 L 6.25,3.75 L 12.25,3.75 L 12.25,10.25 Z
+  </Geometry>
+
+  <!--
+    The mark on the Loader tab while a loader contest has no answer.
+
+    The path takes a Fill and no Stroke, so this geometry is a closed circle of two arcs. A
+    stroked ring of this size reads as a smudge on the software rasterizer.
+  -->
+  <Geometry x:Key="IconDot" po:Freeze="True">
+    M 0,3 A 3,3 0 1 1 6,3 A 3,3 0 1 1 0,3
+  </Geometry>
+
+  <!--
     The profile menu. Three dots.
 
     Each dot is a small circle of two arcs and never a zero length line. A zero length

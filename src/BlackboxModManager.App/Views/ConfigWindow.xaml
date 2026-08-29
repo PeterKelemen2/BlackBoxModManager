@@ -4,8 +4,8 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="clr-namespace:BlackboxModManager.App.Theme"
   Title="Settings"
-  Width="680"
-  Height="690"
+  Width="700"
+  Height="720"
   MinWidth="520"
   MinHeight="420"
   Background="{StaticResource SurfaceBase}"
@@ -18,10 +18,52 @@
     <b>This window holds no logic.</b> It takes the MainViewModel as its DataContext and it
     binds to the commands that already exist. The code-behind opens it, sets the dialog
     owner, and nothing else.
+
+    Step 17 gave the four path groups one shape and one interaction model. Read Parts A, C,
+    and D of docs/roadmap/17-ui-consistency.md before you change a group.
+
+    1. The status line says what the state is.
+    2. The path box holds the path and nothing else. A group with no path hides the box.
+    3. The hint line says what the choice costs.
+    4. Change opens the picker. The default place is a button of its own.
+    5. Open and Copy path sit on every group. Copy path works when Open does not.
   -->
+  <Window.Resources>
+    <!--
+      The path box of a group. Four properties make a read-only box read as a line of text
+      that a user can select.
+
+      <b>BasedOn is not optional.</b> The TextBox style of Theme/Controls.xaml carries no
+      x:Key, so it applies to every box that names no style of its own. A keyed style does
+      not inherit from it. Without this attribute the box loses the theme foreground and
+      draws black text on the dark surface.
+    -->
+    <Style
+      x:Key="PathBox"
+      BasedOn="{StaticResource {x:Type TextBox}}"
+      TargetType="TextBox">
+      <Setter Property="Margin" Value="0,4,0,0" />
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!--  The Open and Copy path pair. Both sit under the buttons of the group.  -->
+    <Style
+      x:Key="PathIconRow"
+      BasedOn="{StaticResource IconButtonSmall}"
+      TargetType="Button">
+      <Setter Property="Margin" Value="0,4,4,0" />
+      <Setter Property="ui:Kind.Value" Value="Quiet" />
+    </Style>
+  </Window.Resources>
+
   <Grid Margin="16">
     <Grid.RowDefinitions>
       <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
@@ -43,15 +85,10 @@
                 Style="{StaticResource Hint}"
                 Text="{Binding GameStatus}"
                 TextWrapping="Wrap" />
-              <!--  The path is selectable, so a user can copy part of it by hand.  -->
               <TextBox
-                Margin="0,4,0,0"
-                Padding="0"
-                Background="Transparent"
-                BorderThickness="0"
-                IsReadOnly="True"
+                Style="{StaticResource PathBox}"
                 Text="{Binding GamePath, Mode=OneWay}"
-                TextWrapping="Wrap" />
+                Visibility="{Binding HasGamePath, Converter={StaticResource BoolToVisible}}" />
             </StackPanel>
             <StackPanel Grid.Column="1" VerticalAlignment="Top">
               <Button
@@ -59,13 +96,32 @@
                 HorizontalAlignment="Stretch"
                 Command="{Binding DetectGameCommand}"
                 Content="Detect"
-                ToolTip="Search the common install directories. This application asks before it takes one." />
+                ToolTip="Search the common install directories. One dialog then lists every result." />
               <Button
                 Margin="0"
                 HorizontalAlignment="Stretch"
                 Command="{Binding BrowseGameCommand}"
                 Content="Browse"
                 ToolTip="Choose the install directory of this game." />
+              <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button
+                  Command="{Binding OpenDirectoryCommand}"
+                  CommandParameter="{Binding GamePath}"
+                  IsEnabled="{Binding HasGamePath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Open this directory in the file manager.">
+                  <Path Data="{StaticResource IconFolder}" Style="{StaticResource IconGlyph}" />
+                </Button>
+                <Button
+                  Margin="0,4,0,0"
+                  Command="{Binding CopyPathCommand}"
+                  CommandParameter="{Binding GamePath}"
+                  IsEnabled="{Binding HasGamePath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Copy this path to the clipboard.">
+                  <Path Data="{StaticResource IconClipboard}" Style="{StaticResource IconGlyph}" />
+                </Button>
+              </StackPanel>
             </StackPanel>
           </Grid>
         </GroupBox>
@@ -80,19 +136,48 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBlock
-              Grid.Column="0"
-              Margin="0,0,8,0"
-              Style="{StaticResource Hint}"
-              Text="{Binding BinaryStatus}"
-              TextWrapping="Wrap" />
-            <Button
-              Grid.Column="1"
-              Margin="0"
-              VerticalAlignment="Top"
-              Command="{Binding SetBinaryCommand}"
-              Content="Browse"
-              ToolTip="Choose the directory of the Binary 2.8.3 install. This application reads its hash lists." />
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+              <TextBlock
+                Style="{StaticResource Hint}"
+                Text="{Binding BinaryStatus}"
+                TextWrapping="Wrap" />
+              <TextBox
+                Style="{StaticResource PathBox}"
+                Text="{Binding BinaryPath, Mode=OneWay}"
+                Visibility="{Binding HasBinaryPath, Converter={StaticResource BoolToVisible}}" />
+              <TextBlock
+                Margin="0,4,0,0"
+                Style="{StaticResource Hint}"
+                Text="This application reads the hash lists of that install. It ships no file of it."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" VerticalAlignment="Top">
+              <Button
+                Margin="0"
+                HorizontalAlignment="Stretch"
+                Command="{Binding SetBinaryCommand}"
+                Content="Browse"
+                ToolTip="Choose the directory of the Binary 2.8.3 install." />
+              <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button
+                  Command="{Binding OpenDirectoryCommand}"
+                  CommandParameter="{Binding BinaryPath}"
+                  IsEnabled="{Binding HasBinaryPath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Open this directory in the file manager.">
+                  <Path Data="{StaticResource IconFolder}" Style="{StaticResource IconGlyph}" />
+                </Button>
+                <Button
+                  Margin="0,4,0,0"
+                  Command="{Binding CopyPathCommand}"
+                  CommandParameter="{Binding BinaryPath}"
+                  IsEnabled="{Binding HasBinaryPath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Copy this path to the clipboard.">
+                  <Path Data="{StaticResource IconClipboard}" Style="{StaticResource IconGlyph}" />
+                </Button>
+              </StackPanel>
+            </StackPanel>
           </Grid>
         </GroupBox>
 
@@ -114,25 +199,74 @@
                 Style="{StaticResource Hint}"
                 Text="{Binding ModStoreStatus}"
                 TextWrapping="Wrap" />
+              <TextBox
+                Style="{StaticResource PathBox}"
+                Text="{Binding ModStorePath, Mode=OneWay}"
+                Visibility="{Binding HasModStorePath, Converter={StaticResource BoolToVisible}}" />
               <TextBlock
                 Margin="0,4,0,0"
                 Style="{StaticResource Hint}"
-                Text="A hard link cannot cross a volume. A store on the volume of the game makes every deploy cost almost no disk space."
+                Text="A hard link cannot cross a volume. A store on the volume of the game makes every deploy cost almost no disk space. A store anywhere else makes every deploy copy every byte of every mod. A change offers to move the mods that the store holds today."
                 TextWrapping="Wrap" />
             </StackPanel>
-            <Button
-              Grid.Column="1"
-              Margin="0"
-              VerticalAlignment="Top"
-              Command="{Binding SetModStoreCommand}"
-              Content="Change"
-              ToolTip="Move the mod store, or point this application at a store that already exists." />
+            <StackPanel Grid.Column="1" VerticalAlignment="Top">
+              <Button
+                Margin="0,0,0,4"
+                HorizontalAlignment="Stretch"
+                Command="{Binding SetModStoreCommand}"
+                Content="Change"
+                ToolTip="Choose another directory for the mod store." />
+              <!--
+                The default place is a button and no longer a row of a choice window. It
+                shows only while the store sits somewhere else. See step 17, Part D.
+              -->
+              <Button
+                Margin="0"
+                HorizontalAlignment="Stretch"
+                Command="{Binding UseDefaultModStoreCommand}"
+                Content="Use the default place"
+                ToolTip="Put the mod store back under the application data of this application.">
+                <Button.Style>
+                  <Style BasedOn="{StaticResource {x:Type Button}}" TargetType="Button">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding ModStoreIsDefault}" Value="True">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Button.Style>
+              </Button>
+              <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button
+                  Command="{Binding OpenDirectoryCommand}"
+                  CommandParameter="{Binding ModStorePath}"
+                  IsEnabled="{Binding HasModStorePath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Open this directory in the file manager.">
+                  <Path Data="{StaticResource IconFolder}" Style="{StaticResource IconGlyph}" />
+                </Button>
+                <Button
+                  Margin="0,4,0,0"
+                  Command="{Binding CopyPathCommand}"
+                  CommandParameter="{Binding ModStorePath}"
+                  IsEnabled="{Binding HasModStorePath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Copy this path to the clipboard.">
+                  <Path Data="{StaticResource IconClipboard}" Style="{StaticResource IconGlyph}" />
+                </Button>
+              </StackPanel>
+            </StackPanel>
           </Grid>
         </GroupBox>
 
         <!--
           The workspace. It holds the vanilla copy, so a move while a profile is deployed
-          would take the only way back. SetWorkRoot refuses that case.
+          would take the only way back. Both move commands refuse that case.
+
+          The staging copy and the vanilla copy live in here, so the way to the other
+          directories sits in this group. It sat beside Close until step 17, Part A, where
+          it read as an action of the dialog and not as a destination.
         -->
         <GroupBox
           Margin="0,0,0,12"
@@ -149,26 +283,66 @@
                 Text="{Binding WorkspaceStatus}"
                 TextWrapping="Wrap" />
               <TextBox
-                Margin="0,4,0,0"
-                Padding="0"
-                Background="Transparent"
-                BorderThickness="0"
-                IsReadOnly="True"
+                Style="{StaticResource PathBox}"
                 Text="{Binding WorkspacePath, Mode=OneWay}"
-                TextWrapping="Wrap" />
+                Visibility="{Binding HasWorkspacePath, Converter={StaticResource BoolToVisible}}" />
               <TextBlock
                 Margin="0,4,0,0"
                 Style="{StaticResource Hint}"
-                Text="The workspace holds the vanilla copy and the staging copy. Revert to vanilla before you move it."
+                Text="A deploy builds the staging copy here and then swaps it with the game directory. Both steps are cheap only on the volume of the game. Move this only when that volume has no free space. The workspace holds the vanilla copy, so revert to vanilla before you move it."
                 TextWrapping="Wrap" />
+              <Button
+                Margin="0,8,0,0"
+                HorizontalAlignment="Left"
+                ui:Kind.Value="Quiet"
+                Command="{Binding ShowFoldersCommand}"
+                Content="Other directories"
+                ToolTip="Open the staging copy, the vanilla copy, the application data, or the logs." />
             </StackPanel>
-            <Button
-              Grid.Column="1"
-              Margin="0"
-              VerticalAlignment="Top"
-              Command="{Binding SetWorkRootCommand}"
-              Content="Change"
-              ToolTip="Move the workspace. Do this only when the volume of the game has no free space." />
+            <StackPanel Grid.Column="1" VerticalAlignment="Top">
+              <Button
+                Margin="0,0,0,4"
+                HorizontalAlignment="Stretch"
+                Command="{Binding SetWorkRootCommand}"
+                Content="Change"
+                ToolTip="Choose another directory for the workspace." />
+              <Button
+                Margin="0"
+                HorizontalAlignment="Stretch"
+                Command="{Binding UseDefaultWorkRootCommand}"
+                Content="Use the default place"
+                ToolTip="Put the workspace beside the game install again.">
+                <Button.Style>
+                  <Style BasedOn="{StaticResource {x:Type Button}}" TargetType="Button">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding WorkspaceIsDefault}" Value="True">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Button.Style>
+              </Button>
+              <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button
+                  Command="{Binding OpenDirectoryCommand}"
+                  CommandParameter="{Binding WorkspacePath}"
+                  IsEnabled="{Binding HasWorkspacePath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Open this directory in the file manager.">
+                  <Path Data="{StaticResource IconFolder}" Style="{StaticResource IconGlyph}" />
+                </Button>
+                <Button
+                  Margin="0,4,0,0"
+                  Command="{Binding CopyPathCommand}"
+                  CommandParameter="{Binding WorkspacePath}"
+                  IsEnabled="{Binding HasWorkspacePath}"
+                  Style="{StaticResource PathIconRow}"
+                  ToolTip="Copy this path to the clipboard.">
+                  <Path Data="{StaticResource IconClipboard}" Style="{StaticResource IconGlyph}" />
+                </Button>
+              </StackPanel>
+            </StackPanel>
           </Grid>
         </GroupBox>
 
@@ -282,27 +456,22 @@
       </StackPanel>
     </ScrollViewer>
 
-    <Grid Grid.Row="1" Margin="0,12,0,0">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="Auto" />
-        <ColumnDefinition Width="*" />
-        <ColumnDefinition Width="Auto" />
-      </Grid.ColumnDefinitions>
-      <!--
-        A deploy that the verify stopped leaves its result in the staging copy, and the
-        failure is only readable from inside that directory.
-      -->
+    <!--
+      What the last Open or Copy path did. This window shows no status bar, and Open can
+      fail on a Wine prefix that holds no file manager.
+    -->
+    <TextBlock
+      Grid.Row="1"
+      Margin="0,10,0,0"
+      Style="{StaticResource Hint}"
+      Text="{Binding SettingsReport}"
+      TextWrapping="Wrap" />
+
+    <Grid Grid.Row="2" Margin="0,12,0,0">
       <Button
-        Grid.Column="0"
-        Margin="0"
-        ui:Kind.Value="Quiet"
-        Command="{Binding ShowFoldersCommand}"
-        Content="Folders"
-        ToolTip="Open the staging copy, the vanilla copy, the mod store, or the logs." />
-      <Button
-        Grid.Column="2"
         MinWidth="80"
         Margin="0"
+        HorizontalAlignment="Right"
         Content="Close"
         IsCancel="True"
         IsDefault="True" />

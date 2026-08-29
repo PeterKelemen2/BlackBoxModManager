@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using BlackboxModManager.App.Services;
 using BlackboxModManager.App.ViewModels;
 using BlackboxModManager.App.Views;
+using BlackboxModManager.Core;
 
 namespace BlackboxModManager.App
 {
@@ -31,7 +32,86 @@ namespace BlackboxModManager.App
 			// Keep the last log line in view. A deploy writes while the user watches.
 			((INotifyCollectionChanged)this._model.Log).CollectionChanged += this.OnLogChanged;
 
+			this.ApplyStoredBounds();
+
 			this.Loaded += this.OnLoaded;
+			this.Closing += this.OnClosing;
+		}
+
+		// ---------------------------------------------------------------- The window bounds
+		//
+		// The window and the splitter keep their size across a restart. Both values belong to
+		// the machine and never to a profile, so they live in the settings file. See
+		// docs/roadmap/17-ui-consistency.md, Part K.
+		//
+		// The window saves no position. A position needs the same monitor set, and the clamp
+		// below does not cover a monitor that is gone.
+
+		/// <summary>
+		/// Reads the size of the window and the width of the mod list out of the settings.
+		///
+		/// The clamp keeps the window inside the virtual screen. A user who unplugs a second
+		/// monitor must not lose the window off the edge.
+		/// </summary>
+		private void ApplyStoredBounds()
+		{
+			Settings settings = SettingsStore.Load();
+
+			double maxWidth = SystemParameters.VirtualScreenWidth;
+			double maxHeight = SystemParameters.VirtualScreenHeight;
+
+			if (settings.WindowWidth is double width && width >= this.MinWidth)
+			{
+				this.Width = Math.Min(width, maxWidth);
+			}
+
+			if (settings.WindowHeight is double height && height >= this.MinHeight)
+			{
+				this.Height = Math.Min(height, maxHeight);
+			}
+
+			if (settings.WindowMaximized) this.WindowState = WindowState.Maximized;
+
+			// The MinWidth of both columns already stops a column of no width, so this needs
+			// no clamp of its own.
+			if (settings.ModListWidth is double column && column > 0)
+			{
+				this.ModListColumn.Width = new GridLength(column, GridUnitType.Pixel);
+			}
+		}
+
+		/// <summary>
+		/// Writes the size of the window and the width of the mod list back.
+		///
+		/// <b>A maximized window reports the screen size in Width and Height.</b> RestoreBounds
+		/// holds the size from before the maximize, so the next start opens at a size that the
+		/// user can work with.
+		/// </summary>
+		private void OnClosing(object sender, System.ComponentModel.CancelEventArgs e)
+		{
+			try
+			{
+				bool maximized = this.WindowState == WindowState.Maximized;
+				Rect resting = this.RestoreBounds;
+
+				double width = maximized ? resting.Width : this.Width;
+				double height = maximized ? resting.Height : this.Height;
+				double column = this.ModListColumn.ActualWidth;
+
+				SettingsStore.Update(settings =>
+				{
+					settings.WindowMaximized = maximized;
+
+					if (width > 0) settings.WindowWidth = width;
+					if (height > 0) settings.WindowHeight = height;
+					if (column > 0) settings.ModListWidth = column;
+				});
+			}
+			catch (Exception)
+			{
+				// A window size is cosmetic. A settings file that refuses a write must never
+				// stop the application from closing.
+			}
 		}
 
 		/// <summary>
@@ -242,9 +322,14 @@ namespace BlackboxModManager.App
 		// The DataGrid of step 9 became a row list in step 10. A drag reorders the load
 		// order. See docs/roadmap/11-ui-polish.md, Part B. The row template lives in
 		// Theme/Parts.xaml as a shared resource with no code-behind, so every handler below
-		// attaches to the ItemsControl itself. PreviewMouseLeftButtonDown and
-		// PreviewMouseMove tunnel from the window down to the row, and DragOver, Drop, and
-		// DragLeave bubble from the row back up, so the ItemsControl sees every one of them.
+		// attaches to an element of MainWindow.xaml. PreviewMouseLeftButtonDown and
+		// PreviewMouseMove tunnel from the window down to the row, so the ItemsControl sees
+		// both of them.
+		//
+		// The three drag handlers sit on ModPanel and no longer on ModList. An ItemsControl
+		// paints no background, so it answered a hit test only where a row painted. An empty
+		// profile therefore took no drop, and neither did the space below the last row. See
+		// docs/roadmap/17-ui-consistency.md, Part E.
 		//
 		// Step 10 drew an insertion line and step 11 replaced it. The dragged row now moves
 		// inside the collection to the place where it would land, and it draws as a ghost. The
@@ -304,6 +389,63 @@ namespace BlackboxModManager.App
 			}
 
 			return false;
+		}
+
+		/// <summary>
+		/// Takes the focus for the panel and drops the selection on a press that finds no row.
+		///
+		/// <b>The keys of Part G need the focus.</b> A press on a row lands here first, because
+		/// this handler tunnels from the panel down to the row.
+		///
+		/// A press that finds no row clears the selection. Nothing cleared it before step 17,
+		/// Part G, so <c>CanActOnMod</c> reported true forever after the first click.
+		/// </summary>
+		private void ModPanel_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+		{
+			this.ModPanel.Focus();
+
+			if (FindRowElement(e.OriginalSource as DependencyObject) != null) return;
+
+			this._model.ClearSelection();
+		}
+
+		/// <summary>
+		/// The four keys of the mod panel.
+		///
+		/// Delete runs the command and never removes a mod on its own. That command asks for a
+		/// confirmation first. See step 17, Part G.
+		/// </summary>
+		private void ModPanel_KeyDown(object sender, KeyEventArgs e)
+		{
+			switch (e.Key)
+			{
+				case Key.Up:
+					this._model.MoveSelection(-1);
+					break;
+
+				case Key.Down:
+					this._model.MoveSelection(1);
+					break;
+
+				case Key.Escape:
+					// A drag reads Escape as a cancel of that drag. QueryContinueDrag handles
+					// that case, and this key must not clear the selection under it.
+					if (this._dragGhost != null) return;
+
+					this._model.ClearSelection();
+					break;
+
+				case Key.Delete:
+					if (!this._model.RemoveModCommand.CanExecute(null)) return;
+
+					this._model.RemoveModCommand.Execute(null);
+					break;
+
+				default:
+					return;
+			}
+
+			e.Handled = true;
 		}
 
 		private void ModList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -419,7 +561,7 @@ namespace BlackboxModManager.App
 		/// way to the next one, and the gap belongs to the panel. A handler that clears the
 		/// preview there makes the ghost blink once per row.
 		/// </summary>
-		private void ModList_DragOver(object sender, DragEventArgs e)
+		private void ModPanel_DragOver(object sender, DragEventArgs e)
 		{
 			// A file that comes from outside the window is an import and never a reorder. It
 			// carries no dragged row, so the preview below has nothing to move.
@@ -427,6 +569,8 @@ namespace BlackboxModManager.App
 			{
 				e.Effects = DragDropEffects.Copy;
 				e.Handled = true;
+
+				this.ShowDropState(true);
 
 				return;
 			}
@@ -461,15 +605,32 @@ namespace BlackboxModManager.App
 			this._model.PreviewMove(from, to);
 		}
 
-		private void ModList_DragLeave(object sender, DragEventArgs e)
+		private void ModPanel_DragLeave(object sender, DragEventArgs e)
 		{
-			// Nothing. DragLeave fires when the pointer crosses from one row into the next, so a
-			// handler that clears the preview here undoes the move that DragOver just made.
+			// The drop state goes away, and the preview stays. DragLeave fires when the pointer
+			// crosses from one row into the next, so a handler that clears the preview here
+			// undoes the move that DragOver just made.
+			this.ShowDropState(false);
 		}
 
-		private void ModList_Drop(object sender, DragEventArgs e)
+		/// <summary>
+		/// Draws the edge of the panel while a file drag is over it.
+		///
+		/// One pixel of AccentDefault costs the software rasterizer nothing. The panel sets no
+		/// resting Opacity and no shadow, for the reason that step 10 records.
+		/// </summary>
+		private void ShowDropState(bool active)
+		{
+			this.ModPanel.BorderBrush = active
+				? (Brush)this.FindResource("AccentDefault")
+				: Brushes.Transparent;
+		}
+
+		private void ModPanel_Drop(object sender, DragEventArgs e)
 		{
 			e.Handled = true;
+
+			this.ShowDropState(false);
 
 			// An import from outside the window. ModImporter reads an archive or a directory,
 			// so one path covers both. See docs/roadmap/12-minimal-ui.md, Part I.
