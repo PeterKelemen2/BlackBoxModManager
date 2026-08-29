@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Velopack;
@@ -18,10 +19,23 @@ namespace BlackboxModManager.App.Services
 		/// <summary>The repository that holds the releases.</summary>
 		public const string RepositoryUrl = "https://github.com/PeterKelemen2/BlackBoxModManager";
 
+		/// <summary>
+		/// The name of the environment variable that points a check at a local feed instead of
+		/// GitHub.
+		///
+		/// This exists to test the update flow without a real tag. Set it to the directory that
+		/// `tools/pack.ps1` wrote, for example `artifacts/releases`, and pack two versions into
+		/// it before an installed copy checks. <b>Never set this variable in a build that
+		/// reaches a user.</b>
+		/// </summary>
+		public const string LocalFeedEnvironmentVariable = "BMM_LOCAL_UPDATE_FEED";
+
 		private readonly UpdateManager _manager;
 
 		public UpdateService()
 		{
+			var localFeed = Environment.GetEnvironmentVariable(LocalFeedEnvironmentVariable);
+
 			// No access token.
 			//
 			// GitHub allows 60 requests each hour for one address without one. A person presses
@@ -29,7 +43,9 @@ namespace BlackboxModManager.App.Services
 			//
 			// Never ship a token to raise the limit. The token would reach every user, and a
 			// token in a public build is a token that somebody else uses.
-			var source = new GithubSource(RepositoryUrl, null, this.WantsPrerelease());
+			IUpdateSource source = string.IsNullOrEmpty(localFeed)
+				? new GithubSource(RepositoryUrl, null, this.WantsPrerelease())
+				: new SimpleFileSource(new DirectoryInfo(localFeed));
 
 			this._manager = new UpdateManager(source);
 		}
