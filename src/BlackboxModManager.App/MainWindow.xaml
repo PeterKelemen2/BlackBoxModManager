@@ -24,6 +24,39 @@
     </Grid.RowDefinitions>
 
     <!--
+      The corner accent. One tiny, opaque, per-game color image, already blended over
+      SurfaceBase in MainViewModel.RefreshHeroLook (Theme/HeroPalette.cs) — never a live
+      Opacity, which docs/roadmap/10-dark-theme.md, Part A bans under the Wine software
+      rasterizer.
+
+      This is the first child of the grid on purpose. WPF paints panel children in
+      declaration order, so painting first here puts the accent right above the window
+      background and under every row that follows, with no Panel.ZIndex.
+
+      BitmapScalingMode gives the corner its blur: the source image is 64x20, and the Fant
+      resampler turns that into a soft gradient instead of a blocky upscale. This is the
+      blur, not a BlurEffect, which the same doc bans for the same per-frame cost.
+
+      IsHitTestVisible is false because the accent sits under the game/profile bar's
+      bounding box and must never intercept a click meant for it.
+
+      Margin cancels out DragLayer's own Margin="12". A child of that grid otherwise starts
+      12 pixels in from the real corner of the window, and this accent has to sit at the
+      window's actual top-left corner, not the content area's.
+    -->
+    <Image
+      Grid.RowSpan="5"
+      Width="480"
+      Height="150"
+      Margin="-12,-12,0,0"
+      HorizontalAlignment="Left"
+      VerticalAlignment="Top"
+      IsHitTestVisible="False"
+      RenderOptions.BitmapScalingMode="HighQuality"
+      Source="{Binding HeroCornerImage}"
+      Stretch="UniformToFill" />
+
+    <!--
       The bar. One row holds the game, the profile, and the way into the settings.
 
       Step 12 replaced a Game card of five status lines and four buttons, plus a profile row
@@ -125,7 +158,10 @@
         The card carries no header. A row list of mods with a drag handle needs no caption,
         and the empty state below names the panel on the one screen where the rows cannot.
       -->
-      <GroupBox Grid.Column="0" Padding="4">
+      <GroupBox
+        Grid.Column="0"
+        Padding="4"
+        Background="{StaticResource SurfaceRaisedTranslucent}">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -320,7 +356,7 @@
         Two headers carry state. Conflicts shows a count, and Loader shows a dot while a
         loader contest has no answer. Both draw Path geometry and no glyph font.
       -->
-      <TabControl Grid.Column="2">
+      <TabControl Grid.Column="2" Background="{StaticResource SurfaceRaisedTranslucent}">
         <!--  The variants of a Binary mod, and the questions that its script asks.  -->
         <TabItem Header="Mod">
           <Grid Margin="6">

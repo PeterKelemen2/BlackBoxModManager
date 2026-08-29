@@ -5,7 +5,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using BlackboxModManager.App.Services;
+using BlackboxModManager.App.Theme;
 using BlackboxModManager.App.Views;
 using BlackboxModManager.Core;
 using BlackboxModManager.Core.Asi;
@@ -128,7 +131,10 @@ namespace BlackboxModManager.App.ViewModels
 			this._selectedGame = this._game;
 
 			// The field and not the property. The setter saves the settings file, and the
-			// settings file is where this value just came from.
+			// settings file is where this value just came from. The property setter's other
+			// work still needs to run once, by hand.
+			this.RefreshHeroLook(this._game);
+
 			this._fullVerify = this._settings.FullVerify;
 			this._checkForUpdatesAtStart = this._settings.CheckForUpdatesAtStart;
 
@@ -500,9 +506,31 @@ namespace BlackboxModManager.App.ViewModels
 			this.OnPropertyChanged(nameof(this.Game));
 			this.Write($"The window now manages {definition.DisplayName}.");
 
+			this.RefreshHeroLook(definition);
+
 			this.SelectedMod = null;
 			this.RefreshGame();
 			this.RefreshProfiles();
+		}
+
+		private BitmapSource _heroCornerImage;
+
+		/// <summary>
+		/// The selected game's corner accent, already blended over the window background.
+		/// See Theme/HeroPalette.cs — this is a plain opaque bitmap, never a live
+		/// <c>Opacity</c>.
+		/// </summary>
+		public BitmapSource HeroCornerImage
+		{
+			get => this._heroCornerImage;
+			private set => this.SetProperty(ref this._heroCornerImage, value);
+		}
+
+		private void RefreshHeroLook(GameDefinition definition)
+		{
+			Color surfaceBase = ((SolidColorBrush)Application.Current.Resources["SurfaceBase"]).Color;
+
+			this.HeroCornerImage = HeroPalette.CornerFor(definition.Game, definition.HeroImage, surfaceBase);
 		}
 
 		private ModRowViewModel _selectedMod;

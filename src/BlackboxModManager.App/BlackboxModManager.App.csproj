@@ -53,6 +53,15 @@
          ApplicationIcon below sets the icon of the .exe itself, a separate embed. -->
     <Resource Include="Assets\icon.ico" />
     <Resource Include="Assets\icon.png" />
+    <!-- One tiny (64x20), opaque dominant-color image per game. Each one is the source of
+         the top-left corner accent; its own small size is what blurs it once the UI scales
+         it up. A pack URI reads a Resource, the same as the fonts and the icon above. -->
+    <Resource Include="Assets\GameImages\u_colors.png" />
+    <Resource Include="Assets\GameImages\u2_colors.png" />
+    <Resource Include="Assets\GameImages\mw_colors.png" />
+    <Resource Include="Assets\GameImages\c_colors.png" />
+    <Resource Include="Assets\GameImages\ps_colors.png" />
+    <Resource Include="Assets\GameImages\uc_colors.png" />
   </ItemGroup>
 
   <ItemGroup>

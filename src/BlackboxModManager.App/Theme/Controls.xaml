@@ -865,13 +865,17 @@
     the mod list and this panel match across the splitter. Change both together.
   -->
   <Style TargetType="TabControl">
-    <Setter Property="Background" Value="Transparent" />
+    <!--
+      A Setter default, not a hardcoded value in the template below. MainWindow's TabControl
+      binds its own Background to a per-game container tint. See Theme/HeroPalette.cs.
+    -->
+    <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="TabControl">
           <Border
-            Background="{StaticResource SurfaceRaised}"
+            Background="{TemplateBinding Background}"
             BorderBrush="{StaticResource BorderDefault}"
             BorderThickness="1"
             CornerRadius="{StaticResource RadiusCard}">
@@ -1070,6 +1074,13 @@
   -->
   <Style TargetType="GroupBox">
     <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    <!--
+      A Setter default, not a hardcoded value in the template below. A GroupBox that binds
+      its own Background — MainWindow's mod-list card, to a per-game container tint — needs
+      the template to read that value instead of always drawing SurfaceRaised. See
+      Theme/HeroPalette.cs.
+    -->
+    <Setter Property="Background" Value="{StaticResource SurfaceRaised}" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="GroupBox">
@@ -1090,7 +1101,7 @@
             <Border
               Grid.Row="1"
               Padding="{TemplateBinding Padding}"
-              Background="{StaticResource SurfaceRaised}"
+              Background="{TemplateBinding Background}"
               BorderBrush="{StaticResource BorderDefault}"
               BorderThickness="1"
               CornerRadius="{StaticResource RadiusCard}">

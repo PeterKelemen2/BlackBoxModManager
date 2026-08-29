@@ -22,6 +22,16 @@
      <SolidColorBrush x:Key="AccentHover" Color="#669EFF" />
      <SolidColorBrush x:Key="AccentPressed" Color="#3A78E0" />
 
+     <!--
+          SurfaceRaised with its alpha lowered. The mod-list card and the tab strip's card
+          use this instead of SurfaceRaised, so the hero corner accent (MainWindow.xaml)
+          shows through wherever a card sits over it. This is the one deliberate exception
+          to "drop Opacity as a color tool" below — the two cards it applies to redraw
+          rarely, not per frame, and the alpha sits on the fill alone, so a border and its
+          text stay crisp.
+     -->
+     <SolidColorBrush x:Key="SurfaceRaisedTranslucent" Color="#BF1E2127" />
+
      <SolidColorBrush x:Key="SuccessDefault" Color="#3FB950" />
      <SolidColorBrush x:Key="SuccessHover" Color="#57C767" />
      <SolidColorBrush x:Key="SuccessPressed" Color="#2F9C3E" />

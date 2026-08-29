@@ -56,6 +56,14 @@ namespace BlackboxModManager.Core.Games
 		public required string DisplayName { get; init; }
 
 		/// <summary>
+		/// The file name of this game's dominant-color image, under
+		/// <c>Assets/GameImages/</c> in the App project. Each one is a tiny, opaque image
+		/// that holds only the game's cover-art colors, blurred by its own small size once
+		/// the UI scales it up. See docs/roadmap for the corner-accent feature.
+		/// </summary>
+		public required string HeroImage { get; init; }
+
+		/// <summary>
 		/// The game executable, relative to the install root. The validator needs this file.
 		/// </summary>
 		public required string Executable { get; init; }
@@ -116,6 +124,7 @@ namespace BlackboxModManager.Core.Games
 			{
 				Game = GameINT.Underground2,
 				DisplayName = "Need for Speed Underground 2",
+				HeroImage = "u2_colors.png",
 				Executable = "SPEED2.EXE",
 
 				// GLOBALB.LZC reads as GlobalB.lzc on the disk. The lookup ignores letter
@@ -140,6 +149,7 @@ namespace BlackboxModManager.Core.Games
 			{
 				Game = GameINT.Underground1,
 				DisplayName = "Need for Speed Underground",
+				HeroImage = "u_colors.png",
 
 				// Most Wanted names its executable speed.exe. A Windows lookup ignores
 				// letter case, so the two names collide there. GameInstallLocator.Identify
@@ -168,6 +178,7 @@ namespace BlackboxModManager.Core.Games
 			{
 				Game = GameINT.Carbon,
 				DisplayName = "Need for Speed Carbon",
+				HeroImage = "c_colors.png",
 				Executable = "NFSC.exe",
 				MarkerFiles = new[] { "GLOBAL/GLOBALA.BUN", "GLOBAL/GLOBALB.BUN" },
 				MarkerDirectories = new[] { "CARS", "TRACKS", "FRONTEND" },
@@ -182,6 +193,7 @@ namespace BlackboxModManager.Core.Games
 			{
 				Game = GameINT.MostWanted,
 				DisplayName = "Need for Speed Most Wanted",
+				HeroImage = "mw_colors.png",
 				Executable = "speed.exe",
 
 				// GLOBALA.BUN and GLOBALB.BUN alone also sit in a real Underground 1 install,
@@ -201,6 +213,7 @@ namespace BlackboxModManager.Core.Games
 			{
 				Game = GameINT.Prostreet,
 				DisplayName = "Need for Speed ProStreet",
+				HeroImage = "ps_colors.png",
 
 				// Undercover names the identical executable, not only the same name under a
 				// case-insensitive lookup. This machine holds no ProStreet install, so this
@@ -221,6 +234,7 @@ namespace BlackboxModManager.Core.Games
 			{
 				Game = GameINT.Undercover,
 				DisplayName = "Need for Speed Undercover",
+				HeroImage = "uc_colors.png",
 
 				// ProStreet names the identical executable, and a Windows lookup does not even
 				// need to ignore letter case here. ritalin.bin, cars_vault.BIN, NFSGD.BIN, and
