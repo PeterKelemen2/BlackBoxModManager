@@ -4,6 +4,7 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:ui="clr-namespace:BlackboxModManager.App.Theme"
   Title="Blackbox Mod Manager"
+  Icon="Assets/icon.ico"
   Width="1040"
   Height="700"
   MinWidth="820"

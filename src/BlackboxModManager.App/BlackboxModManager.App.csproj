@@ -23,6 +23,7 @@
          collection is the wrong mode for that shape of work. -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -48,6 +49,10 @@
     <!-- The log used IBM Plex Sans before JetBrains Mono. The file stays as a spare, and
          LogFontFamilyAlternate names it. -->
     <Resource Include="Fonts\IBMPlexSans-Regular.ttf" />
+    <!-- The window icon. A pack URI reads this as a Resource, the same as the fonts above.
+         ApplicationIcon below sets the icon of the .exe itself, a separate embed. -->
+    <Resource Include="Assets\icon.ico" />
+    <Resource Include="Assets\icon.png" />
   </ItemGroup>
 
   <ItemGroup>
