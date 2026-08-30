@@ -133,6 +133,10 @@ namespace BlackboxModManager.App.ViewModels
 			// The field and not the property. The setter saves the settings file, and the
 			// settings file is where this value just came from. The property setter's other
 			// work still needs to run once, by hand.
+			//
+			// The look comes first. RefreshHeroLook reads it, and a call before this line
+			// would draw the corner accent whatever the file says.
+			this._heroBackground = StoredHeroBackground(this._settings);
 			this.RefreshHeroLook(this._game);
 
 			this._fullVerify = this._settings.FullVerify;
@@ -174,6 +178,19 @@ namespace BlackboxModManager.App.ViewModels
 			}
 
 			return GameCatalog.All[0];
+		}
+
+		/// <summary>
+		/// The window look of the settings file, or the corner accent. A missing key and a
+		/// name that this build does not hold both fall back to the corner accent, which is
+		/// what every build before this one drew.
+		/// </summary>
+		private static HeroBackground StoredHeroBackground(Settings settings)
+		{
+			return Enum.TryParse(settings.HeroBackground, ignoreCase: true, out HeroBackground look)
+				&& Enum.IsDefined(typeof(HeroBackground), look)
+					? look
+					: HeroBackground.Corner;
 		}
 
 		/// <summary>
@@ -268,6 +285,54 @@ namespace BlackboxModManager.App.ViewModels
 		partial void OnCheckForUpdatesAtStartChanged(bool value)
 		{
 			this.SaveSettings(settings => settings.CheckForUpdatesAtStart = value);
+		}
+
+		/// <summary>
+		/// Which look the window draws behind itself. The settings window sets it, and the
+		/// three attributes below keep the three radio buttons of that window in step.
+		/// </summary>
+		[ObservableProperty]
+		[NotifyPropertyChangedFor(nameof(HeroBackgroundIsOff))]
+		[NotifyPropertyChangedFor(nameof(HeroBackgroundIsCorner))]
+		[NotifyPropertyChangedFor(nameof(HeroBackgroundIsFull))]
+		private HeroBackground _heroBackground;
+
+		/// <summary>
+		/// Keeps the answer of the config window, in the same way as FullVerify, and draws
+		/// the new look at once. The config window shares this view model, so the main
+		/// window changes while that window is still open.
+		/// </summary>
+		partial void OnHeroBackgroundChanged(HeroBackground value)
+		{
+			this.SaveSettings(settings => settings.HeroBackground = value.ToString());
+			this.RefreshHeroLook(this._game);
+		}
+
+		/// <summary>
+		/// The look as three booleans, so that three radio buttons can bind to it. This
+		/// matches the shape that BinaryRouteIsCli already uses for a toggle.
+		///
+		/// <b>Each setter acts on true alone.</b> WPF pushes false into the two buttons that
+		/// lose the group, and a setter that answered false would fight the one that won.
+		/// </summary>
+		public bool HeroBackgroundIsOff
+		{
+			get => this.HeroBackground == HeroBackground.Off;
+			set { if (value) this.HeroBackground = HeroBackground.Off; }
+		}
+
+		/// <summary>The corner accent, in the same way as HeroBackgroundIsOff.</summary>
+		public bool HeroBackgroundIsCorner
+		{
+			get => this.HeroBackground == HeroBackground.Corner;
+			set { if (value) this.HeroBackground = HeroBackground.Corner; }
+		}
+
+		/// <summary>The full wash, in the same way as HeroBackgroundIsOff.</summary>
+		public bool HeroBackgroundIsFull
+		{
+			get => this.HeroBackground == HeroBackground.Full;
+			set { if (value) this.HeroBackground = HeroBackground.Full; }
 		}
 
 		/// <summary>
@@ -519,6 +584,8 @@ namespace BlackboxModManager.App.ViewModels
 		/// The selected game's corner accent, already blended over the window background.
 		/// See Theme/HeroPalette.cs — this is a plain opaque bitmap, never a live
 		/// <c>Opacity</c>.
+		///
+		/// It is null in every look but <see cref="HeroBackground.Corner"/>.
 		/// </summary>
 		public BitmapSource HeroCornerImage
 		{
@@ -526,11 +593,40 @@ namespace BlackboxModManager.App.ViewModels
 			private set => this.SetProperty(ref this._heroCornerImage, value);
 		}
 
+		private BitmapSource _heroFullImage;
+
+		/// <summary>
+		/// The selected game's full-window wash, in the same way as
+		/// <see cref="HeroCornerImage"/>. It is null in every look but
+		/// <see cref="HeroBackground.Full"/>.
+		/// </summary>
+		public BitmapSource HeroFullImage
+		{
+			get => this._heroFullImage;
+			private set => this.SetProperty(ref this._heroFullImage, value);
+		}
+
+		/// <summary>
+		/// Puts the image of one game and the current look into the property that draws it,
+		/// and nulls the other one.
+		///
+		/// <b>Null is how a look hides.</b> An Image with no Source draws nothing and answers
+		/// no hit test, so MainWindow needs no Visibility, no trigger, and no converter for
+		/// the two elements that these properties feed.
+		/// </summary>
 		private void RefreshHeroLook(GameDefinition definition)
 		{
 			Color surfaceBase = ((SolidColorBrush)Application.Current.Resources["SurfaceBase"]).Color;
+			HeroBackground look = this.HeroBackground;
 
-			this.HeroCornerImage = HeroPalette.CornerFor(definition.Game, definition.HeroImage, surfaceBase);
+			BitmapSource image = HeroPalette.ImageFor(
+				definition.Game,
+				look,
+				definition.HeroImage,
+				surfaceBase);
+
+			this.HeroCornerImage = look == HeroBackground.Corner ? image : null;
+			this.HeroFullImage = look == HeroBackground.Full ? image : null;
 		}
 
 		private ModRowViewModel _selectedMod;

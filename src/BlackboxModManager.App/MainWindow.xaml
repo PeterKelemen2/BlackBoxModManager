@@ -24,6 +24,36 @@
     </Grid.RowDefinitions>
 
     <!--
+      The full wash. The same per-game color image as the corner accent below, blended over
+      SurfaceBase at one weight for every pixel and with no fade. Settings holds which of the
+      three looks the window draws. See Theme/HeroBackground.cs and
+      docs/roadmap/18-hero-background.md.
+
+      <b>Both this element and the accent below draw only in their own look.</b> MainViewModel
+      nulls the Source of the other one. An Image with no Source draws nothing and answers no
+      hit test, so neither element needs a Visibility, a trigger, or a converter.
+
+      This is the first child of the grid, above the accent, for the reason that the accent
+      records below: WPF paints panel children in declaration order. The wash covers the whole
+      window, so it goes under everything, the accent included.
+
+      Margin cancels DragLayer's own Margin="12" on all four sides, so the wash reaches the
+      real edges of the window. The accent cancels the top and the left alone, because it
+      keeps the top-left corner.
+
+      Stretch is Fill and not UniformToFill. The source is a wide, short image and the window
+      is not, and an even wash carries no shape that a crop could protect. Fill also keeps
+      this element free of the resolution of the source.
+    -->
+    <Image
+      Grid.RowSpan="5"
+      Margin="-12"
+      IsHitTestVisible="False"
+      RenderOptions.BitmapScalingMode="HighQuality"
+      Source="{Binding HeroFullImage}"
+      Stretch="Fill" />
+
+    <!--
       The corner accent. One tiny, opaque, per-game color image, already blended over
       SurfaceBase in MainViewModel.RefreshHeroLook (Theme/HeroPalette.cs) — never a live
       Opacity, which docs/roadmap/10-dark-theme.md, Part A bans under the Wine software
@@ -33,9 +63,14 @@
       declaration order, so painting first here puts the accent right above the window
       background and under every row that follows, with no Panel.ZIndex.
 
-      BitmapScalingMode gives the corner its blur: the source image is 64x20, and the Fant
+      BitmapScalingMode gives the corner its blur: the source image is small, and the Fant
       resampler turns that into a soft gradient instead of a blocky upscale. This is the
       blur, not a BlurEffect, which the same doc bans for the same per-frame cost.
+
+      <b>Width alone sets the size, and the height follows the source.</b> Stretch="Uniform"
+      with no Height makes the element as tall as the shape of the image asks for, so a game
+      image of any resolution draws the same accent. A hardcoded Height would fix one aspect
+      ratio, and UniformToFill with no Height would grow the element to the whole window.
 
       IsHitTestVisible is false because the accent sits under the game/profile bar's
       bounding box and must never intercept a click meant for it.
@@ -47,14 +82,13 @@
     <Image
       Grid.RowSpan="5"
       Width="480"
-      Height="150"
       Margin="-12,-12,0,0"
       HorizontalAlignment="Left"
       VerticalAlignment="Top"
       IsHitTestVisible="False"
       RenderOptions.BitmapScalingMode="HighQuality"
       Source="{Binding HeroCornerImage}"
-      Stretch="UniformToFill" />
+      Stretch="Uniform" />
 
     <!--
       The bar. One row holds the game, the profile, and the way into the settings.
@@ -946,8 +980,16 @@
       The tooltip carries the three paths that step 12 took off the main window. It names its
       own DataContext, because a ToolTip sits outside the visual tree in the same way that a
       ContextMenu does.
+
+      <b>The background is Transparent and never the SurfaceBase of the theme.</b> The style
+      in Theme/Controls.xaml paints that bar, and an opaque bar cuts a solid strip across the
+      bottom of the full wash above. The window itself paints SurfaceBase, so the bar looks
+      the same as before in the other two looks.
     -->
-    <StatusBar Grid.Row="4" Margin="0,8,0,0">
+    <StatusBar
+      Grid.Row="4"
+      Margin="0,8,0,0"
+      Background="Transparent">
       <StatusBarItem>
         <TextBlock Text="{Binding Status}" />
       </StatusBarItem>

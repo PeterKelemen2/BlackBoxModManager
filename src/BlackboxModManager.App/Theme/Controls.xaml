@@ -322,6 +322,66 @@
   </Style>
 
   <!--
+    The radio button. The check box above with a round box and a drawn dot.
+
+    This style needs no key, and that is the difference from TogglePill below. No template of
+    this file names a RadioButton, so an implicit style reaches the settings window alone.
+
+    A radio button holds no third state, so this needs no IsChecked="{x:Null}" trigger.
+  -->
+  <Style TargetType="RadioButton">
+    <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+    <Setter Property="FontFamily" Value="{StaticResource UiFontFamily}" />
+    <Setter Property="FontSize" Value="{StaticResource FontSizeBody}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <StackPanel Orientation="Horizontal">
+            <Border
+              x:Name="Box"
+              Width="16"
+              Height="16"
+              VerticalAlignment="Center"
+              Background="{StaticResource SurfaceRaised}"
+              BorderBrush="{StaticResource BorderDefault}"
+              BorderThickness="1"
+              CornerRadius="8">
+              <!--
+                An Ellipse and not the Path of the check box. A dot needs no geometry, and an
+                Ellipse of a fixed size centers itself with no help.
+              -->
+              <Ellipse
+                x:Name="Dot"
+                Width="8"
+                Height="8"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Fill="{StaticResource OnAccent}"
+                Visibility="Collapsed" />
+            </Border>
+            <ContentPresenter Margin="6,0,0,0" VerticalAlignment="Center" />
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Box" Property="Background" Value="{StaticResource AccentDefault}" />
+              <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource AccentDefault}" />
+              <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Foreground" Value="{StaticResource TextDisabled}" />
+              <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BorderDefault}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
     The toggle pill. It carries a key on purpose, because ComboBoxToggleButtonStyle is a
     ToggleButton too and the combo box template names it. An implicit style for
     ToggleButton would reach the arrow of every combo box. See

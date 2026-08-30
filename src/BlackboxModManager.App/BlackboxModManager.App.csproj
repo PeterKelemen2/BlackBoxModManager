@@ -53,9 +53,12 @@
          ApplicationIcon below sets the icon of the .exe itself, a separate embed. -->
     <Resource Include="Assets\icon.ico" />
     <Resource Include="Assets\icon.png" />
-    <!-- One tiny (64x20), opaque dominant-color image per game. Each one is the source of
-         the top-left corner accent; its own small size is what blurs it once the UI scales
-         it up. A pack URI reads a Resource, the same as the fonts and the icon above. -->
+    <!-- One small, opaque dominant-color image per game. Each one is the source of the
+         corner accent and of the full-window wash. Its own small size is what blurs it once
+         the UI scales it up. No code reads the resolution of these files, so a replacement
+         may hold any size. Keep the shape wide and short, because the corner accent takes
+         its height from the shape. See docs/roadmap/18-hero-background.md. A pack URI reads
+         a Resource, the same as the fonts and the icon above. -->
     <Resource Include="Assets\GameImages\u_colors.png" />
     <Resource Include="Assets\GameImages\u2_colors.png" />
     <Resource Include="Assets\GameImages\mw_colors.png" />

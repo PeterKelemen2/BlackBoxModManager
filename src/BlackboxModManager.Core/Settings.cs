@@ -94,6 +94,17 @@ namespace BlackboxModManager.Core
 		public bool CheckForUpdatesAtStart { get; set; }
 
 		/// <summary>
+		/// Which look the window draws behind itself with the color image of the selected
+		/// game. The App project owns the names, in the same way that it owns the names of
+		/// <see cref="LastGame"/>. This layer holds the string alone.
+		///
+		/// This field needs no migration. An older file holds no such key, a missing key
+		/// reads as null, and the window draws the corner accent for null. That is the look
+		/// that every build before this one drew, so the Version above stays at 2.
+		/// </summary>
+		public string HeroBackground { get; set; }
+
+		/// <summary>
 		/// The directory that the last folder import read. The next folder import starts the
 		/// picker there.
 		///

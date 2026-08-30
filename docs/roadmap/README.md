@@ -27,6 +27,7 @@ Read `../../project_brief.md` first. The brief holds the format research and the
 | 15   | [15-binary-cli-route.md](15-binary-cli-route.md) | Needs a real Binary run.       |
 | 16   | [16-release-and-update.md](16-release-and-update.md) | Needs a Windows install run. |
 | 17   | [17-ui-consistency.md](17-ui-consistency.md)     | Nothing. Look and input only.  |
+| 18   | [18-hero-background.md](18-hero-background.md)   | Nothing. Look only.            |
 | 90   | [90-texmod.md](90-texmod.md)                     | Nothing. Explicitly last.      |
 
 Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6, 8, and 9 are done. **The success criterion of the project brief passes.**
@@ -38,6 +39,8 @@ Steps 1 to 3 prove that the foundation works. **All three pass.** Steps 4, 5, 6,
 **Step 12 empties the main window.** Every path setting moves into a config window, the seven buttons of the mod toolbar become four glyphs, and the two solid action buttons take a colored edge instead of a fill. It changes no behavior either. **It is built and checked on Windows, and no part of it ran under Wine yet.** Read the Results section of [12-minimal-ui.md](12-minimal-ui.md).
 
 **Step 17 removes the duplicate surfaces that steps 10 to 12 left.** The Folders window repeats three groups of the settings window, the word `Settings` names two different panels, and the mod list takes a drop on a row and nowhere else. It changes no deploy rule. Read [17-ui-consistency.md](17-ui-consistency.md).
+
+**Step 18 gives the window three looks for the per-game color image.** The corner accent of step 17 stays the default. The settings window now also offers no image at all, and an even wash of the game colors across the whole window. It changes no deploy rule. Read [18-hero-background.md](18-hero-background.md).
 
 **Step 14 makes a large container deploy finish.** A deploy of `NFSMWRV-1024x-Advanced` for Most Wanted pinned every core and never finished. It now takes 47 seconds and the verify passes. Read the Step 14 section under "Completed".
 

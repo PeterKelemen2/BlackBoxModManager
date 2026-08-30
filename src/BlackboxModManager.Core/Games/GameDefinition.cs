@@ -59,7 +59,7 @@ namespace BlackboxModManager.Core.Games
 		/// The file name of this game's dominant-color image, under
 		/// <c>Assets/GameImages/</c> in the App project. Each one is a tiny, opaque image
 		/// that holds only the game's cover-art colors, blurred by its own small size once
-		/// the UI scales it up. See docs/roadmap for the corner-accent feature.
+		/// the UI scales it up. See docs/roadmap/18-hero-background.md.
 		/// </summary>
 		public required string HeroImage { get; init; }
 

@@ -398,6 +398,60 @@
         </GroupBox>
 
         <!--
+          The look of the window. This group changes no deployed byte, and it is the only
+          group here that does not.
+
+          Three radio buttons and no toggle, because the answer holds three values. The two
+          groups above hold two values each, and a TogglePill carries those. See
+          docs/roadmap/18-hero-background.md.
+        -->
+        <GroupBox
+          Margin="0,0,0,12"
+          Padding="10"
+          Header="Appearance">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+              <TextBlock Text="Background image" />
+              <TextBlock
+                Margin="0,2,0,0"
+                Style="{StaticResource Hint}"
+                Text="The color of the selected game, behind the window. Corner puts it in the top left corner alone. Full spreads it across the whole window."
+                TextWrapping="Wrap" />
+            </StackPanel>
+            <!--
+              GroupName is not enough on its own here. Each button binds to a boolean of its
+              own, and every one of those setters acts on true alone. See MainViewModel.
+            -->
+            <StackPanel
+              Grid.Column="1"
+              VerticalAlignment="Top"
+              Orientation="Horizontal">
+              <RadioButton
+                Margin="0,0,10,0"
+                Content="Off"
+                GroupName="HeroBackground"
+                IsChecked="{Binding HeroBackgroundIsOff, Mode=TwoWay}"
+                ToolTip="Draw no image." />
+              <RadioButton
+                Margin="0,0,10,0"
+                Content="Corner"
+                GroupName="HeroBackground"
+                IsChecked="{Binding HeroBackgroundIsCorner, Mode=TwoWay}"
+                ToolTip="One accent in the top left corner, which fades out." />
+              <RadioButton
+                Content="Full"
+                GroupName="HeroBackground"
+                IsChecked="{Binding HeroBackgroundIsFull, Mode=TwoWay}"
+                ToolTip="An even wash across the whole window." />
+            </StackPanel>
+          </Grid>
+        </GroupBox>
+
+        <!--
           Updates. The version sits here and in the status bar, and the log names it at every
           start. A user who reports a defect pastes that log.
         -->
