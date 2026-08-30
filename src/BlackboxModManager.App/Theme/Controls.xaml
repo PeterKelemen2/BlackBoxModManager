@@ -10,6 +10,16 @@
   -->
 
   <!--
+    The dotted focus rectangle of Windows. A press of Alt turns the keyboard cues on, and
+    every control that keeps the default focus visual then draws that rectangle. This key
+    holds the style that WPF looks up for it. An empty template removes the rectangle in
+    the whole application, so a new control does not need its own FocusVisualStyle setter.
+  -->
+  <Style x:Key="{x:Static SystemParameters.FocusVisualStyleKey}">
+    <Setter Property="Control.Template" Value="{x:Null}" />
+  </Style>
+
+  <!--
     The window. This applies to every Window, including every dialog of Part F, because
     Application.Resources merges this dictionary. A dialog does not need to repeat it.
   -->
