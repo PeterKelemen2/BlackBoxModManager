@@ -1,7 +1,20 @@
-# BlackBox Mod Manager
+<p align="center">
+  <img src="assets/icon.png" alt="The application icon" width="128">
+</p>
+
+<h1 align="center">BlackBox Mod Manager</h1>
 
 A mod manager for the six Need for Speed games that EA Black Box developed. It installs mods
 into a staging copy of the game, verifies the result, and then swaps that copy into place.
+
+<p align="center">
+  <img src="assets/ui_screenshot.png"
+       alt="The main window. The mod list is on the left, and the options of the selected mod are on the right.">
+</p>
+
+<p align="center">
+  <em>The main window. It shows the mod list, the load order, and the options of the selected mod.</em>
+</p>
 
 > **This project is not affiliated with, authorized by, or endorsed by Electronic Arts Inc.**
 > Need for Speed and every game name below are trademarks of Electronic Arts Inc. This project
