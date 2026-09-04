@@ -280,7 +280,8 @@ namespace BlackboxModManager.Core.Deploy
 		/// <summary>
 		/// Puts the vanilla state back into the game directory.
 		/// </summary>
-		public void Revert(GameInstall install, Action<string> log = null)
+		public void Revert(GameInstall install, Action<string> log = null,
+			CancellationToken cancellation = default)
 		{
 			if (install is null) throw new ArgumentNullException(nameof(install));
 
@@ -296,8 +297,13 @@ namespace BlackboxModManager.Core.Deploy
 
 			// Build the replacement first. A revert must never move the vanilla copy
 			// itself, because a failure would then leave no baseline.
+			// A cancel stops the build and nothing else. The swap is two moves, and a stop
+			// between them would leave the game directory absent.
 			write("Build the vanilla copy for the swap.");
-			TreeReplicator.Build(workspace.VanillaDirectory, workspace.StagingDirectory, write);
+			TreeReplicator.Build(workspace.VanillaDirectory, workspace.StagingDirectory, write,
+				linkFiles: true, cancellation: cancellation);
+
+			cancellation.ThrowIfCancellationRequested();
 
 			GameSwap.Swap(workspace, workspace.StagingDirectory, write);
 

@@ -55,7 +55,19 @@ namespace BlackboxModManager.Core.Staging
 			FileTree.Delete(aside);
 
 			log?.Invoke($"Move the game directory to {aside}.");
-			Move(live, aside);
+
+			try
+			{
+				Move(live, aside);
+			}
+			catch (Exception ex)
+			{
+				// The game directory did not move, so it still holds what it held before.
+				// A locked file is the common cause. Name it, and stop.
+				throw new SwapException(
+					$"The game directory {live} did not move aside. The game directory did not change. " +
+					$"Close the game and every program that reads {live}, then deploy again. {ex.Message}", ex);
+			}
 
 			try
 			{
@@ -87,19 +99,25 @@ namespace BlackboxModManager.Core.Staging
 		/// <summary>
 		/// Moves a directory. A move across a volume copies every byte and then removes the
 		/// source, because the filesystem cannot rename across a volume.
+		///
+		/// <b>The volume test runs before the move and never after it.</b> A locked file
+		/// raises the same <c>IOException</c> as a move across a volume. Code that read
+		/// that exception as a cross-volume move then copied the tree and deleted the
+		/// source, and the source of the first move is the live game directory of the
+		/// user.
 		/// </summary>
 		private static void Move(string from, string to)
 		{
-			try
+			if (FileTree.SameVolume(from, to))
 			{
+				// A rename is the whole move. Every error leaves this method, because the
+				// source must stay where it is.
 				Directory.Move(from, to);
 				return;
 			}
-			catch (IOException)
-			{
-				// A move across a volume fails here. Fall through to the copy.
-			}
 
+			// The delete runs after the copy finished. A copy that throws leaves the source
+			// in place, and the caller reports the directory that holds the content.
 			TreeReplicator.Build(from, to);
 			FileTree.Delete(from);
 		}

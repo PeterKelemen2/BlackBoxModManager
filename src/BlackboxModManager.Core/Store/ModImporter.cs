@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using BlackboxModManager.Core.Files;
 using BlackboxModManager.Core.Mods;
 using Nikki.Core;
@@ -78,7 +79,7 @@ namespace BlackboxModManager.Core.Store
 		/// carries a note. A drop-in mod names no game, so it takes the game argument.
 		/// </summary>
 		public ModImportResult Import(string source, GameINT game, string displayName = null,
-			IProgress<ImportProgress> progress = null)
+			IProgress<ImportProgress> progress = null, CancellationToken cancellation = default)
 		{
 			if (String.IsNullOrWhiteSpace(source)) throw new ArgumentException("The source is empty.", nameof(source));
 
@@ -102,8 +103,10 @@ namespace BlackboxModManager.Core.Store
 
 				progress?.Report(new ImportProgress(ImportStage.Unpack));
 
-				if (isDirectory) CopyTree(full, scratch, progress);
-				else Unpack(full, scratch, progress);
+				if (isDirectory) CopyTree(full, scratch, progress, cancellation);
+				else Unpack(full, scratch, progress, cancellation);
+
+				cancellation.ThrowIfCancellationRequested();
 
 				progress?.Report(new ImportProgress(ImportStage.Inspect));
 
@@ -135,6 +138,10 @@ namespace BlackboxModManager.Core.Store
 
 				progress?.Report(new ImportProgress(ImportStage.Store, 0, content.Files.Count));
 
+				// The last safe point. Adopt moves the scratch directory into the store, and
+				// a stop inside that move would leave half a mod in the library.
+				cancellation.ThrowIfCancellationRequested();
+
 				InstalledMod mod = this._store.Adopt(contentRoot, manifest);
 
 				return new ModImportResult(mod, content);
@@ -146,6 +153,12 @@ namespace BlackboxModManager.Core.Store
 			catch (ArchiveReadException ex)
 			{
 				throw new ModImportException(ex.Message, full, ex);
+			}
+			catch (OperationCanceledException)
+			{
+				// A cancel is what the user asked for. The finally block below removes the
+				// scratch directory, so the store holds no new mod.
+				throw;
 			}
 			catch (Exception ex)
 			{
@@ -166,7 +179,7 @@ namespace BlackboxModManager.Core.Store
 		}
 
 		private static void Unpack(string archivePath, string scratch,
-			IProgress<ImportProgress> progress)
+			IProgress<ImportProgress> progress, CancellationToken cancellation)
 		{
 			if (!ArchiveExtractor.LooksLikeArchive(archivePath))
 			{
@@ -176,7 +189,7 @@ namespace BlackboxModManager.Core.Store
 				return;
 			}
 
-			ArchiveExtractor.Extract(archivePath, scratch, progress);
+			ArchiveExtractor.Extract(archivePath, scratch, progress, cancellation);
 		}
 
 		/// <summary>
@@ -249,7 +262,7 @@ namespace BlackboxModManager.Core.Store
 		/// source still reaches the target, because the first loop creates every directory.
 		/// </summary>
 		private static void CopyTree(string source, string target,
-			IProgress<ImportProgress> progress = null)
+			IProgress<ImportProgress> progress = null, CancellationToken cancellation = default)
 		{
 			Directory.CreateDirectory(target);
 
@@ -264,6 +277,8 @@ namespace BlackboxModManager.Core.Store
 
 			foreach (string file in files)
 			{
+				cancellation.ThrowIfCancellationRequested();
+
 				File.Copy(file, Path.Combine(target, Path.GetRelativePath(source, file)), true);
 
 				++done;

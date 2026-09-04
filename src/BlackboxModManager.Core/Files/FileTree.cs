@@ -109,6 +109,34 @@ namespace BlackboxModManager.Core.Files
 		}
 
 		/// <summary>
+		/// Tests whether two paths sit on one volume.
+		///
+		/// A rename moves a directory on one volume. Across two volumes the filesystem
+		/// cannot rename, so a move copies every byte. <c>GameSwap</c> and
+		/// <c>GameWorkspace</c> both ask this question, and one method keeps the two
+		/// answers equal.
+		///
+		/// <b>A volume that Windows mounts into a folder gives a wrong answer.</b> The test
+		/// reads the path root, and a mounted folder carries the root of its parent. A
+		/// path that this method cannot read counts as another volume, because a copy is
+		/// slow and a rename that fails is not.
+		/// </summary>
+		public static bool SameVolume(string left, string right)
+		{
+			try
+			{
+				string a = Path.GetPathRoot(Path.GetFullPath(left));
+				string b = Path.GetPathRoot(Path.GetFullPath(right));
+
+				return String.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+			}
+			catch (Exception)
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
 		/// Tests whether one path is the other path, or sits inside it.
 		///
 		/// Call this before every destructive operation. A staging directory inside the

@@ -238,3 +238,22 @@ while (!manager.ProcessScript())
 if (manager.Errors.Any()) { /* failed deploy */ }
 string[] saveErrors = profile.Save();
 ```
+
+## 7-Zip switches for a link entry
+
+Verified against the `7z.exe` that `src/BlackboxModManager.App/7-Zip/` holds. The readme of that copy names version 26.01, and the program reports 26.02. The switches ran under Wine 11.16 against a 7z archive that holds one symbolic link to `..`.
+
+| Switch  | What the built-in help says          | What the run showed                                        |
+| ------- | ------------------------------------ | ---------------------------------------------------------- |
+| `-snl`  | store symbolic links as links        | Accepted. This is the default for an extraction.            |
+| `-snh`  | store hard links as links            | Accepted. This is the default for an extraction.            |
+| `-snl-` | The help lists no minus form.        | Accepted. 7-Zip creates no symbolic link.                   |
+| `-snh-` | The help lists no minus form.        | Accepted. 7-Zip creates no hard link.                       |
+| `-snld` | allow a dangerous link               | Accepted with no minus. `-snld-` fails with "Unsupported switch postfix". |
+
+`SevenZipTool.Extract` passes `-snl-` and `-snh-`. **The minus form works although the help does not list it.** Test both switches again after every update of the shipped 7-Zip.
+
+Two more results of the same run matter.
+
+1. **7-Zip 26 refuses a dangerous link by itself.** The default extraction reported `ERROR: Dangerous link path was ignored`, and it stopped with an exit code above 1. A link that stays inside the target directory raises no such error, so the default is not a guard.
+2. **SharpCompress does not report every link.** The reader gives `LinkTarget` for a tar entry. For a 7z that p7zip wrote, it reports no link target, and `Attrib` returns `0x00000020` with the unix mode of the high half removed. The base entry of SharpCompress throws `NotImplementedException` for `Attrib`. So the listing guard of `ArchiveExtractor.ReadListing` finds some links and not all of them, and `ArchiveExtractor` walks the target directory after the extraction for that reason.

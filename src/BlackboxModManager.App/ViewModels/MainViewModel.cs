@@ -1235,9 +1235,9 @@ namespace BlackboxModManager.App.ViewModels
 
 			try
 			{
-				await this.RunAsync($"Import {Path.GetFileName(source)}.", report =>
+				await this.RunAsync($"Import {Path.GetFileName(source)}.", (report, token) =>
 				{
-					ModImportResult result = this._importer.Import(source, game, null, progress);
+					ModImportResult result = this._importer.Import(source, game, null, progress, token);
 					added = result.Mod.Id;
 
 					report($"The import added \"{result.Mod.Name}\" of kind {result.Mod.Kind} " +
@@ -1709,11 +1709,90 @@ namespace BlackboxModManager.App.ViewModels
 		// ---------------------------------------------------------------- the ASI loader
 
 		/// <summary>
+		/// Counts the loader scans that this window started. Only the newest one writes the
+		/// panel. This follows the shape of <c>_conflictRun</c>.
+		/// </summary>
+		private int _loaderRun;
+
+		/// <summary>
 		/// Reads which mod supplies each ASI loader file. It writes nothing, so it runs after
 		/// every change of the enabled set.
+		///
+		/// The scan runs on a background thread and the result comes back later. Nothing
+		/// waits for it, because the loader panel is the only thing that it changes.
 		/// </summary>
 		private void RefreshLoaders()
 		{
+			_ = this.RefreshLoadersAsync();
+		}
+
+		/// <summary>
+		/// Reads the loader files on a background thread and shows the result.
+		///
+		/// <b>The scan is slow enough to freeze the window.</b> It opens the manifest of
+		/// every enabled mod, and it then walks the content directory of each one. Two
+		/// callers are hot. <c>OnModToggled</c> runs on every click of a checkbox, and
+		/// <c>ResyncOrder</c> runs on every drag and on every press of the two move buttons.
+		///
+		/// The scan reads a copy of the profile. The user can click again while it runs, and
+		/// a read of the live profile would then race the change.
+		/// </summary>
+		private async Task RefreshLoadersAsync()
+		{
+			int run = ++this._loaderRun;
+
+			this.Loaders.Clear();
+			this.LoaderHeader = String.Empty;
+			this.LoaderNeedsAnswer = false;
+
+			if (this._profile is null) return;
+
+			// Read the store and copy the profile here. Both belong to the window thread.
+			DeployService service = this.Service();
+			Profile snapshot;
+
+			try
+			{
+				snapshot = ProfileStore.Clone(this._profile);
+			}
+			catch (Exception ex)
+			{
+				this.LoaderHeader = $"The loader scan failed. {ex.Message}";
+				return;
+			}
+
+			ProxyPlan plan;
+
+			try
+			{
+				plan = await Task.Run(() => service.PlanLoaders(snapshot)).ConfigureAwait(true);
+			}
+			catch (Exception ex)
+			{
+				// A later click started another scan. That one writes the panel.
+				if (run != this._loaderRun) return;
+
+				this.LoaderHeader = $"The loader scan failed. {ex.Message}";
+				return;
+			}
+
+			if (run != this._loaderRun) return;
+
+			this.ApplyLoaderPlan(plan);
+		}
+
+		/// <summary>
+		/// Reads the loader files on the window thread and waits for the answer.
+		///
+		/// A deploy and the loader dialog both need the panel before the next line of code
+		/// runs. The wait costs the user nothing there, because a deploy takes minutes and a
+		/// dialog just closed.
+		/// </summary>
+		private void RefreshLoadersNow()
+		{
+			// A scan that still runs in the background must not overwrite this answer.
+			++this._loaderRun;
+
 			this.Loaders.Clear();
 			this.LoaderHeader = String.Empty;
 			this.LoaderNeedsAnswer = false;
@@ -1722,30 +1801,37 @@ namespace BlackboxModManager.App.ViewModels
 
 			try
 			{
-				ProxyPlan plan = new DeployService(this._store).PlanLoaders(this._profile);
-
-				foreach (ProxyContest contest in plan.Contests) this.Loaders.Add(new LoaderRowViewModel(contest));
-
-				foreach (string note in plan.Unmanaged) this.Write(note);
-
-				if (this.Loaders.Count == 0)
-				{
-					this.LoaderHeader = "No enabled mod ships an ASI loader.";
-					return;
-				}
-
-				// The tab strip draws a mark from this. A settled contest and an open one drew
-				// the same header until step 17, Part I.
-				this.LoaderNeedsAnswer = !plan.IsSettled;
-
-				this.LoaderHeader = plan.IsSettled
-					? $"{this.Loaders.Count} loader files, each with one supplier."
-					: "More than one mod supplies a loader file. Choose one, then deploy.";
+				this.ApplyLoaderPlan(this.Service().PlanLoaders(this._profile));
 			}
 			catch (Exception ex)
 			{
 				this.LoaderHeader = $"The loader scan failed. {ex.Message}";
 			}
+		}
+
+		/// <summary>Writes one loader plan into the panel. This runs on the window thread.</summary>
+		private void ApplyLoaderPlan(ProxyPlan plan)
+		{
+			this.Loaders.Clear();
+
+			foreach (ProxyContest contest in plan.Contests) this.Loaders.Add(new LoaderRowViewModel(contest));
+
+			foreach (string note in plan.Unmanaged) this.Write(note);
+
+			if (this.Loaders.Count == 0)
+			{
+				this.LoaderNeedsAnswer = false;
+				this.LoaderHeader = "No enabled mod ships an ASI loader.";
+				return;
+			}
+
+			// The tab strip draws a mark from this. A settled contest and an open one drew
+			// the same header until step 17, Part I.
+			this.LoaderNeedsAnswer = !plan.IsSettled;
+
+			this.LoaderHeader = plan.IsSettled
+				? $"{this.Loaders.Count} loader files, each with one supplier."
+				: "More than one mod supplies a loader file. Choose one, then deploy.";
 		}
 
 		/// <summary>
@@ -1760,7 +1846,7 @@ namespace BlackboxModManager.App.ViewModels
 		/// </summary>
 		private bool AskForLoaders()
 		{
-			this.RefreshLoaders();
+			this.RefreshLoadersNow();
 
 			foreach (LoaderRowViewModel row in this.Loaders)
 			{
@@ -1823,7 +1909,9 @@ namespace BlackboxModManager.App.ViewModels
 
 			this.Status = "The loader choice changed. Deploy to apply it.";
 
-			this.RefreshLoaders();
+			// AskForLoaders reads the panel on the line after its call to this method, so
+			// the scan cannot run in the background here.
+			this.RefreshLoadersNow();
 		}
 
 		// ---------------------------------------------------------------- conflicts
@@ -2035,7 +2123,7 @@ namespace BlackboxModManager.App.ViewModels
 				"Revert", destructive: true)) return;
 
 			await this.RunAsync("Revert to vanilla.",
-				report => this.Service().Revert(install, report), RunningWork.Revert);
+				(report, token) => this.Service().Revert(install, report, token), RunningWork.Revert);
 
 			this.RefreshDeployedState();
 		}
@@ -2554,16 +2642,11 @@ namespace BlackboxModManager.App.ViewModels
 		///
 		/// The kind names the operation for the buttons. Work carries that name while the
 		/// operation runs, and the button of a deploy or a revert draws a spinner from it.
-		/// </summary>
-		private Task RunAsync(string title, Action<Action<string>> work,
-			RunningWork kind = RunningWork.Other)
-		{
-			return this.RunAsync(title, (report, token) => work(report), kind);
-		}
-
-		/// <summary>
-		/// The same, for an operation that the user can cancel. The work delegate reads the
-		/// token and throws <c>OperationCanceledException</c> at its next safe point.
+		///
+		/// The work delegate reads the token and throws <c>OperationCanceledException</c> at
+		/// its next safe point. <b>Every run reports as cancelable, so every work delegate
+		/// takes the token.</b> An overload that dropped the token made the Cancel button lie
+		/// to the user for an import and for a revert. See step 19, Part 4.
 		/// </summary>
 		private Task RunAsync(string title, Action<Action<string>, CancellationToken> work,
 			RunningWork kind = RunningWork.Other)

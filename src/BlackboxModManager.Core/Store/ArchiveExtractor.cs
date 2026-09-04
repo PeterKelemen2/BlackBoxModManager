@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Threading;
 using BlackboxModManager.Core.Files;
 using SharpCompress.Archives;
 using SharpCompress.Common;
@@ -50,7 +51,7 @@ namespace BlackboxModManager.Core.Store
 		/// limits how often the report goes out.
 		/// </summary>
 		public static int Extract(string archivePath, string targetDirectory,
-			IProgress<ImportProgress> progress = null)
+			IProgress<ImportProgress> progress = null, CancellationToken cancellation = default)
 		{
 			if (String.IsNullOrWhiteSpace(archivePath)) throw new ArgumentException("The archive path is empty.", nameof(archivePath));
 			if (String.IsNullOrWhiteSpace(targetDirectory)) throw new ArgumentException("The target directory is empty.", nameof(targetDirectory));
@@ -64,8 +65,8 @@ namespace BlackboxModManager.Core.Store
 			Directory.CreateDirectory(target);
 
 			return String.Equals(Path.GetExtension(archivePath), ".zip", StringComparison.OrdinalIgnoreCase)
-				? ExtractZip(archivePath, target, progress)
-				: ExtractOther(archivePath, target, progress);
+				? ExtractZip(archivePath, target, progress, cancellation)
+				: ExtractOther(archivePath, target, progress, cancellation);
 		}
 
 		/// <summary>
@@ -76,7 +77,7 @@ namespace BlackboxModManager.Core.Store
 		/// archive that is otherwise good.
 		/// </summary>
 		private static int ExtractZip(string archivePath, string target,
-			IProgress<ImportProgress> progress)
+			IProgress<ImportProgress> progress, CancellationToken cancellation)
 		{
 			int written = 0;
 			var reporter = new StageReporter(progress, ImportStage.Unpack);
@@ -93,6 +94,8 @@ namespace BlackboxModManager.Core.Store
 
 				foreach (ZipArchiveEntry entry in archive.Entries)
 				{
+					cancellation.ThrowIfCancellationRequested();
+
 					// A directory entry carries an empty name. Its files create it.
 					if (String.IsNullOrEmpty(entry.Name)) continue;
 
@@ -112,6 +115,10 @@ namespace BlackboxModManager.Core.Store
 				}
 			}
 			catch (ArchiveReadException)
+			{
+				throw;
+			}
+			catch (OperationCanceledException)
 			{
 				throw;
 			}
@@ -136,21 +143,33 @@ namespace BlackboxModManager.Core.Store
 		/// result is the same, and a solid archive of many files takes minutes.
 		/// </summary>
 		private static int ExtractOther(string archivePath, string target,
-			IProgress<ImportProgress> progress)
+			IProgress<ImportProgress> progress, CancellationToken cancellation)
 		{
 			int total = ReadListing(archivePath, target);
 
-			return SevenZipTool.Exists
-				? SevenZipTool.Extract(archivePath, target, total, progress)
-				: ExtractWithLibrary(archivePath, target, total, progress);
+			int written = SevenZipTool.Exists
+				? SevenZipTool.Extract(archivePath, target, total, progress, cancellation)
+				: ExtractWithLibrary(archivePath, target, total, progress, cancellation);
+
+			// The listing and the extractor are two readers of one archive, so the listing
+			// cannot prove what the extractor wrote. Read the disk instead.
+			RefuseLinks(archivePath, target);
+
+			return written;
 		}
 
 		/// <summary>
 		/// Reads the listing of the archive, and it returns the number of files.
 		///
-		/// This is the guard of the whole path. It refuses an entry name that writes outside
-		/// the target directory, and it refuses an archive that needs a password. Both tests
-		/// run before any extractor writes a file.
+		/// This is the first guard of the path. It refuses an entry name that writes outside
+		/// the target directory, it refuses an archive that needs a password, and it refuses
+		/// an entry that names a link. Every test runs before any extractor writes a file.
+		///
+		/// <b>This guard reads the archive with SharpCompress, and 7-Zip writes the files.</b>
+		/// Two readers of one archive can disagree, so this method proves nothing about what
+		/// 7-Zip writes. <c>SevenZipTool</c> passes the switches that make 7-Zip write a link
+		/// entry as a plain file, and <see cref="RefuseLinks"/> then walks the target. This
+		/// method stays the whole guard of <see cref="ExtractWithLibrary"/> alone.
 		///
 		/// ArchiveFactory reads the header, so a file with the wrong extension still opens.
 		/// </summary>
@@ -174,6 +193,15 @@ namespace BlackboxModManager.Core.Store
 							archivePath);
 					}
 
+					if (IsLink(entry))
+					{
+						throw new ArchiveReadException(
+							$"The archive {archivePath} holds the entry \"{entry.Key}\", which names a link " +
+							"and not a file. A link lets a later entry write outside the target directory. " +
+							"This application does not extract that archive.",
+							archivePath);
+					}
+
 					// The result goes nowhere. The call throws for a name that leaves the
 					// target directory, and that is the point of it.
 					SafePath(archivePath, target, entry.Key);
@@ -182,6 +210,10 @@ namespace BlackboxModManager.Core.Store
 				}
 			}
 			catch (ArchiveReadException)
+			{
+				throw;
+			}
+			catch (OperationCanceledException)
 			{
 				throw;
 			}
@@ -203,7 +235,7 @@ namespace BlackboxModManager.Core.Store
 		/// Reads a rar or a 7z through SharpCompress. This runs when 7-Zip is not there.
 		/// </summary>
 		private static int ExtractWithLibrary(string archivePath, string target, int total,
-			IProgress<ImportProgress> progress)
+			IProgress<ImportProgress> progress, CancellationToken cancellation)
 		{
 			int written = 0;
 			var reporter = new StageReporter(progress, ImportStage.Unpack);
@@ -214,6 +246,8 @@ namespace BlackboxModManager.Core.Store
 
 				foreach (IArchiveEntry entry in archive.Entries)
 				{
+					cancellation.ThrowIfCancellationRequested();
+
 					if (entry.IsDirectory) continue;
 					if (String.IsNullOrEmpty(entry.Key)) continue;
 
@@ -236,6 +270,10 @@ namespace BlackboxModManager.Core.Store
 			{
 				throw;
 			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
 			catch (SharpCompress.Common.CryptographicException ex)
 			{
 				throw new ArchiveReadException(
@@ -248,6 +286,95 @@ namespace BlackboxModManager.Core.Store
 			}
 
 			return written;
+		}
+
+		/// <summary>
+		/// True when one entry of the listing names a link and not a file.
+		///
+		/// Three archive formats say it three ways. A tar entry carries the target of the
+		/// link in <c>LinkTarget</c>. A Windows 7-Zip entry sets the reparse-point bit of
+		/// the file attributes. A p7zip entry stores the unix mode in the high half of the
+		/// same field and sets bit 0x8000 to say so.
+		///
+		/// <b>SharpCompress reports neither field for every archive.</b> The base entry
+		/// throws for <c>Attrib</c>, and the 7z reader hides the high half of a p7zip mode.
+		/// So this test finds some links and not all of them, and <see cref="RefuseLinks"/>
+		/// holds the answer that the disk gives.
+		/// </summary>
+		private static bool IsLink(IArchiveEntry entry)
+		{
+			// FILE_ATTRIBUTE_REPARSE_POINT.
+			const int ReparsePoint = 0x400;
+
+			// Bit 0x8000 says that the high half holds a unix mode. S_IFMT is 0xF000 of that
+			// mode, and S_IFLNK is 0xA000.
+			const int UnixModeFollows = 0x8000;
+			const int UnixTypeMask = unchecked((int)0xF0000000);
+			const int UnixLink = unchecked((int)0xA0000000);
+
+			if (!String.IsNullOrEmpty(Read(() => entry.LinkTarget))) return true;
+
+			int? attributes = ReadAttributes(entry);
+
+			if (attributes is null) return false;
+
+			if ((attributes.Value & ReparsePoint) != 0) return true;
+
+			return (attributes.Value & UnixModeFollows) != 0
+				&& (attributes.Value & UnixTypeMask) == UnixLink;
+		}
+
+		private static int? ReadAttributes(IArchiveEntry entry)
+		{
+			try
+			{
+				return entry.Attrib;
+			}
+			catch (Exception)
+			{
+				// The base entry of SharpCompress throws NotImplementedException here. A
+				// format that reports no attributes answers nothing about a link.
+				return null;
+			}
+		}
+
+		private static string Read(Func<string> value)
+		{
+			try
+			{
+				return value();
+			}
+			catch (Exception)
+			{
+				return null;
+			}
+		}
+
+		/// <summary>
+		/// Walks the target directory and refuses the import when it finds a link.
+		///
+		/// This is the last guard, and it reads the disk. The listing guard and the
+		/// extractor are two readers of one archive, so only the disk says what the
+		/// extraction wrote.
+		///
+		/// The walk does not descend into a link. A link to a parent directory would make
+		/// the walk run forever.
+		/// </summary>
+		private static void RefuseLinks(string archivePath, string target)
+		{
+			foreach (FileSystemInfo entry in new DirectoryInfo(target).EnumerateFileSystemInfos())
+			{
+				if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
+				{
+					throw new ArchiveReadException(
+						$"The archive {archivePath} wrote the link {entry.FullName} into the target directory. " +
+						"A link lets a write reach a place outside the target. " +
+						"This application does not import that archive.",
+						archivePath);
+				}
+
+				if (entry is DirectoryInfo child) RefuseLinks(archivePath, child.FullName);
+			}
 		}
 
 		/// <summary>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using BlackboxModManager.Core.Deploy;
 using BlackboxModManager.Core.Files;
 
@@ -65,9 +66,13 @@ namespace BlackboxModManager.Core.Staging
 		/// where it wants, and no call here can make the right file private first.</b> A full
 		/// copy costs one write of every byte of the install, and it removes the risk. See
 		/// BinaryCliDeployEngine and defect 16.
+		///
+		/// A cancel throws <c>OperationCanceledException</c> and leaves a half-built target.
+		/// Every caller builds into a work directory, and the next build deletes that
+		/// directory first.
 		/// </summary>
 		public static ReplicationReport Build(string source, string target, Action<string> log = null,
-			bool linkFiles = true)
+			bool linkFiles = true, CancellationToken cancellation = default)
 		{
 			if (String.IsNullOrWhiteSpace(source)) throw new ArgumentException("The source is empty.", nameof(source));
 			if (String.IsNullOrWhiteSpace(target)) throw new ArgumentException("The target is empty.", nameof(target));
@@ -111,6 +116,10 @@ namespace BlackboxModManager.Core.Staging
 
 			foreach (string relative in files)
 			{
+				// One file is the safe point of this loop. The target directory is a work
+				// directory, so a stop here leaves the game directory untouched.
+				cancellation.ThrowIfCancellationRequested();
+
 				string sourceFile = FileTree.Combine(from, relative);
 				string targetFile = FileTree.Combine(to, relative);
 

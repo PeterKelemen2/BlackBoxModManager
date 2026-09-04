@@ -56,7 +56,15 @@ namespace BlackboxModManager.Core.Profiles
 		{
 			if (profile is null) throw new ArgumentNullException(nameof(profile));
 
-			return JsonSerializer.Deserialize<Profile>(JsonSerializer.Serialize(profile, Options), Options);
+			Profile copy = JsonSerializer.Deserialize<Profile>(
+				JsonSerializer.Serialize(profile, Options), Options);
+
+			// The reader drops the comparer of every dictionary. A copy that compares its
+			// keys with letter case would make a background check and the live profile
+			// disagree about one key.
+			copy?.Normalize();
+
+			return copy;
 		}
 
 		public string DirectoryOf(GameINT game) => Path.Combine(this.Root, game.ToString());
@@ -175,10 +183,9 @@ namespace BlackboxModManager.Core.Profiles
 				profile.Name = Path.GetFileNameWithoutExtension(path);
 				profile.Game = game.ToString();
 
-				foreach (ProfileEntry entry in profile.Entries)
-				{
-					entry.Selections ??= new Mods.ModSelections();
-				}
+				// The reader drops the comparer of every dictionary of the file. Normalize
+				// rebuilds each one, and it fills a missing Selections object.
+				profile.Normalize();
 
 				return profile;
 			}

@@ -1,6 +1,6 @@
 # Step 19 — the audit findings
 
-An audit read the whole of `src/BlackboxModManager.App` and `src/BlackboxModManager.Core` and found 27 defects. This file holds one part per finding. **No part of this file is implemented.**
+An audit read the whole of `src/BlackboxModManager.App` and `src/BlackboxModManager.Core` and found 27 defects. This file holds one part per finding. **Parts 1 to 5 are implemented. Parts 6 to 27 are not.**
 
 Each part states the problem, the evidence, the fix, and the check. The evidence names a file and a method. Line numbers move, so match the quoted code and not a number.
 
@@ -773,11 +773,11 @@ Fill this table in as each part lands. Record a measurement for every speed part
 
 | Part | State | Note |
 | ---- | ----- | ---- |
-| 1 | Not started | |
-| 2 | Not started | |
-| 3 | Not started | |
-| 4 | Not started | |
-| 5 | Not started | |
+| 1 | Done | The volume test runs before the move. `FileTree.SameVolume` holds the rule, and `GameWorkspace.SharesVolumeWithGame` reads it. The lock test needs Windows and reports as skipped on Linux. |
+| 2 | Done | `Profile.Normalize`, `ProfileEntry.Normalize`, and `ModSelections.Normalize`. `ProfileStore.Read` and `ProfileStore.Clone` both call it. Five tests in `ProfileCaseTests.cs`. |
+| 3 | Done | The scan runs in `Task.Run` with a run counter. `AskForLoaders` and `ChooseLoader` call `RefreshLoadersNow`. Not measured yet, because the measurement needs a real mod library. |
+| 4 | Done | The token reaches `ModImporter.Import`, `ArchiveExtractor.Extract`, `SevenZipTool.Extract`, `ModImporter.CopyTree`, `TreeReplicator.Build`, and `DeployService.Revert`. The token-less `RunAsync` overload is gone. |
+| 5 | Done | `SevenZipTool` passes `-snl-` and `-snh-`. `ReadListing` refuses a link entry. `ArchiveExtractor` walks the target after the extraction. See `99-api-notes.md`. |
 | 6 | Not started | |
 | 7 | Not started | |
 | 8 | Not started | |

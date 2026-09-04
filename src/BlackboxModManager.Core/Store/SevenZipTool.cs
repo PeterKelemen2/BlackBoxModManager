@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 namespace BlackboxModManager.Core.Store
 {
@@ -17,8 +18,11 @@ namespace BlackboxModManager.Core.Store
 	/// interop layer, it cannot corrupt the memory of this process, and a crash of the
 	/// decoder ends as an exit code.
 	///
-	/// This class never decides what is safe to write. <c>ArchiveExtractor</c> reads the
-	/// listing of the archive first and refuses a name that leaves the target directory.
+	/// This class refuses one thing only. The switches below make 7-Zip write a link entry
+	/// as a plain file, so no entry of an archive can create a link on the disk.
+	/// <c>ArchiveExtractor</c> owns every other check. It reads the listing of the archive
+	/// first, it refuses a name that leaves the target directory, and it walks the target
+	/// afterwards.
 	/// </summary>
 	public static class SevenZipTool
 	{
@@ -46,16 +50,25 @@ namespace BlackboxModManager.Core.Store
 		public static bool Exists => Path != null;
 
 		/// <summary>
+		/// How often the wait tests the child process and the cancel. See
+		/// <c>ProcessRunner.Wait</c>, which polls at the same rate.
+		/// </summary>
+		private const int PollMilliseconds = 200;
+
+		/// <summary>
 		/// Extracts every entry into the target directory, and reports each file.
 		///
 		/// It returns the number of files that 7-Zip named. The count comes from the output
 		/// of the program, so it counts what reached the disk.
 		///
+		/// A cancel ends the child process and throws <c>OperationCanceledException</c>. The
+		/// caller then removes the scratch directory.
+		///
 		/// <b>A failure throws and does not fall back.</b> A fallback would repeat a broken
 		/// read for half an hour and then report the same failure.
 		/// </summary>
 		public static int Extract(string archivePath, string target, int total,
-			IProgress<ImportProgress> progress)
+			IProgress<ImportProgress> progress, CancellationToken cancellation = default)
 		{
 			string tool = Path
 				?? throw new ArchiveReadException($"The file {DirectoryName}\\{ExecutableName} is not beside the application.", archivePath);
@@ -80,6 +93,13 @@ namespace BlackboxModManager.Core.Store
 			start.ArgumentList.Add("-bb1");
 			start.ArgumentList.Add("-bsp0");
 
+			// -snl- and -snh- make 7-Zip write a link entry as a plain file. A real link in
+			// the target lets a later entry write through it to a place outside the target,
+			// and the guard of ArchiveExtractor never sees that write. See
+			// docs/roadmap/99-api-notes.md for the switch names of 7-Zip 26.01.
+			start.ArgumentList.Add("-snl-");
+			start.ArgumentList.Add("-snh-");
+
 			var errors = new StringBuilder();
 			var reporter = new StageReporter(progress, ImportStage.Unpack);
 			int written = 0;
@@ -93,26 +113,32 @@ namespace BlackboxModManager.Core.Store
 					if (line.Data != null) errors.AppendLine(line.Data);
 				};
 
+				// Read the output on another thread. A wait cannot poll for a cancel while it
+				// blocks on ReadLine, and a full pipe buffer stops the program until somebody
+				// reads it. The runtime raises this event one line at a time, so the counter
+				// needs no lock.
+				process.OutputDataReceived += (sender, line) =>
+				{
+					string name = FileNameOf(line.Data);
+
+					if (name is null) return;
+
+					++written;
+
+					reporter.File(written, total, name);
+				};
+
 				process.Start();
 
 				// An archive that wants a password stops for an answer. The closed input gives
 				// the program an end of file, so it fails instead of waiting forever.
 				process.StandardInput.Close();
+				process.BeginOutputReadLine();
 				process.BeginErrorReadLine();
 
-				string line;
+				Wait(process, cancellation);
 
-				while ((line = process.StandardOutput.ReadLine()) != null)
-				{
-					string name = FileNameOf(line);
-
-					if (name is null) continue;
-
-					++written;
-
-					reporter.File(written, total, name);
-				}
-
+				// Let the two readers drain what the program wrote last.
 				process.WaitForExit();
 
 				// 0 is success. 1 is success with a warning, such as one file that the program
@@ -129,6 +155,10 @@ namespace BlackboxModManager.Core.Store
 			{
 				throw;
 			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
 			catch (Exception ex)
 			{
 				throw new ArchiveReadException(
@@ -136,6 +166,39 @@ namespace BlackboxModManager.Core.Store
 			}
 
 			return written;
+		}
+
+		/// <summary>
+		/// Waits for the program, and ends the wait when the user cancels.
+		///
+		/// A canceled import must not leave the program writing into the scratch directory,
+		/// because the caller removes that directory next. So a cancel ends the program
+		/// first. This follows <c>ProcessRunner.Wait</c>.
+		///
+		/// <b>This method sets no timeout.</b> A 4 GB archive is legitimate, and a timeout
+		/// needs a limit that the size of the archive gives. Step 19, Part 8 owns that.
+		/// </summary>
+		private static void Wait(Process process, CancellationToken cancellation)
+		{
+			while (!process.WaitForExit(PollMilliseconds))
+			{
+				if (!cancellation.IsCancellationRequested) continue;
+
+				Kill(process);
+				cancellation.ThrowIfCancellationRequested();
+			}
+		}
+
+		private static void Kill(Process process)
+		{
+			try
+			{
+				if (!process.HasExited) process.Kill(true);
+			}
+			catch (Exception)
+			{
+				// A program that ended by itself needs no kill.
+			}
 		}
 
 		/// <summary>

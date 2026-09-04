@@ -87,6 +87,27 @@ namespace BlackboxModManager.Core.Mods
 			return found;
 		}
 
+		/// <summary>
+		/// Rebuilds the variant map with the comparer that this type declares.
+		///
+		/// <b>System.Text.Json drops the comparer of a declared instance.</b> See
+		/// <c>Profile.Normalize</c>, which calls this for every entry of a profile.
+		/// </summary>
+		public void Normalize()
+		{
+			var target = new Dictionary<string, VariantSelection>(StringComparer.OrdinalIgnoreCase);
+
+			if (this.Variants != null)
+			{
+				foreach (KeyValuePair<string, VariantSelection> entry in this.Variants)
+				{
+					target[entry.Key] = entry.Value;
+				}
+			}
+
+			this.Variants = target;
+		}
+
 		/// <summary>True when this variant is present and switched on.</summary>
 		public bool IsEnabled(string variant)
 		{

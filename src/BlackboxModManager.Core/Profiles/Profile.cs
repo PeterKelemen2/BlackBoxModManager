@@ -145,6 +145,27 @@ namespace BlackboxModManager.Core.Profiles
 			answers[key] = value ?? String.Empty;
 		}
 
+		/// <summary>
+		/// Rebuilds every dictionary of this entry with the comparer that it declares. See
+		/// <see cref="Profile.Normalize"/> for why a read needs this.
+		/// </summary>
+		internal void Normalize()
+		{
+			this.Selections ??= new ModSelections();
+			this.Selections.Normalize();
+
+			Dictionary<string, Dictionary<string, string>> files = Profile.CaseInsensitive(this.IniSettings);
+
+			// EnsureIni builds the inner map without letter case too, so the inner map
+			// carries the same defect.
+			foreach (string path in new List<string>(files.Keys))
+			{
+				files[path] = Profile.CaseInsensitive(files[path]);
+			}
+
+			this.IniSettings = files;
+		}
+
 		/// <summary>How many options of this mod the profile changed.</summary>
 		[JsonIgnore]
 		public int IniAnswerCount
@@ -233,6 +254,43 @@ namespace BlackboxModManager.Core.Profiles
 		{
 			this.Name = name;
 			this.Game = game;
+		}
+
+		/// <summary>
+		/// Rebuilds every dictionary of this profile with the comparer that it declares.
+		///
+		/// <b>System.Text.Json drops the comparer of a declared instance.</b> The reader
+		/// builds a new Dictionary with the default ordinal comparer and assigns it. So a
+		/// key matches without letter case before a save, and with letter case after a
+		/// load. An ini answer and a loader choice both go missing after a restart.
+		///
+		/// Call this after every read and after every clone. <c>Settings.Normalize</c> and
+		/// <c>SnapshotReader.Load</c> repair the same trap for their own types.
+		/// </summary>
+		public void Normalize()
+		{
+			this.LoaderChoices = CaseInsensitive(this.LoaderChoices);
+			this.Entries ??= new List<ProfileEntry>();
+
+			foreach (ProfileEntry entry in this.Entries)
+			{
+				entry?.Normalize();
+			}
+		}
+
+		/// <summary>
+		/// Copies a map into a new map that compares its keys without letter case. A null
+		/// source gives an empty map.
+		/// </summary>
+		internal static Dictionary<string, TValue> CaseInsensitive<TValue>(Dictionary<string, TValue> source)
+		{
+			var target = new Dictionary<string, TValue>(StringComparer.OrdinalIgnoreCase);
+
+			if (source is null) return target;
+
+			foreach (KeyValuePair<string, TValue> entry in source) target[entry.Key] = entry.Value;
+
+			return target;
 		}
 
 		/// <summary>
